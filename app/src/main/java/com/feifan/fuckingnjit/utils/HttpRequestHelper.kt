@@ -1,7 +1,5 @@
 package com.feifan.fuckingnjit.utils
 
-import android.os.Handler
-import android.os.Looper
 import android.webkit.CookieManager
 import okhttp3.Call
 import okhttp3.Callback
@@ -43,7 +41,7 @@ class HttpRequestHelper(
         val cookie = cookieManager.getCookie(BASE_URL)
         if (cookie.isNullOrBlank()) {
 //            Manager.showToast("cookie为空，需要登录")
-            Manager.startLogin()
+            Manager.startLogin(true)
             throw Exception("需要登录")
         }
         var formBody: RequestBody = FormBody.Builder().build()

@@ -1,10 +1,11 @@
 package com.feifan.fuckingnjit.service.impl
 
-import android.os.Handler
-import android.os.Looper
 import android.webkit.CookieManager
-import com.alibaba.fastjson2.JSONArray
-import com.alibaba.fastjson2.JSONObject
+import com.alibaba.fastjson.JSON
+import com.alibaba.fastjson.JSONArray
+import com.alibaba.fastjson.JSONObject
+import com.feifan.fuckingnjit.Model.Course
+import com.feifan.fuckingnjit.Model.Time
 import com.feifan.fuckingnjit.service.WebService
 import com.feifan.fuckingnjit.utils.HttpMethod
 import com.feifan.fuckingnjit.utils.HttpRequestHelper
@@ -38,8 +39,9 @@ class WebServiceImpl : WebService {
                 "Origin" to HttpRequestHelper.BASE_URL
             )
 
-            val result = httpRequestHelper.getJsonResponse(url, HttpMethod.GET, additionalHeaders)
-            if (result.endsWith("</html>")) {
+            val raw = httpRequestHelper.getJsonResponse(url, HttpMethod.GET, additionalHeaders)
+            println("课表数据：$raw")
+            if (raw.endsWith("</html>")) {
 //                Handler(Looper.getMainLooper()).post {
                     Manager.showToast("需要登录")
 //                }
@@ -47,11 +49,119 @@ class WebServiceImpl : WebService {
                 Manager.startLogin(true)
                 """{"state":"error","message":"需要登录"}"""
             } else {
-                result
+                val jsonObject = JSON.parseObject(raw);
+                if(jsonObject.containsKey("message")&&jsonObject.getString("message")=="需要登录"){
+                    return """{"state":"error","message":"需要登录"}"""
+                }
+                val items = jsonObject.getJSONArray("items")
+
+                val weekdayMap = mapOf(
+                    "星期一" to 1, "星期二" to 2, "星期三" to 3,
+                    "星期四" to 4, "星期五" to 5, "星期六" to 6, "星期日" to 7
+                )
+                val courses = ArrayList<Course>()
+                val size: Int = items.size
+                for (m in 0..<size) {
+                    val item = items.getJSONObject(m)
+                    var teacher = item.getString("jsxx")
+                    var classroom = item.getString("jxdd")
+                    val courseName = item.getString("kcmc")
+                    val time = item.getString("sksj") ?: continue
+                    if (classroom == null) {
+                        classroom = "上课地点未定"
+                    }
+                    val times = time.split(";")
+                    val classrooms = classroom.split(";")
+                    teacher = teacher.split("/")[1]
+                    var j = 0
+                    for (t in times) {
+                        println(t)
+                        val weekday = t.substring(0, 3)
+                        println(weekday)
+                        val courseTime = t.substring(t.indexOf("第"), t.indexOf("{"))
+                        println(courseTime)
+                        val weeks = t.substring(t.indexOf("{") + 1, t.indexOf("}"))
+
+                        val timeArray: ArrayList<Int> = Tools.getCourseTime(courseTime)
+                        println()
+                        //System.out.println(courseName+" "+weekday+" "+courseTime+" "+weeks);
+                        val weekss =
+                            weeks.split(",".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
+                        //
+                        for (week in weekss) {
+                            if (!week.contains("-")) {
+                                val course = Course()
+                                course.setName(courseName)
+                                course.setTeacher(teacher)
+                                val time1 = Time(
+                                    weekdayMap[weekday]!!,
+                                    timeArray,
+                                    week.substring(0, week.indexOf("周")).toInt()
+                                )
+                                course.setTime(time1)
+                                course.setClassroom(classrooms[j])
+                                courses.add(course)
+                            } else {
+                                val index = week.indexOf("(")
+                                val pos = week.indexOf("-")
+                                val left = week.substring(0, pos).toInt()
+                                val right = week.substring(pos + 1, week.indexOf("周")).toInt()
+                                if (index != -1) {
+                                    val choice = week[index + 1]
+                                    if (choice == '单') {
+                                        for (i in left..right) {
+                                            if (i % 2 == 1) {
+                                                val course = Course()
+                                                course.setName(courseName)
+                                                course.setTeacher(teacher)
+                                                val time1 =
+                                                    Time(weekdayMap[weekday]!!, timeArray, i)
+                                                course.setTime(time1)
+                                                course.setClassroom(classrooms[j])
+                                                courses.add(course)
+                                            }
+                                        }
+                                    } else if (choice == '双') {
+                                        for (i in left..right) {
+                                            if (i % 2 == 0) {
+                                                val course = Course()
+                                                course.setName(courseName)
+                                                course.setTeacher(teacher)
+                                                val time1 =
+                                                    Time(weekdayMap[weekday]!!, timeArray, i)
+                                                course.setTime(time1)
+                                                course.setClassroom(classrooms[j])
+                                                courses.add(course)
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    for (i in left..right) {
+                                        val course = Course()
+                                        course.setName(courseName)
+                                        course.setTeacher(teacher)
+                                        val time1 = Time(weekdayMap[weekday]!!, timeArray, i)
+                                        course.setTime(time1)
+                                        course.setClassroom(classrooms[j])
+                                        courses.add(course)
+                                    }
+                                }
+                            }
+                        }
+                        j++
+                    }
+                }
+
+                val maxWeek = courses.maxOfOrNull { it.getTime().week } ?: 20
+                val result = courses.groupBy { it.getTime().week }.run {
+                    Array(maxWeek + 1) { getOrElse(it) { emptyList() } }
+                }
+                    JSONArray.parseArray(JSONObject.toJSONString(Tools.getTimeTableData(result)))
+                        .toJSONString()
             }
         } catch (e: Exception) {
-            e.message?.let { Manager.showToast(it) }
-            Manager.startLogin()
+            e.printStackTrace() // 显示完整堆栈轨迹
+            Manager.startLogin(true)
             """{"state":"error","message":"${e.message}"}"""
         }
     }
@@ -71,6 +181,7 @@ class WebServiceImpl : WebService {
             }
 
             val values = doc.select(".col-md-4.col-sm-3.mobile-col")
+            println(values.text())
             if (values.size == 2) {
                 val id = values[0].select(".form-control-static").text()
                 val name = values[1].select(".form-control-static").text()
@@ -294,7 +405,7 @@ class WebServiceImpl : WebService {
                     }
                 """
             )
-            result["data"] = JSONArray.from(details)
+            result["data"] = JSONArray.parseArray(JSON.toJSONString(details))
             result.toJSONString()
         } catch (e: Exception) {
             e.message?.let {

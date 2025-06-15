@@ -25,7 +25,7 @@ class SampleWebViewClientImpl(private val context: Context, private val webView:
 //        }else
         if(url.startsWith("https://casb.njit.edu.cn/http/webvpnea5e00498bb033e68046c95dbdf6e09fbc127bea836184c80a0792b662ced92f/authserver/login?service=")){
             val userManager = Manager.getUserManager()
-            val user = userManager.getCurrentUser()
+            val user = userManager?.getCurrentUser()
             view.evaluateJavascript("""
                 (function() {
                 getObj("load").onclick = function() {
@@ -47,7 +47,7 @@ class SampleWebViewClientImpl(private val context: Context, private val webView:
         """.trimIndent(),null)
         }
         if(url.startsWith("https://casb.njit.edu.cn/http/webvpn3e1a11b7208e283ab07ade5d2913fc13d6f6fe09d2dc7372db2a51a14aa4167a/jwglxt/xtgl/index_initMenu.html")){
-            Manager.getUserManager().updateUserName(view)
+            Manager.getUserManager()?.updateUserName(view)
 
 //            val cookieManager: CookieManager = CookieManager.getInstance()
         }

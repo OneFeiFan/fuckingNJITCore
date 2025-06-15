@@ -19,7 +19,7 @@ class J2J {
     }
     @JavascriptInterface
     fun login(){
-        Manager.getUserManager().addUser(user)
+        Manager.getUserManager()?.addUser(user)
         user = User()
     }
 }

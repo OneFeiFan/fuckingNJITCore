@@ -1,6 +1,7 @@
 package com.feifan.fuckingnjit.service
 
-import com.alibaba.fastjson2.JSONObject
+import com.alibaba.fastjson.JSONObject
+
 
 interface WebService {
     suspend fun getCurriculum() : String

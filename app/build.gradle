@@ -50,6 +50,7 @@ dependencies {
     implementation libs.androidx.appcompat
     implementation libs.material
     implementation libs.androidx.activity
+    implementation libs.androidx.work.runtime.ktx
 //    implementation libs.material
     testImplementation libs.junit
     implementation libs.mockito.core
@@ -58,8 +59,8 @@ dependencies {
     androidTestImplementation libs.androidx.espresso.core
 
 //    implementation libs.htmlunit
-    implementation libs.androidx.security.crypto
-    implementation libs.fastjson2
+//    implementation libs.androidx.security.crypto
+    implementation libs.fastjson
     implementation libs.okhttp
 //    testImplementation libs.robolectric
     androidTestImplementation libs.androidx.runner

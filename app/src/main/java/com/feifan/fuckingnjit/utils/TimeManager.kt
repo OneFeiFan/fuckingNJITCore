@@ -1,38 +1,36 @@
 package com.feifan.fuckingnjit.utils
 
 import java.text.SimpleDateFormat
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
 class TimeManager {
     private val SDF by lazy { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())}
-    private val timeFormat by lazy { SimpleDateFormat("HH:mm", Locale.getDefault()) }
     private val DATELIST by lazy {
+        val today = LocalDate.now() // 今天的日期
+        val timeFormatter = DateTimeFormatter.ofPattern("HH:mm") // 时间格式化器
         arrayOf(
-            timeFormat.parse("07:00"),
-            timeFormat.parse("07:55"),
-            timeFormat.parse("09:10"),
-            timeFormat.parse("10:05"),
-            timeFormat.parse("12:40"),
-            timeFormat.parse("13:35"),
-            timeFormat.parse("14:40"),
-            timeFormat.parse("15:35"),
-            timeFormat.parse("17:30"),
-            timeFormat.parse("18:25"),
-            timeFormat.parse("19:20")
-        ).filterNotNull()  // 确保没有null值
-
+            "07:00", "07:55", "09:10", "10:05", "12:40",
+            "13:35", "14:40", "15:35", "17:30", "18:25", "19:20"
+        ).map { timeStr ->
+            val time = LocalTime.parse(timeStr, timeFormatter) // 解析时间
+            // 合并为今天的日期 + 指定时间
+            today.atTime(time)
+                .atZone(ZoneId.systemDefault())
+                .toInstant()
+                .let { Date.from(it) } // 转为旧版 Date（如需兼容旧代码）
+        }.filterNotNull()
     }
     fun isInLateNightPeriod(): Boolean {
-        val millisPerDay = 24 * 60 * 60 * 1000L
-        val currentMillis = System.currentTimeMillis() % millisPerDay
-
-        val startMillis = 20 * 60 * 60 * 1000L // 20:00的毫秒数
-        val endMillis = 5 * 60 * 60 * 1000L   // 05:00的毫秒数
-
-        return currentMillis >= startMillis || currentMillis < endMillis
+        val currentHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        return currentHour >= 20 || currentHour < 5
     }
+
 
     fun getDateList(): List<Date> {
         return DATELIST

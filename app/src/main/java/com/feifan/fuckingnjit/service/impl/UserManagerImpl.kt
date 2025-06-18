@@ -52,9 +52,9 @@ class UserManagerImpl : UserManager {
             userList = JSON.parseObject(
                 userListJson,
                 object : TypeReference<HashMap<String, User>>() {})
-            Manager.getSemesterStartDate()
+            Manager.getSemesterStartDate(this)
             Manager.registerTimeReceiver()
-            Manager.updateTimetableData()
+            Manager.updateTimetableData(this)
         } catch (e: Exception) {
             Manager.handleException(e, "Failed to load user list from preferences")
         }
@@ -147,10 +147,11 @@ class UserManagerImpl : UserManager {
         webViewRef = WeakReference(view)
         coroutineScope.launch(Dispatchers.IO) {
             try {
+                withContext(Dispatchers.Main) {
+                    Manager.openDialog("正在更新用户信息", context)
+                }
                 if (userList[currentUser]?.getName()?.isEmpty() == true) {
-                    withContext(Dispatchers.Main) {
-                        Manager.openDialog("正在更新用户信息", context)
-                    }
+
                     val userData = Manager.getWebService().getUserData()
                     if (userData.getString("status") != "error") {
                         val data = userData.getJSONObject("data")

@@ -28,15 +28,14 @@ class Manager {
 
         private lateinit var userManager: UserManagerImpl
         private lateinit var context: Context
-        private var dialogContext: WeakReference<Context> = WeakReference(null)
         private val webService = WebServiceImpl()
         private val timeManager = TimeManager()
-        private lateinit var dialog: WeakReference<LoadingAnimationDialog>
+        private lateinit var dialog: LoadingAnimationDialog
         private var inLogin = false
         private lateinit var receiver: BroadcastReceiver
         private lateinit var timetableData: List<List<List<String>>>
-        private var thisWeek: Int = -1
-        private val timeMap = mutableMapOf<Int, Date>()
+        private var thisWeek: Int = 0
+        private val timeMap = hashMapOf<Int, Date>()
 
         fun init(context: Context) {
             if (!::userManager.isInitialized) {
@@ -47,8 +46,9 @@ class Manager {
             }
         }
 
-        fun getSemesterStartDate(): String {
-            val date = getUserManager()?.getCurrentUser()?.getSemesterStartDate()
+        fun getSemesterStartDate(obj: UserManagerImpl? = null): String {
+            val userManager = obj?: getUserManager()
+            val date = userManager?.getCurrentUser()?.getSemesterStartDate()
             try {
                 if (date != null && date != "") {
                     thisWeek = timeManager.calculateCurrentWeek(date)
@@ -82,14 +82,15 @@ class Manager {
             receiver = object : BroadcastReceiver() {
                 override fun onReceive(context: Context, intent: Intent) {
                     println("onReceive")
-                    if (timeManager.isInLateNightPeriod()) {
+                    if (getTimeManager().isInLateNightPeriod()) {
+                        println("isInLateNightPeriod")
                         return
                     }
-                    if (timetableData.isEmpty()) {
+                    if (getTimetableData().isEmpty()) {
                         updateTimetableData()
                         return
                     }
-                    if (timeMap.isEmpty()) {
+                    if (getTimeMap().isEmpty()) {
                         updateTimeMap()
                         return
                     }
@@ -97,7 +98,7 @@ class Manager {
                     val currentTime = Date() // 获取当前时间
 
                     // 遍历时间映射表
-                    val iterator = timeMap.iterator()
+                    val iterator = getTimeMap().iterator()
                     while (iterator.hasNext()) {
                         val (index, time) = iterator.next()
 
@@ -105,9 +106,12 @@ class Manager {
                         val diffMinutes = (currentTime.time - time.time) / (60 * 1000)
 
                         when {
-                            diffMinutes < -30 -> break
+                            diffMinutes < -30 -> {
+                                break
+                            }
                             diffMinutes > 30 -> {
                                 iterator.remove()
+                                break // 退出循环
                             }
                             abs(diffMinutes) <= 10 -> {
                                 DemoWidgetProvider.updateWidgets(context)
@@ -131,14 +135,13 @@ class Manager {
             context.unregisterReceiver(receiver)
         }
 
-        fun updateTimetableData() {
-            val curriculums = getUserManager()?.getCurrentUser()?.getCurriculums()
+        fun updateTimetableData(obj: UserManagerImpl? = null) {
+            val userManager = obj?: getUserManager()
+            val curriculums = userManager?.getCurrentUser()?.getCurriculums()
             if (curriculums == null || curriculums == "") {
                 return
             }
             timetableData = JSONArray.parseArray(curriculums) as List<List<List<String>>>
-            println("updateTimetableData")
-            println(timetableData)
         }
 
         fun updateTimeMap() {
@@ -148,12 +151,22 @@ class Manager {
             }
             val dateList = timeManager.getDateList()
             val timeTable = timetableData[thisWeek][getTimeManager().todayWeekIndex()]
-
             for (i in timeTable.indices) {
                 if (timeTable[i] != "") {
                     timeMap[i] = dateList[i]
                 }
             }
+        }
+
+        fun getTimeMap(): HashMap<Int, Date> {
+            return timeMap
+        }
+
+        fun getTimetableData(): List<List<List<String>>> {
+            if (!::timetableData.isInitialized) {
+                return emptyList()
+            }
+            return timetableData
         }
 
         fun startLogin(relogin: Boolean = false): String {
@@ -193,39 +206,26 @@ class Manager {
         }
 
         fun openDialog(text: String, context_: Context) {
-            // if (context_ !is Activity) {
-            //     throw IllegalArgumentException("Context must be an instance of Activity")
-            // }
-            if (dialogContext.get() == null) {
-                dialogContext = WeakReference(context_)
-                dialog = WeakReference(LoadingAnimationDialog(context_))
-                // AppWatcher.objectWatcher.expectWeaklyReachable(dialog,"加载框")
-            }
-            dialog.get()?.apply {
-                setCloseOnClick(false)
-                setProgressVector(R.drawable.loading)
-                setTextViewVisibility(true)
-                setTextStyle(true)
-                setTextColor(Color.WHITE)
-                setTextSize(20F)
-                setEnlarge(5)
-                setTextMsg(text)
-                if (!isShowing) {
-                    show()
-                } else {
-                    closeDialog()
+                if(::dialog.isInitialized){
+                    dialog.dismiss()
+                }
+                dialog = LoadingAnimationDialog(context_)
+
+                dialog.apply {
+                    setCloseOnClick(false)
+                    setProgressVector(R.drawable.loading)
+                    setTextViewVisibility(true)
+                    setTextStyle(true)
+                    setTextColor(Color.WHITE)
+                    setTextSize(20F)
+                    setEnlarge(5)
+                    setTextMsg(text)
                     show()
                 }
-            }
-        }
-
-        fun closeDialog() {
-            dialog.get()?.hide()
         }
 
         fun dismissDialog() {
-            dialog.get()?.dismiss()
-            dialog.clear()
+            dialog.dismiss()
         }
 
         fun handleException(e: Exception, message: String) {
@@ -233,5 +233,17 @@ class Manager {
             println("handleException: $message")
             showToast(message)
         }
+
+        fun goHome() {
+            if (!this::context.isInitialized) {
+                return
+            }
+            val intent = Intent(Intent.ACTION_MAIN).apply {
+                addCategory(Intent.CATEGORY_HOME)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(intent)
+        }
+
     }
 }

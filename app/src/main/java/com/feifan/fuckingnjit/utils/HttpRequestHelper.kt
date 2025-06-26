@@ -1,5 +1,6 @@
 package com.feifan.fuckingnjit.utils
 
+import android.annotation.SuppressLint
 import android.webkit.CookieManager
 import okhttp3.Call
 import okhttp3.Callback
@@ -12,6 +13,7 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.io.IOException
+import java.net.ProtocolException
 import kotlin.coroutines.suspendCoroutine
 
 
@@ -32,6 +34,7 @@ class HttpRequestHelper(
 
 
 
+    @SuppressLint("SuspiciousIndentation")
     private suspend fun makeRequest(
         url: String,
         method: HttpMethod = HttpMethod.GET,
@@ -62,7 +65,7 @@ class HttpRequestHelper(
         }
         val request = builder.build()
 //        Handler(Looper.getMainLooper()).post {
-            Manager.showToast("请求地址: $url")
+//            Manager.showToast("请求地址: $url")
 //        }
         return suspendCoroutine { continuation ->
             okHttpClient.newCall(request).enqueue(object : Callback {
@@ -79,27 +82,19 @@ class HttpRequestHelper(
                 }
 
                 override fun onFailure(call: Call, e: IOException) {
-//                    Handler(Looper.getMainLooper()).post {
-                        Manager.showToast("请求失败: ${e.message}")
-//                    }
-//                    okHttpClient.dispatcher.executorService.shutdown()
                     continuation.resumeWith(Result.failure(e))
-                    if (e is java.net.ProtocolException) {
+                    if (e is ProtocolException) {
                         if (e.message?.contains("Too many follow-up requests") == true) {
-                            println("捕获到Too many follow-up requests异常: ${e.message}")
-//                            Handler(Looper.getMainLooper()).post {
-                                Manager.showToast("重试次数过多，cookie可能失效,请重新登录")
-//                            }
+                            Manager.handleException(e,"重试次数过多，cookie可能失效,请重新登录")
                             Manager.startLogin(true)
                         } else {
-                            println("捕获到其他IO异常: ${e.message}")
-
+                            Manager.handleException(e,"捕获到其他IO异常")
                         }
                     } else {
-                        println("捕获到非ProtocolException异常: ${e.message}")
-//                        Handler(Looper.getMainLooper()).post {
-                            Manager.showToast("捕获到非ProtocolException异常: ${e.message}")
-//                        }
+                        if(e.message?.contains("onnect") == true){
+                            Manager.showToast("网络异常")
+                        }
+                        Manager.handleException(e,"捕获到非ProtocolException异常")
                     }
                 }
             })
@@ -129,11 +124,7 @@ class HttpRequestHelper(
         return try {
             Jsoup.parse(makeRequest(url,method, additionalHeaders,requestBody))
         } catch (e: Exception) {
-            println("获取HTML失败: ${e.message}")
-//            Handler(Looper.getMainLooper()).post {
-                Manager.showToast("获取HTML失败: ${e.message}")
-//            }
-
+            Manager.handleException(e,"获取HTML失败")
             Jsoup.parse("""<html><body><h1>获取HTML失败: ${e.message}</h1></body></html>""")
         }
     }

@@ -231,7 +231,7 @@ class Manager {
         fun handleException(e: Exception, message: String) {
             e.printStackTrace()
             println("handleException: $message")
-            showToast(message)
+//            showToast(message)
         }
 
         fun goHome() {

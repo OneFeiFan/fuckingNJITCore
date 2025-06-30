@@ -30,6 +30,10 @@ class UserManagerImpl : UserManager {
     private var userList = hashMapOf<String, User>()
     private lateinit var currentUser: String
 
+    companion object {
+        private const val PREF_STORE_PASSWORD = "store_password"
+    }
+
     constructor(context: Context) {
         try {
             this.context = context
@@ -61,15 +65,21 @@ class UserManagerImpl : UserManager {
     }
 
     override fun addUser(user: User) {
-        if (user.getId().isEmpty()) return
-        if (userList.containsKey(user.getId())) {
-            currentUser = user.getId()
-            return
-        }
-        Manager.showToast("正在添加用户")
         try {
-            userList[user.getId()] = user
-            currentUser = user.getId()
+            val userToAdd = if (!isPasswordStorageEnabled()) {
+                user.setPassword("")
+            } else {
+                user
+            }
+        if (userToAdd.getId().isEmpty()) return
+//        if (userList.containsKey(userToAdd.getId())) {
+//            currentUser = userToAdd.getId()
+//            return
+//        }
+        Manager.showToast("请稍后")
+            // 如果不存储密码，先清空用户密码
+            userList[userToAdd.getId()] = userToAdd
+            currentUser = userToAdd.getId()
         } catch (e: Exception) {
             Manager.handleException(e, "用户添加失败")
         }
@@ -203,5 +213,38 @@ class UserManagerImpl : UserManager {
     fun removeCurrentUser() {
         currentUser = ""
         preferences.edit{remove("current_user")}
+    }
+
+    /**
+     * 设置是否存储用户密码
+     * @param enable true表示存储密码，false表示不存储
+     */
+    fun setPasswordStorageEnabled(enable: Boolean) {
+        preferences.edit {
+            putBoolean(PREF_STORE_PASSWORD, enable)
+        }
+
+        // 如果不存储密码，立即清除已存储的密码
+        if (!enable) {
+            clearStoredPasswords()
+        }
+    }
+
+    /**
+     * 检查是否启用了密码存储
+     * @return Boolean 是否存储密码
+     */
+    fun isPasswordStorageEnabled(): Boolean {
+        return preferences.getBoolean(PREF_STORE_PASSWORD, true) // 默认值为true，表示默认存储密码
+    }
+
+    /**
+     * 清除所有已存储的用户密码
+     */
+    private fun clearStoredPasswords() {
+        userList.values.forEach { user ->
+            user.setPassword("") // 清空密码
+        }
+        reStoreUserList() // 更新持久化存储
     }
 }

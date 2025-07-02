@@ -100,7 +100,7 @@ class TimeManager {
         val schoolYearEnd: Int
         val semester: Int
 
-        if (currentMonth >= Calendar.SEPTEMBER) { // 如果当前月份大于或等于9月
+        if (currentMonth >= Calendar.JULY) { // 如果当前月份大于或等于9月
             schoolYearStart = currentYear
             schoolYearEnd = currentYear + 1
             semester = 3 // 秋季学期

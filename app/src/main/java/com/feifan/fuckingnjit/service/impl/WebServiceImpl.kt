@@ -29,9 +29,12 @@ class WebServiceImpl : WebService {
 
     override suspend fun getCurriculum(): String {
         return try {
+            val schoolYearFull = Manager.getTimeManager().getCurrentSchoolYear()
+            val schoolYear = schoolYearFull.split('-')[0]
+            val semester = schoolYearFull.split('-')[2]
             val url =
                 "${HttpRequestHelper.BASE_URL}${HttpRequestHelper.WEBVPN_PATH}/jwglxt/kbcx/xskbqr_cxXskbqrIndex.html" +
-                        "?doType=query&gnmkdm=N2158&enlink-vpn&xnm=2024&xqm=12&_search=false" +
+                        "?doType=query&gnmkdm=N2158&enlink-vpn&xnm=${schoolYear}&xqm=${semester}&_search=false" +
                         "&nd=1725346567148&queryModel.showCount=200&queryModel.currentPage=1" +
                         "&queryModel.sortName=&queryModel.sortOrder=asc&time=1"
 

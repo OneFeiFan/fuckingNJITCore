@@ -24,6 +24,7 @@ class Tools {
         {"index": "11", "name": "20:20-21:05"}
     ]
 """.trimIndent()
+
         fun getScores(raw: JSONObject): JSONArray {
             val result = mutableListOf<Map<String, Any>>()
             val items: JSONArray = raw.getJSONArray("items")
@@ -43,7 +44,8 @@ class Tools {
                         "xqm" to element.getString("xqm"),//学期
                         "kcmc" to element.getString("kcmc"),//课程名称
                         "xnmmc" to element.getString("xnmmc"),//学年名称
-                        "xqmmc" to element.getString("xqmmc")//学期名称
+                        "xqmmc" to element.getString("xqmmc"),//学期名称
+                        "ksxz" to element.getString("ksxz"),//考试性质
                     )
                 )
             }
@@ -56,59 +58,134 @@ class Tools {
 //            val averageGPA = calculateAverageGPA(finalCourseList )
 //        }
 
+//        fun appendToPrivateFile(fileName: String, content: String) {
+//            try {
+//                // 构建完整路径（确保包名正确）
+//                val filePath = "/data/user/0/uni.UNI2090008/files/$fileName"
+//                val file = File(filePath)
+//
+//                // 如果文件不存在，先创建父目录
+//                if (!file.parentFile.exists()) {
+//                    file.parentFile.mkdirs()
+//                }
+//
+//                // 使用 FileWriter 追加内容（true 表示追加模式）
+//                FileWriter(file, true).use { writer ->
+//                    writer.append(content)
+//                    writer.append("\n") // 可选：换行分隔每次写入
+//                }
+//            } catch (e: IOException) {
+//                e.printStackTrace()
+//            }
+//        }
+
+
         @SuppressLint("DefaultLocale")
         fun calculateAverageGPA(tableData: JSONArray): String {
+            try {
+                // 删除不计入GPA的课程和特殊算法课程
+                val excludedCourses = (0 until tableData.size)
+                    .map { tableData.getJSONObject(it) }
+                    .filter { item ->
+                        item.getString("kcgsmc") != "劳动教育" &&
+                        item.getString("kcgsmc") != "跨专业选修" &&
+                        item.getString("kcgsmc") != "公选" &&
+                        item.getString("kcgsmc") != "劳动选修" &&
+                        item.getString("kcgsmc") != "xxx" &&
+                        item.getString("kclbmc") != "专业选修课程" &&
+                        item.getString("kclbmc") != "大学外语类课程" &&
+                        item.getInteger("bfzcj") >= 60 //不是挂科的
+                    }
 
-            // 删除不计入GPA的课程和特殊算法课程
-            val excludedCourses = (0 until tableData.size)
-                .map { tableData.getJSONObject(it) }
-                .filter { item ->
-                    item.getString("kcgsmc") != "劳动教育" &&
-                            item.getString("kcgsmc") != "跨专业选修" &&
-                            item.getString("kcgsmc") != "公选" &&
-                            item.getString("kcgsmc") != "劳动选修" &&
-                            item.getString("kcgsmc") != "xxx" &&
-                            item.getString("kclbmc") != "专业选修课程" &&
-                            item.getString("kclbmc") != "大学外语类课程"
+                // 过滤特殊算法课程
+                val specialCourses = (0 until tableData.size)
+                    .map { tableData.getJSONObject(it) }
+                    .filter { item ->
+                        item.getString("kclbmc") == "专业选修课程" ||
+                                item.getString("kclbmc") == "大学外语类课程"
+                    }
+
+                // 取出专业选修课程和大学外语类课程的最高分
+                val highestScoreSpecialCourses = specialCourses
+                    .groupBy { it.getString("kclbmc") }
+                    .mapValues { (_, items) ->
+                        items.maxByOrNull { it.getDouble("bfzcj") }!!
+                    }
+                    .values
+
+                // 合并结果
+
+                val finalCourseList =
+                    JSONArray.parseArray(JSON.toJSONString(excludedCourses + highestScoreSpecialCourses))
+
+                var totalCredit = 0.0
+                var totalCreditPoint = 0.0
+
+                (0 until finalCourseList.size).forEach { i ->
+                    val item = finalCourseList.getJSONObject(i)
+
+                    var gradePoint = item.getDouble("jd")
+
+                    if (item.getString("cj") == "合格" || item.getString("cj") == "通过") {
+                        if (item.getString("ksxz") != "正常考试") {
+                            gradePoint = 3.0;
+                        } else {
+                            gradePoint = 3.5;
+                        }
+                    } else if (item.getString("cj") == "优秀") {
+                        gradePoint = 4.5;
+                    } else if (item.getString("cj") == "良好") {
+                        gradePoint = 3.5;
+                    } else if (item.getString("cj") == "中等") {
+                        gradePoint = 2.5;
+                    } else if (item.getString("cj") == "及格") {
+                        gradePoint = 1.5;
+                    } else if (item.getInteger("cj") >= 95) {
+                        gradePoint = 5.0;
+                    } else if (item.getInteger("cj") >= 90) {
+                        gradePoint = 4.5;
+                    } else if (item.getInteger("cj") >= 85) {
+                        gradePoint = 4.0;
+                    } else if (item.getInteger("cj") >= 80) {
+                        gradePoint = 3.5;
+                    } else if (item.getInteger("cj") >= 75) {
+                        gradePoint = 3.0;
+                    } else if (item.getInteger("cj") >= 70) {
+                        gradePoint = 2.5;
+                    } else if (item.getInteger("cj") >= 65) {
+                        gradePoint = 2.0;
+                    } else if (item.getInteger("cj") >= 60) {
+                        gradePoint = 1.0;
+                    }
+
+                    if (item.getString("ksxz") != "正常考试") {
+                        if (gradePoint != 1.0) {
+                            gradePoint -= 0.5;
+                        }
+                    }
+
+                    val credit = item.getDouble("xf")
+
+                    val courseName = item.getString("kcmc")
+
+                    totalCredit += credit
+                    totalCreditPoint += credit * gradePoint
+
+//        appendToPrivateFile(
+//            "result.txt",
+//            "$courseName: $credit * $gradePoint = ${credit * gradePoint} ${item.getString("ksxz")}"
+//        )
                 }
 
-            // 过滤特殊算法课程
-            val specialCourses = (0 until tableData.size)
-                .map { tableData.getJSONObject(it) }
-                .filter { item ->
-                    item.getString("kclbmc") == "专业选修课程" ||
-                            item.getString("kclbmc") == "大学外语类课程"
+                return (totalCreditPoint / totalCredit).let {
+                    String.format("%.2f", it)
                 }
-
-            // 取出专业选修课程和大学外语类课程的最高分
-            val highestScoreSpecialCourses = specialCourses
-                .groupBy { it.getString("kclbmc") }
-                .mapValues { (_, items) ->
-                    items.maxByOrNull { it.getDouble("bfzcj") }!!
-                }
-                .values
-
-            // 合并结果
-
-            val finalCourseList =
-                JSONArray.parseArray(JSON.toJSONString(excludedCourses + highestScoreSpecialCourses))
-
-            var totalCredit = 0.0
-            var totalCreditPoint = 0.0
-
-            (0 until finalCourseList.size).forEach { i ->
-                val item = finalCourseList.getJSONObject(i)
-                val credit = item.getDouble("xf")
-                val gradePoint = item.getDouble("jd")
-
-                totalCredit += credit
-                totalCreditPoint += credit * gradePoint
-            }
-
-            return (totalCreditPoint / totalCredit).let {
-                String.format("%.2f", it)
+            } catch (e: Exception) {
+                Manager.handleException(e, "calculateAverageGPA")
+                return "0.00"
             }
         }
+
         fun getCourseTime(courseTime: String): ArrayList<Int> {
             var courseTime = courseTime
             courseTime = courseTime.replace("第", "")

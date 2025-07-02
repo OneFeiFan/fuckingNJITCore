@@ -181,6 +181,7 @@ class Manager {
             if (!relogin) {
                 logout()
             }
+            CookieManager.getInstance().removeAllCookies(null)
             val intent = Intent(context, SampleWebViewImpl::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(intent)
             return ""
@@ -195,8 +196,6 @@ class Manager {
             if (removeCurrentUser) {
                 userManager.removeCurrentUser()
             }
-            val cookieManager = CookieManager.getInstance()
-            cookieManager.removeAllCookies(null)
         }
 
         fun showToast(text: String) {

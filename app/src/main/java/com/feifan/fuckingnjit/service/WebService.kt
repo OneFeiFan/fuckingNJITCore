@@ -8,7 +8,7 @@ interface WebService {
     suspend fun getUserData(): JSONObject
     suspend fun getSemesterStartDate(): String
     suspend fun getEmptyClassrooms(dateRange:String,coursePeriod:String,buildingId:String): String
-    suspend fun getAllSorces(): String
+    suspend fun getAllSorces(refresh: Boolean): String
     suspend fun getSorcesDetail(
         classId: String,
         schoolYear: String,
@@ -17,4 +17,5 @@ interface WebService {
     ): String
 
     suspend fun getNoticeInformation(): String
+    suspend fun getAcademicProgress(refresh: Boolean): String
 }

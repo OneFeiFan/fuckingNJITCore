@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.objectbox)
 }
 
 android {
@@ -67,6 +68,7 @@ dependencies {
     androidTestImplementation libs.androidx.rules
     implementation libs.jsoup
     implementation libs.android.loading.animation
+    implementation(libs.objectbox.kotlin)
 //    compileOnly libs.leakcanary.android
 //    implementation libs.kotlin.test
 

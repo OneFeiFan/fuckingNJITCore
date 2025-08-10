@@ -24,6 +24,8 @@ securityCrypto = "1.1.0-alpha07"
 junitJunit = "4.12"
 activity = "1.10.1"
 workRuntimeKtx = "2.10.1"
+objectbox = "4.3.0"
+objectboxKotlin = "4.3.0"
 
 [libraries]
 android-loading-animation = { module = "com.github.OneFeiFan:Android-Loading-Animation", version.ref = "androidLoadingAnimation" }
@@ -49,9 +51,10 @@ junit-junit = { group = "junit", name = "junit", version.ref = "junitJunit" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 androidx-activity = { group = "androidx.activity", name = "activity", version.ref = "activity" }
 androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workRuntimeKtx" }
+objectbox-kotlin = { module = "io.objectbox:objectbox-kotlin", version.ref = "objectboxKotlin" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 android-library = { id = "com.android.library" }
-
+objectbox = { id = "io.objectbox", version.ref = "objectbox" }

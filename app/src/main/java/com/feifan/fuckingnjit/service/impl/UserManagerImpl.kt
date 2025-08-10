@@ -181,7 +181,7 @@ class UserManagerImpl : UserManager {
                         Manager.showToast("获取学期开始日期失败，请稍后重试")
                     }
                     try {
-                        val allSorces = Manager.getWebService().getAllSorces()
+                        val allSorces = Manager.getWebService().getAllSorces(false)
                         userList[currentUser]?.setAllSorces(allSorces)
                     } catch (e: Exception) {
                         Manager.showToast("获取成绩失败，请稍后重试")

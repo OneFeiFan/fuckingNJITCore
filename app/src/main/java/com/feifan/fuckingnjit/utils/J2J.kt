@@ -1,25 +1,25 @@
 package com.feifan.fuckingnjit.utils
 
 import android.webkit.JavascriptInterface
-import com.feifan.fuckingnjit.Model.User
+import com.feifan.fuckingnjit.database.UserData
 
 //import leakcanary.AppWatcher
 
 class J2J {
-    private lateinit var user: User
+    private lateinit var user: UserData
     init {
-        user = User()
+        user = UserData()
 //        AppWatcher.objectWatcher.expectWeaklyReachable(user, "d登录用user对象")
     }
     @JavascriptInterface
     fun addUser(id: String, password: String){
-        user = User()
-        user.setId(id)
-        user.setPassword(password)
+        user = UserData()
+        user.id = id
+        user.password = password
     }
     @JavascriptInterface
     fun login(){
         Manager.getUserManager()?.addUser(user)
-        user = User()
+        user = UserData()
     }
 }

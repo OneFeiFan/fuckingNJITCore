@@ -48,13 +48,14 @@ class TimeManager {
             (diff / 7).toInt() + 1
         }
     }
-    fun calculateCurrentWeek(startDate: String): Int {
-
+    fun calculateCurrentWeek(start: Long): Int {
         // 获取当前日期
-        val currentDate = SDF.format(Date())
-
-        val start = SDF.parse(startDate)?.time as Long
-        val today = SDF.parse(currentDate)?.time as Long
+        val today = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
 
         val diff = (today - start) / (24 * 60 * 60 * 1000) // 毫秒转换为天
 
@@ -100,7 +101,7 @@ class TimeManager {
         val schoolYearEnd: Int
         val semester: Int
 
-        if (currentMonth >= Calendar.JULY) { // 如果当前月份大于或等于9月
+        if (currentMonth >= Calendar.JULY) { // 如果当前月份大于或等于6月
             schoolYearStart = currentYear
             schoolYearEnd = currentYear + 1
             semester = 3 // 秋季学期

@@ -31,8 +31,8 @@ class SampleWebViewClientImpl(private val context: Context, private val webView:
                 getObj("load").onclick = function() {
                     J2J.addUser(document.querySelector("#mobileUsername").value,document.querySelector("#mobilePassword").value)
                 }
-                document.querySelector("#mobileUsername").value = "${user?.getId()}"
-                document.querySelector("#mobilePassword").value = "${user?.getPassword()}"
+                document.querySelector("#mobileUsername").value = "${user?.id}"
+                document.querySelector("#mobilePassword").value = "${user?.password}"
                 
             })();
         """.trimIndent(),null)
@@ -59,8 +59,8 @@ class SampleWebViewClientImpl(private val context: Context, private val webView:
         val user = userManager?.getCurrentUser()
         view.evaluateJavascript("""
             (function() {
-                document.querySelector("#mobileUsername").value = "${user?.getId()}"
-                document.querySelector("#mobilePassword").value = "${user?.getPassword()}"
+                document.querySelector("#mobileUsername").value = "${user?.id}"
+                document.querySelector("#mobilePassword").value = "${user?.password}"
             })();
         """.trimIndent(),null)
     }

@@ -4,8 +4,8 @@ import com.alibaba.fastjson.JSONArray
 import com.alibaba.fastjson.JSONObject
 import com.alibaba.fastjson.annotation.JSONField
 import com.feifan.fuckingnjit.utils.Manager
-import com.feifan.fuckingnjit.utils.Tools
 import com.feifan.fuckingnjit.utils.SecureUtil
+import com.feifan.fuckingnjit.utils.Tools
 
 class User {
     private var name: String = ""

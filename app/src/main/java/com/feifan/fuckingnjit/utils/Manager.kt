@@ -17,8 +17,9 @@ import com.feifan.fuckingnjit.service.impl.SampleWebViewImpl
 import com.feifan.fuckingnjit.service.impl.UserManagerImpl
 import com.feifan.fuckingnjit.service.impl.WebServiceImpl
 import com.feifan.fuckingnjit.widget.DemoWidgetProvider
-import java.lang.ref.WeakReference
+import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.Locale
 import kotlin.math.abs
 
 class Manager {
@@ -34,33 +35,34 @@ class Manager {
         private var inLogin = false
         private lateinit var receiver: BroadcastReceiver
         private lateinit var timetableData: List<List<List<String>>>
-        private var thisWeek: Int = 0
         private val timeMap = hashMapOf<Int, Date>()
 
         fun init(context: Context) {
             if (!::userManager.isInitialized) {
                 this.context = context
+                UserBoxUtils.init(context)
+                BaseDataBoxUtils.init(context)
                 userManager = UserManagerImpl(context)
             } else {
                 throw IllegalStateException("Manager already initialized")
             }
         }
 
-        fun getSemesterStartDate(obj: UserManagerImpl? = null): String {
-            val userManager = obj?: getUserManager()
-            val date = userManager?.getCurrentUser()?.getSemesterStartDate()
+        fun getSemesterStartDate(): String {
+            val date = BaseDataBoxUtils.getSemesterStartDate()
             try {
-                if (date != null && date != "") {
-                    thisWeek = timeManager.calculateCurrentWeek(date)
+                if (date != 0L) {
+                    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                    return sdf.format(Date(date))
                 }
             } catch (e: Exception) {
                 showToast("获取学期开始日期失败，请稍后重试")
             }
-            return date?: ""
+            return "2025-02-17"
         }
 
-        fun getThisWeek(): Int {
-            return thisWeek
+        fun getCurrentWeek(): Int {
+            return BaseDataBoxUtils.getCurrentWeek()
         }
 
         fun getTimeManager(): TimeManager {
@@ -124,9 +126,10 @@ class Manager {
             }
             val filter = IntentFilter(Intent.ACTION_TIME_TICK)
             context.registerReceiver(receiver, filter)
+            val currentWeek = BaseDataBoxUtils.getCurrentWeek()
 
-            if (thisWeek == -1 || thisWeek > 19) {
-                println("thisWeek is -1 or >19: $thisWeek")
+            if (currentWeek == -1 || currentWeek > 19) {
+                println("thisWeek is -1 or >19: $currentWeek")
                 context.unregisterReceiver(receiver)
             }
         }
@@ -137,7 +140,7 @@ class Manager {
 
         fun updateTimetableData(obj: UserManagerImpl? = null) {
             val userManager = obj?: getUserManager()
-            val curriculums = userManager?.getCurrentUser()?.getCurriculums()
+            val curriculums = userManager?.getCurrentUser()?.curriculums
             if (curriculums == null || curriculums == "") {
                 return
             }
@@ -150,7 +153,7 @@ class Manager {
                 return
             }
             val dateList = timeManager.getDateList()
-            val timeTable = timetableData[thisWeek][getTimeManager().todayWeekIndex()]
+            val timeTable = timetableData[BaseDataBoxUtils.getCurrentWeek()][getTimeManager().todayWeekIndex()]
             for (i in timeTable.indices) {
                 if (timeTable[i] != "") {
                     timeMap[i] = dateList[i]

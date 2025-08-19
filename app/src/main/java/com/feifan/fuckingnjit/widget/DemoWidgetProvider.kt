@@ -13,8 +13,8 @@ import android.widget.RemoteViews
 import android.widget.Toast
 import com.alibaba.fastjson.JSONArray
 import com.alibaba.fastjson.JSONObject
-import com.feifan.fuckingnjit.Model.User
 import com.feifan.fuckingnjit.R
+import com.feifan.fuckingnjit.database.UserData
 import com.feifan.fuckingnjit.utils.Manager
 import com.feifan.fuckingnjit.utils.Tools
 import java.time.LocalDate
@@ -68,14 +68,14 @@ class DemoWidgetProvider : AppWidgetProvider() {
             remoteViews.setTextViewText(R.id.month_id, monthDayText)
             remoteViews.setTextViewText(R.id.week_id, weekDayText)
 
-           val user: User?
+           val user: UserData?
             try {
                 user = Manager.getUserManager()?.getCurrentUser()
             }catch (e: Exception){
                 e.printStackTrace()
                 return remoteViews
             }
-            val curriculums = user?.getCurriculums()
+            val curriculums = user?.curriculums
             if (curriculums == null||curriculums == "") {
                 println("没有课表")
                 return remoteViews
@@ -84,7 +84,7 @@ class DemoWidgetProvider : AppWidgetProvider() {
 
                    // 使用 fastjson 解析 JSON 数组字符串
             val list: List<HashMap<String, String>> = Tools.parseCourseSchedule(JSONArray.parseArray(
-                curriculumsObject[Manager.getThisWeek()][Manager.getTimeManager().todayWeekIndex()].toString()
+                curriculumsObject[Manager.getCurrentWeek()][Manager.getTimeManager().todayWeekIndex()].toString()
             ))
             // 过滤出还没结束的课程
             var sortedList: List<HashMap<String, String>> = emptyList<HashMap<String, String>>()

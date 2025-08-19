@@ -14,10 +14,14 @@ data class UserData (
     @Id
     var uuid: Long  = 0,
     var id: String = "",
+    var password: String = "",
+    var name: String = "",
+    var gpa: String = "0",
     @Convert(converter = JSONObjectConverter::class, dbType = String::class)
     var academicProgress: JSONObject = JSONObject(),
     @Convert(converter = JSONArrayConverter::class, dbType = String::class)
-    var scores: JSONArray = JSONArray()
+    var scores: JSONArray = JSONArray(),
+    var curriculums: String = ""
 )
 
 

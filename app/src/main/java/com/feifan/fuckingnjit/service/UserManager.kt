@@ -1,13 +1,13 @@
 package com.feifan.fuckingnjit.service
 
-import com.feifan.fuckingnjit.Model.User
+import com.feifan.fuckingnjit.database.UserData
 
 interface UserManager {
-    fun addUser(user: User)
+    fun addUser(user: UserData)
     suspend  fun deleteUser(id: String): Boolean
-    fun getOriginalPassword(id: String): String
+//    fun getOriginalPassword(id: String): String
 //    fun getOriginalPassword(): String
-    fun getCurrentUser(): User
+    fun getCurrentUser(): UserData
     fun setCurrentUser(id: String)
 //    fun setCookie(cookie: String)
 //    fun getCookie(): String

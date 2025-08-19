@@ -20,7 +20,8 @@ object UserBoxUtils {
         userDataBox = boxStore.boxFor(UserData::class.java)
     }
 
-    /** CRUD 操作 **/
+    // 返回储存的 BoxStore 对象
+    fun getBoxStore(): Box<UserData> = userDataBox
 
     // 插入/更新单个用户数据
     fun insertUserData(userData: UserData?) = userData?.let {

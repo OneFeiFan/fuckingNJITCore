@@ -257,14 +257,37 @@ class WebServiceImpl : WebService {
 
     override suspend fun getSemesterStartDate(): String {
         return try {
-            val url = buildUrl(
-                "/jwglxt/xtgl/index_cxAreaFive.html",
-                "localeKey" to "zh_CN",
-                "gnmkdm" to "index"
+            val schoolYearFull = Manager.getTimeManager().getCurrentSchoolYear()
+            val schoolYear = schoolYearFull.split('-')[0]
+            val semester = schoolYearFull.split('-')[2]
+
+            val additionalHeaders = mapOf(
+                "Referer" to "${HttpRequestHelper.BASE_URL}/http/webvpnea5e00498bb033e68046c95dbdf6e09fbc127bea836184c80a0792b662ced92f/authserver/login",
+                "Origin" to HttpRequestHelper.BASE_URL
             )
-            val doc = httpRequestHelper.getHtmlResponse(url)
-            val values = doc.select(".tab-th-1")[0].text()
-            values.split("(")[1].split("至")[0]
+
+            val url = buildUrl(
+                "/jwglxt/kbcx/xskbcxMobile_cxXsKb.html",
+                "xnm" to schoolYear,
+                "xqm" to semester,
+                "zs" to "1",
+                "gnmkdm" to "N2154",
+            )
+
+            val result = httpRequestHelper.getJsonResponse(url, HttpMethod.POST, additionalHeaders)
+            if (result.endsWith("</html>")) {
+                Manager.showToast("需要登录")
+                Manager.startLogin(true)
+                return "2025-02-17"
+            }
+            val jsonObject = JSON.parseObject(result)
+            val rqazcList = jsonObject.getJSONArray("rqazcList")
+            if (rqazcList.size == 0) {
+                Manager.showToast("未找到学期开始日期")
+                return "2025-02-17"
+            }
+            val rqazc = rqazcList.getJSONObject(0)
+            rqazc.getString("rq")
         } catch (e: Exception) {
             """{"state":"error","message":"${e.message}"}"""
         }
@@ -354,29 +377,8 @@ class WebServiceImpl : WebService {
         }
     }
 
-    override suspend fun getAllSorces(refresh: Boolean): String {
+    override suspend fun getAllSorces(): JSONObject {
         return try {
-            val resultObject = JSONObject.parseObject(
-                """
-                    {
-                        "state":"success"
-                    }
-                """
-            )
-            val id = Manager.getUserManager()?.getCurrentUser()?.getId() ?: ""
-            var userData = UserBoxUtils.getUserById(id)
-            if (userData == null) {
-                userData = UserData()
-                userData.id = id
-                UserBoxUtils.insertUserData(userData)
-            }
-            if (!refresh) {
-                val result = userData.scores
-                if (!result.isEmpty()) {
-                    resultObject["data"] = result
-                    return resultObject.toJSONString()
-                }
-            }
             val url = buildUrl(
                 "/jwglxt/cjcx/cjcx_cxXsgrcj.html",
                 "doType" to "query",
@@ -397,19 +399,18 @@ class WebServiceImpl : WebService {
                 "Origin" to "https://casb.njit.edu.cn",
                 "Referer" to "https://casb.njit.edu.cn/http/webvpn0ce64a2014465dfe87dac723232b20edd0da6675d44948234864a5c4ff77b278/new/index.html"
             )
-            val result = httpRequestHelper.getJsonResponse(url, HttpMethod.GET, headers)
-            if (result.endsWith("</html>")) {
+            val raw = httpRequestHelper.getJsonResponse(url, HttpMethod.GET, headers)
+            if (raw.endsWith("</html>")) {
                 Manager.showToast("需要登录")
                 Manager.startLogin(true)
-                return """{"state":"error","message":"需要登录"}"""
+                return JSONObject()
             }
-            userData.scores = Tools.getScores(JSONObject.parseObject(result))
-            UserBoxUtils.updateUserData(userData)
-            resultObject["data"] = userData.scores
-            resultObject.toJSONString()
+            val result = JSONObject()
+            result["data"] = Tools.getScores(JSONObject.parseObject(raw))
+            result
         } catch (e: Exception) {
             Manager.handleException(e, "获取全部成绩失败")
-            """{"state":"error","message":"${e.message}"}"""
+            JSONObject()
         }
 
     }
@@ -544,7 +545,7 @@ class WebServiceImpl : WebService {
 
     override suspend fun getAcademicProgress(refresh: Boolean): String {
         return try {
-            val id = Manager.getUserManager()?.getCurrentUser()?.getId() ?: ""
+            val id = Manager.getUserManager()?.getCurrentUser()?.id ?: ""
             var userData = UserBoxUtils.getUserById(id)
             if (userData == null) {
                 userData = UserData()

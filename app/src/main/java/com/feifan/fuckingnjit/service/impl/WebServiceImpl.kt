@@ -56,7 +56,7 @@ class WebServiceImpl : WebService {
         return "$baseUrl?$encodedParams"
     }
 
-    override suspend fun getCurriculum(): String {
+    override suspend fun getCurriculum(): JSONObject {
         return try {
             val schoolYearFull = Manager.getTimeManager().getCurrentSchoolYear()
             val schoolYear = schoolYearFull.split('-')[0]
@@ -81,129 +81,144 @@ class WebServiceImpl : WebService {
             )
 
             val raw = httpRequestHelper.getJsonResponse(url, HttpMethod.GET, additionalHeaders)
-            if (raw.endsWith("</html>")) {
-//                Handler(Looper.getMainLooper()).post {
+            if (raw.endsWith("</html>")||raw.contains("</html>")) {
                 Manager.showToast("需要登录")
-//                }
-
                 Manager.startLogin(true)
-                """{"state":"error","message":"需要登录"}"""
-            } else {
-                val jsonObject = JSON.parseObject(raw)
-                if (jsonObject.containsKey("message") && jsonObject.getString("message") == "需要登录") {
-                    return """{"state":"error","message":"需要登录"}"""
-                }
-                val items = jsonObject.getJSONArray("items")
+                JSONArray()
+            }
+            val jsonObject = JSON.parseObject(raw)
+            if (jsonObject.containsKey("message") && jsonObject.getString("message") == "需要登录") {
+                Manager.showToast("需要登录")
+                Manager.startLogin(true)
+                JSONArray()
+            }
+            val items = jsonObject.getJSONArray("items")
 
-                val weekdayMap = mapOf(
-                    "星期一" to 1, "星期二" to 2, "星期三" to 3,
-                    "星期四" to 4, "星期五" to 5, "星期六" to 6, "星期日" to 7
-                )
-                val courses = ArrayList<Course>()
-                val size: Int = items.size
-                for (m in 0..<size) {
-                    val item = items.getJSONObject(m)
-                    var teacher = item.getString("jsxx")
-                    var classroom = item.getString("jxdd")
-                    val courseName = item.getString("kcmc")
-                    val time = item.getString("sksj") ?: continue
-                    if (classroom == null) {
-                        classroom = "上课地点未定"
+            val weekdayMap = mapOf(
+                "星期一" to 1, "星期二" to 2, "星期三" to 3,
+                "星期四" to 4, "星期五" to 5, "星期六" to 6, "星期日" to 7
+            )
+            val courses = ArrayList<Course>()
+            val size: Int = items.size
+            for (m in 0..<size) {
+                val item = items.getJSONObject(m)
+                var teacher = item.getString("jsxx").split("/")[1]
+                var classroom = item.getString("jxdd")
+                val courseName = item.getString("kcmc")
+                val time = item.getString("sksj")
+
+                if(time == null || classroom == null){
+                    val course = Course()
+                    course.setName(courseName)
+                    course.setTeacher(teacher)
+
+                    if(classroom == null){
+                        course.setClassroom("未安排地点")
+                    }else{
+                        course.setClassroom(classroom)
                     }
-                    val times = time.split(";")
-                    val classrooms = classroom.split(";")
-                    teacher = teacher.split("/")[1]
-                    for ((j, t) in times.withIndex()) {
-                        val weekday = t.substring(0, 3)
-                        val courseTime = t.substring(t.indexOf("第"), t.indexOf("{"))
-                        val weeks = t.substring(t.indexOf("{") + 1, t.indexOf("}"))
-                        val timeArray: ArrayList<Int> = Tools.getCourseTime(courseTime)
-                        val weekss =
-                            weeks.split(",".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
+                    course.setTime(null)
+                    courses.add(course)
+                    continue
+                }
 
-                        for (week in weekss) {
-                            if (!week.contains("-")) {
-                                val course = Course()
-                                course.setName(courseName)
-                                course.setTeacher(teacher)
-                                val time1 = Time(
-                                    weekdayMap[weekday]!!,
-                                    timeArray,
-                                    week.substring(0, week.indexOf("周")).toInt()
-                                )
-                                course.setTime(time1)
-                                course.setClassroom(classrooms[j])
-                                courses.add(course)
-                            } else {
-                                val index = week.indexOf("(")
-                                val pos = week.indexOf("-")
-                                val left = week.substring(0, pos).toInt()
-                                val right = week.substring(pos + 1, week.indexOf("周")).toInt()
-                                if (index != -1) {
-                                    val choice = week[index + 1]
-                                    if (choice == '单') {
-                                        for (i in left..right) {
-                                            if (i % 2 == 1) {
-                                                val course = Course()
-                                                course.setName(courseName)
-                                                course.setTeacher(teacher)
-                                                val time1 =
-                                                    Time(weekdayMap[weekday]!!, timeArray, i)
-                                                course.setTime(time1)
-                                                course.setClassroom(classrooms[j])
-                                                courses.add(course)
-                                            }
-                                        }
-                                    } else if (choice == '双') {
-                                        for (i in left..right) {
-                                            if (i % 2 == 0) {
-                                                val course = Course()
-                                                course.setName(courseName)
-                                                course.setTeacher(teacher)
-                                                val time1 =
-                                                    Time(weekdayMap[weekday]!!, timeArray, i)
-                                                course.setTime(time1)
-                                                course.setClassroom(classrooms[j])
-                                                courses.add(course)
-                                            }
-                                        }
-                                    }
-                                } else {
+                val times = time.split(";")
+                val classrooms = classroom.split(";")
+                for ((j, t) in times.withIndex()) {
+                    val weekday = t.substring(0, 3)
+                    val courseTime = t.substring(t.indexOf("第"), t.indexOf("{"))
+                    val weeks = t.substring(t.indexOf("{") + 1, t.indexOf("}"))
+                    val timeArray: ArrayList<Int> = Tools.getCourseTime(courseTime)
+                    val weekss =
+                        weeks.split(",".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
+
+                    for (week in weekss) {
+                        if (!week.contains("-")) {
+                            val course = Course()
+                            course.setName(courseName)
+                            course.setTeacher(teacher)
+                            val time1 = Time(
+                                weekdayMap[weekday]!!,
+                                timeArray,
+                                week.substring(0, week.indexOf("周")).toInt()
+                            )
+                            course.setTime(time1)
+                            course.setClassroom(classrooms[j])
+                            courses.add(course)
+                        } else {
+                            val index = week.indexOf("(")
+                            val pos = week.indexOf("-")
+                            val left = week.substring(0, pos).toInt()
+                            val right = week.substring(pos + 1, week.indexOf("周")).toInt()
+                            if (index != -1) {
+                                val choice = week[index + 1]
+                                if (choice == '单') {
                                     for (i in left..right) {
-                                        val course = Course()
-                                        course.setName(courseName)
-                                        course.setTeacher(teacher)
-                                        val time1 = Time(weekdayMap[weekday]!!, timeArray, i)
-                                        course.setTime(time1)
-                                        course.setClassroom(classrooms[j])
-                                        courses.add(course)
+                                        if (i % 2 == 1) {
+                                            val course = Course()
+                                            course.setName(courseName)
+                                            course.setTeacher(teacher)
+                                            val time1 =
+                                                Time(weekdayMap[weekday]!!, timeArray, i)
+                                            course.setTime(time1)
+                                            course.setClassroom(classrooms[j])
+                                            courses.add(course)
+                                        }
                                     }
+                                } else if (choice == '双') {
+                                    for (i in left..right) {
+                                        if (i % 2 == 0) {
+                                            val course = Course()
+                                            course.setName(courseName)
+                                            course.setTeacher(teacher)
+                                            val time1 =
+                                                Time(weekdayMap[weekday]!!, timeArray, i)
+                                            course.setTime(time1)
+                                            course.setClassroom(classrooms[j])
+                                            courses.add(course)
+                                        }
+                                    }
+                                }
+                            } else {
+                                for (i in left..right) {
+                                    val course = Course()
+                                    course.setName(courseName)
+                                    course.setTeacher(teacher)
+                                    val time1 = Time(weekdayMap[weekday]!!, timeArray, i)
+                                    course.setTime(time1)
+                                    course.setClassroom(classrooms[j])
+                                    courses.add(course)
                                 }
                             }
                         }
                     }
                 }
-
-                val maxWeek = courses.maxOfOrNull { it.getTime().week } ?: 20
-                val result = courses.groupBy { it.getTime().week }.run {
-                    Array(maxWeek + 1) { getOrElse(it) { emptyList() } }
-                }
-                JSONArray.parseArray(JSONObject.toJSONString(Tools.getTimeTableData(result)))
-                    .toJSONString()
             }
+
+            val maxWeek = courses.maxOfOrNull { it.getTime()?.week ?: 0 } ?: 20
+
+            val (validTimeCourses, nullTimeCourses) = courses.partition { it.getTime() != null }
+
+            val validTimeCoursesList = validTimeCourses.groupBy { it.getTime()!!.week }.run {
+                Array(maxWeek + 1) { getOrElse(it) { emptyList() } }
+            }
+            val result = JSONObject()
+            result["validTimeCourses"] = JSON.toJSONString(Tools.getTimeTableData(validTimeCoursesList))
+            result["nullTimeCourses"] = JSON.toJSONString(nullTimeCourses)
+            result
         } catch (e: Exception) {
             // 分类处理异常
             when (e) {
                 is IOException -> {
                     // 网络异常
                     Manager.handleException(e, "getCurriculum:网络错误")
-                    return """{"state":"network_error","message":"网络请求失败"}"""
+                    return JSONObject()
                 }
 
                 is JSONException -> {
                     // JSON解析异常
                     Manager.handleException(e, "getCurriculum:数据解析错误")
-                    return """{"state":"parse_error","message":"数据解析失败"}"""
+                    return JSONObject()
                 }
 
                 else -> {
@@ -211,7 +226,7 @@ class WebServiceImpl : WebService {
                         Manager.startLogin(true)
                     }
                     Manager.handleException(e, "getCurriculum:未知错误")
-                    return """{"state":"error","message":"需要重新登录"}"""
+                    return JSONObject()
                 }
             }
         }

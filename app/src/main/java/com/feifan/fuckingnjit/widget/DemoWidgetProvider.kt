@@ -75,7 +75,7 @@ class DemoWidgetProvider : AppWidgetProvider() {
                 e.printStackTrace()
                 return remoteViews
             }
-            val curriculums = user?.curriculums
+            val curriculums = user?.curriculums?.getString("validTimeCourses")
             if (curriculums == null||curriculums == "") {
                 println("没有课表")
                 return remoteViews

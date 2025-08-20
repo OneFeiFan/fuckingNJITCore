@@ -1,10 +1,11 @@
 package com.feifan.fuckingnjit.service
 
+import com.alibaba.fastjson.JSONArray
 import com.alibaba.fastjson.JSONObject
 
 
 interface WebService {
-    suspend fun getCurriculum() : String
+    suspend fun getCurriculum() : JSONObject
     suspend fun getUserData(): JSONObject
     suspend fun getSemesterStartDate(): String
     suspend fun getEmptyClassrooms(dateRange:String,coursePeriod:String,buildingId:String): String

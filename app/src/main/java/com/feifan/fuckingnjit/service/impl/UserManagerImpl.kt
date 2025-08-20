@@ -34,7 +34,6 @@ class UserManagerImpl : UserManager {
             this.context = context
         try {
             Manager.registerTimeReceiver()
-            Manager.updateTimetableData(this)
         } catch (e: Exception) {
             Manager.handleException(e, "Failed to load user list from preferences")
         }
@@ -255,5 +254,28 @@ class UserManagerImpl : UserManager {
         result["data"] = userData.scores
         return result.toJSONString()
     }
+
+    suspend fun getCurriculum(refresh: Boolean): String {
+        try {
+            val userData = UserBoxUtils.getUserById(BaseDataBoxUtils.getCurrentUserId())
+            if (userData == null) {
+                Manager.startLogin(true)
+                Manager.showToast("需要登录")
+                return "{}"
+            }
+            if (userData.curriculums.isEmpty() || refresh) {
+                val tmp = Manager.getWebService().getCurriculum()
+                if (!tmp.isEmpty()) {
+                    userData.curriculums = tmp
+                    UserBoxUtils.updateUserData(userData)
+                }
+            }
+            return userData.curriculums.toJSONString()
+        }catch (e: Exception) {
+            Manager.handleException(e, "获取课程表失败")
+            return "{}"
+        }
+    }
+
 }
 

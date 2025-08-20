@@ -2,7 +2,7 @@ package com.feifan.fuckingnjit.Model
 
 class Course {
     private var name: String = ""
-    private var time: Time = Time()
+    private var time: Time? = Time()
     private var classroom: String = ""
     private var teacher: String = ""
 
@@ -14,11 +14,11 @@ class Course {
         this.name = name
     }
 
-    fun getTime(): Time {
+    fun getTime(): Time? {
         return time
     }
 
-    fun setTime(time: Time) {
+    fun setTime(time: Time?) {
         this.time = time
     }
 

@@ -38,14 +38,19 @@ class Manager {
         private val timeMap = hashMapOf<Int, Date>()
 
         fun init(context: Context) {
-            if (!::userManager.isInitialized) {
-                this.context = context
-                UserBoxUtils.init(context)
-                BaseDataBoxUtils.init(context)
-                userManager = UserManagerImpl(context)
-            } else {
-                throw IllegalStateException("Manager already initialized")
+            try {
+                if (!::userManager.isInitialized) {
+                    this.context = context
+                    UserBoxUtils.init(context)
+                    BaseDataBoxUtils.init(context)
+                    userManager = UserManagerImpl(context)
+                } else {
+                    throw IllegalStateException("Manager already initialized")
+                }
+            }catch (e: Exception){
+                println("init error: ${e.message}")
             }
+
         }
 
         fun getSemesterStartDate(): String {
@@ -71,6 +76,7 @@ class Manager {
 
         fun getUserManager(): UserManagerImpl? {
             if (!::userManager.isInitialized) {
+                println("userManager not initialized")
                 return null
             }
             return userManager
@@ -138,13 +144,13 @@ class Manager {
             context.unregisterReceiver(receiver)
         }
 
-        fun updateTimetableData(obj: UserManagerImpl? = null) {
-            val userManager = obj?: getUserManager()
-            val curriculums = userManager?.getCurrentUser()?.curriculums
-            if (curriculums == null || curriculums == "") {
+        fun updateTimetableData() {
+            val userData = UserBoxUtils.getUserById(BaseDataBoxUtils.getCurrentUserId())
+            val validTimeCourses = userData?.curriculums?.getString("validTimeCourses")
+            if (validTimeCourses == null || validTimeCourses == "") {
                 return
             }
-            timetableData = JSONArray.parseArray(curriculums) as List<List<List<String>>>
+            timetableData = JSONArray.parseArray(validTimeCourses) as List<List<List<String>>>
         }
 
         fun updateTimeMap() {
@@ -233,7 +239,7 @@ class Manager {
         fun handleException(e: Exception, message: String) {
             e.printStackTrace()
             println("handleException: $message")
-//            showToast(message)
+            showToast(message)
         }
 
         fun goHome() {

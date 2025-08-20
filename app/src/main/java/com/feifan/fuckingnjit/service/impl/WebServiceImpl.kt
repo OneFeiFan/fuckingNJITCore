@@ -1,11 +1,8 @@
 package com.feifan.fuckingnjit.service.impl
 
-import android.os.Handler
-import android.os.Looper
 import android.webkit.CookieManager
 import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.JSONArray
-import com.alibaba.fastjson.JSONException
 import com.alibaba.fastjson.JSONObject
 import com.feifan.fuckingnjit.Model.Course
 import com.feifan.fuckingnjit.Model.Time
@@ -25,8 +22,8 @@ import kotlinx.coroutines.awaitAll
 import okhttp3.OkHttpClient
 import org.jsoup.Connection
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
 import org.jsoup.select.Elements
-import java.io.IOException
 import java.lang.Integer.parseInt
 import java.util.concurrent.TimeUnit
 import java.util.regex.Matcher
@@ -56,6 +53,12 @@ class WebServiceImpl : WebService {
         return "$baseUrl?$encodedParams"
     }
 
+    private fun isShellDocument(doc: Document): Boolean {
+        return doc.children().size == 1 &&           // 只有 <html> 一个子节点
+                doc.head().children().isEmpty() &&    // <head> 为空
+                doc.body().children().isEmpty()       // <body> 为空
+    }
+
     override suspend fun getCurriculum(): JSONObject {
         return try {
             val schoolYearFull = Manager.getTimeManager().getCurrentSchoolYear()
@@ -81,17 +84,10 @@ class WebServiceImpl : WebService {
             )
 
             val raw = httpRequestHelper.getJsonResponse(url, HttpMethod.GET, additionalHeaders)
-            if (raw.endsWith("</html>")||raw.contains("</html>")) {
-                Manager.showToast("需要登录")
-                Manager.startLogin(true)
+            if (raw.isEmpty()) {
                 JSONArray()
             }
             val jsonObject = JSON.parseObject(raw)
-            if (jsonObject.containsKey("message") && jsonObject.getString("message") == "需要登录") {
-                Manager.showToast("需要登录")
-                Manager.startLogin(true)
-                JSONArray()
-            }
             val items = jsonObject.getJSONArray("items")
 
             val weekdayMap = mapOf(
@@ -102,8 +98,8 @@ class WebServiceImpl : WebService {
             val size: Int = items.size
             for (m in 0..<size) {
                 val item = items.getJSONObject(m)
-                var teacher = item.getString("jsxx").split("/")[1]
-                var classroom = item.getString("jxdd")
+                val teacher = item.getString("jsxx").split("/")[1]
+                val classroom = item.getString("jxdd")
                 val courseName = item.getString("kcmc")
                 val time = item.getString("sksj")
 
@@ -207,28 +203,8 @@ class WebServiceImpl : WebService {
             result["nullTimeCourses"] = JSON.toJSONString(nullTimeCourses)
             result
         } catch (e: Exception) {
-            // 分类处理异常
-            when (e) {
-                is IOException -> {
-                    // 网络异常
-                    Manager.handleException(e, "getCurriculum:网络错误")
-                    return JSONObject()
-                }
-
-                is JSONException -> {
-                    // JSON解析异常
-                    Manager.handleException(e, "getCurriculum:数据解析错误")
-                    return JSONObject()
-                }
-
-                else -> {
-                    Handler(Looper.getMainLooper()).post {
-                        Manager.startLogin(true)
-                    }
-                    Manager.handleException(e, "getCurriculum:未知错误")
-                    return JSONObject()
-                }
-            }
+            Manager.handleException(e, "获取课表失败")
+            return JSONObject()
         }
     }
 
@@ -241,32 +217,24 @@ class WebServiceImpl : WebService {
             )
 
             val doc = httpRequestHelper.getHtmlResponse(url)
-
-            if (doc.title().contains("登录")) {
-//                Manager.showToast("需要登录")
-//                Manager.startLogin(true)
-                throw Exception("需要登录")
+            if (isShellDocument(doc)) {
+                JSONArray()
             }
 
             val values = doc.select(".col-md-4.col-sm-3.mobile-col")
             if (values.size == 2) {
                 val id = values[0].select(".form-control-static").text()
                 val name = values[1].select(".form-control-static").text()
-                JSONObject.parseObject(
-                    """
-                    {
-                        "state":"success",
-                        "data":{"id":"$id","name":"$name"}
-                    }
-                """
-                )
+                val result = JSONObject()
+                result["id"] = id
+                result["name"] = name
+                result
             } else {
-                JSONObject.parseObject("""{"state":"error","message":"获取个人信息失败"}""")
+                JSONObject()
             }
         } catch (e: Exception) {
-            e.message?.let { Manager.showToast(it) }
-            Manager.startLogin()
-            JSONObject.parseObject("""{"state":"error","message":"${e.message}"}""")
+            Manager.handleException(e, "获取用户信息失败")
+            JSONObject()
         }
     }
 
@@ -290,9 +258,7 @@ class WebServiceImpl : WebService {
             )
 
             val result = httpRequestHelper.getJsonResponse(url, HttpMethod.POST, additionalHeaders)
-            if (result.endsWith("</html>")) {
-                Manager.showToast("需要登录")
-                Manager.startLogin(true)
+            if (result.isEmpty()) {
                 return "2025-02-17"
             }
             val jsonObject = JSON.parseObject(result)
@@ -304,29 +270,22 @@ class WebServiceImpl : WebService {
             val rqazc = rqazcList.getJSONObject(0)
             rqazc.getString("rq")
         } catch (e: Exception) {
-            """{"state":"error","message":"${e.message}"}"""
+            Manager.handleException(e, "获取学期开始日期失败")
+            "2025-02-17"
         }
     }
 
-    //buildingId
     override suspend fun getEmptyClassrooms(
         dateRange: String,
         coursePeriod: String,
         buildingId: String
     ): String {
         val semesterStartDate = Manager.getSemesterStartDate()
-        if (semesterStartDate == "") {
-//            Handler(Looper.getMainLooper()).post {
-            Manager.showToast("获取学期开始日期失败")
-//            }
-            return """{"state":"error","message":"获取学期开始日期失败"}"""
-        }
+
         val dateList = dateRange.split("/")
         if (dateList.size != 2) {
-//            Handler(Looper.getMainLooper()).post {
             Manager.showToast("日期格式错误")
-//            }
-            return """{"state":"error","message":"日期格式错误"}"""
+            return "{}"
         }
         val timeManager = TimeManager()
         val dateMap =
@@ -340,13 +299,11 @@ class WebServiceImpl : WebService {
                 "doType" to "query",
                 "gnmkdm" to "N253512"
             )
-
             val headers = mapOf(
-                "Host" to "casb.njit.edu.cn",
-                "Origin" to "https://casb.njit.edu.cn",
-                "Referer" to "https://casb.njit.edu.cn/http/webvpn0ce64a2014465dfe87dac723232b20edd0da6675d44948234864a5c4ff77b278/new/index.html"
+                "Referer" to "${HttpRequestHelper.BASE_URL}/http/webvpn0ce64a2014465dfe87dac723232b20edd0da6675d44948234864a5c4ff77b278/new/index.html",
+                "Origin" to HttpRequestHelper.BASE_URL
             )
-            val resultObject = JSONObject.parseObject("{}")
+            val resultObject = JSONObject()
             for (entry in dateMap) {
                 val formBody = mapOf(
                     "zcd" to (2.0).pow(parseInt(entry.key).toDouble() - 1)
@@ -376,19 +333,15 @@ class WebServiceImpl : WebService {
                 )
                 val result =
                     httpRequestHelper.getJsonResponse(url, HttpMethod.POST, headers, formBody)
-                if (result.endsWith("</html>")) {
-//                    Handler(Looper.getMainLooper()).post {
-                    Manager.showToast("需要登录")
-//                    }
-                    Manager.startLogin(true)
-                    return """{"state":"error","message":"需要登录"}"""
+                if (result.isEmpty()) {
+                    return "{}"
                 }
                 resultObject.putAll(mapOf(entry.key to result))
             }
             resultObject.toJSONString()
         } catch (e: Exception) {
             Manager.handleException(e, "获取空教室失败")
-            """{"state":"error","message":"${e.message}"}"""
+            "{}"
         }
     }
 
@@ -410,14 +363,11 @@ class WebServiceImpl : WebService {
                 "time" to "1"
             )
             val headers = mapOf(
-                "Host" to "casb.njit.edu.cn",
-                "Origin" to "https://casb.njit.edu.cn",
-                "Referer" to "https://casb.njit.edu.cn/http/webvpn0ce64a2014465dfe87dac723232b20edd0da6675d44948234864a5c4ff77b278/new/index.html"
+                "Referer" to "${HttpRequestHelper.BASE_URL}/http/webvpn0ce64a2014465dfe87dac723232b20edd0da6675d44948234864a5c4ff77b278/new/index.html",
+                "Origin" to HttpRequestHelper.BASE_URL
             )
             val raw = httpRequestHelper.getJsonResponse(url, HttpMethod.GET, headers)
-            if (raw.endsWith("</html>")) {
-                Manager.showToast("需要登录")
-                Manager.startLogin(true)
+            if (raw.isEmpty()) {
                 return JSONObject()
             }
             val result = JSONObject()
@@ -449,25 +399,13 @@ class WebServiceImpl : WebService {
 
             val doc = httpRequestHelper.getHtmlResponse(url)
 
-            if (doc.title().contains("登录")) {
-//                Handler(Looper.getMainLooper()).post {
-                Manager.showToast("需要登录")
-//                }
-                Manager.startLogin(true)
-                return """{"state":"error","message":"需要登录"}"""
+            if (isShellDocument(doc)) {
+                return "[]"
             }
-
-            // 解析HTML
-//            val doc = Jsoup.parse(html)
-
-
             // 选择所有的tr元素
             val rows: Elements = doc.select("#subtab tbody tr")
-
-
             // 创建一个列表来存储结果
-            val details: MutableList<Map<String, String>> = ArrayList()
-
+            val details: ArrayList<Map<String, String>> = ArrayList()
             // 遍历每一行
             for (row in rows) {
                 // 选择所有的td元素
@@ -477,30 +415,17 @@ class WebServiceImpl : WebService {
                 val scoreItem = tds[0].text().replace("【", "").replace("】", "")
                 val percentage = tds[1].text()
                 val score = tds[2].text()
-
-                // 创建一个映射来存储每一行的数据
-                val scoreMap = mapOf<String, String>(
+                // 将映射添加到列表中
+                details.add(mapOf(
                     "scoreItem" to scoreItem,
                     "percentage" to percentage,
                     "score" to score
-                )
-
-                // 将映射添加到列表中
-                details.add(scoreMap)
+                ))
             }
-
-            val result = JSONObject.parseObject(
-                """
-                    {
-                        "state":"success"
-                    }
-                """
-            )
-            result["data"] = JSONArray.parseArray(JSON.toJSONString(details))
-            result.toJSONString()
+            JSON.toJSONString(details)
         } catch (e: Exception) {
             Manager.handleException(e, "获取成绩详情失败")
-            JSONObject.parseObject("""{"state":"error","message":"${e.message}"}""").toJSONString()
+            "[]"
         }
     }
 
@@ -510,14 +435,9 @@ class WebServiceImpl : WebService {
 
             val doc = httpRequestHelper.getHtmlResponse(url)
 
-            if (doc.title().contains("登录")) {
-//                Handler(Looper.getMainLooper()).post {
-                Manager.showToast("需要登录")
-//                }
-                Manager.startLogin(true)
-                return """{"state":"error","message":"需要登录"}"""
+            if (isShellDocument(doc)) {
+                return "暂无信息"
             }
-
             val content = doc.selectFirst(".col-md-12.col-sm-12")
             val ps = content?.select("p")
             var text = ""
@@ -529,32 +449,10 @@ class WebServiceImpl : WebService {
                     }
                 }
             }
-            val result = JSONObject()
-            result["state"] = "success"
-            result["data"] = text
-            result.toJSONString()
+            text
         } catch (e: Exception) {
-            when (e) {
-                is IOException -> {
-                    Manager.handleException(e, "getNoticeInformation:网络错误")
-                    return """{"state":"network_error","message":"网络请求失败"}"""
-                }
-
-                is JSONException -> {
-                    Manager.handleException(e, "getNoticeInformation:数据解析错误")
-                    return """{"state":"parse_error","message":"数据解析失败"}"""
-                }
-
-                else -> {
-                    Handler(Looper.getMainLooper()).post {
-                        Manager.startLogin(true)
-                    }
-                    Manager.handleException(e, "getNoticeInformation:未知错误")
-                    return """{"state":"error","message":"需要重新登录"}"""
-                }
-            }
-        } finally {
-            // Test.test()
+            Manager.handleException(e, "获取通知信息失败")
+            "暂无信息"
         }
     }
 
@@ -580,10 +478,8 @@ class WebServiceImpl : WebService {
             )
 
             val doc = httpRequestHelper.getHtmlResponse(url)
-            if (doc.title().contains("登录")) {
-                Manager.showToast("需要登录")
-                Manager.startLogin(true)
-                return """{"state":"error","message":"需要登录"}"""
+            if (isShellDocument(doc)) {
+                return "{}"
             }
 
             val jg_id = doc.select("#jg_id option[selected]").attr("value") ?: ""
@@ -607,16 +503,13 @@ class WebServiceImpl : WebService {
                 "time" to "0"
             )
             val additionalHeaders = mapOf(
-                "Host" to "casb.njit.edu.cn",
                 "Referer" to "${HttpRequestHelper.BASE_URL}/http/webvpnea5e00498bb033e68046c95dbdf6e09fbc127bea836184c80a0792b662ced92f/authserver/login",
                 "Origin" to HttpRequestHelper.BASE_URL
             )
 
             val raw = httpRequestHelper.getJsonResponse(url1, HttpMethod.POST, additionalHeaders)
-            if (raw.endsWith("</html>")) {
-                Manager.showToast("需要登录")
-                Manager.startLogin(true)
-                return """{"state":"error","message":"需要登录"}"""
+            if (raw.isEmpty()) {
+                return "{}"
             }
             val items = JSONObject.parseObject(raw)["items"] as JSONArray
             val item = items[0] as JSONObject
@@ -671,9 +564,7 @@ class WebServiceImpl : WebService {
                     )
                     val raw0 =
                         httpRequestHelper.getJsonResponse(url0, HttpMethod.POST, additionalHeaders)
-                    if (raw0.endsWith("</html>")) {
-                        Manager.showToast("需要登录")
-                        Manager.startLogin(true)
+                    if (raw0.isEmpty()) {
                         return@async JSONArray()
                     }
 
@@ -689,9 +580,7 @@ class WebServiceImpl : WebService {
                             HttpMethod.POST,
                             additionalHeaders
                         )
-                        if (raw00.endsWith("</html>")) {
-                            Manager.showToast("需要登录")
-                            Manager.startLogin(true)
+                        if (raw00.isEmpty()) {
                             return@async JSONArray()
                         }
                         items0 = JSONArray.parseArray(raw00, JSONObject::class.java)
@@ -733,7 +622,7 @@ class WebServiceImpl : WebService {
             result.toJSONString()
         } catch (e: Exception) {
             Manager.handleException(e, "academicProgress:未知错误")
-            """{"state":"error","message":"${e.message}"}"""
+            "{}"
         }
     }
 }

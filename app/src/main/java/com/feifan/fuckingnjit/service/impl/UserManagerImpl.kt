@@ -13,6 +13,7 @@ import com.feifan.fuckingnjit.service.UserManager
 import com.feifan.fuckingnjit.utils.BaseDataBoxUtils
 import com.feifan.fuckingnjit.utils.Manager
 import com.feifan.fuckingnjit.utils.SecureUtil
+import com.feifan.fuckingnjit.utils.Tools
 import com.feifan.fuckingnjit.utils.UserBoxUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,14 +32,13 @@ class UserManagerImpl : UserManager {
     private var webViewRef = WeakReference<WebView>(null)
 
     constructor(context: Context) {
-            this.context = context
+        this.context = context
         try {
             Manager.registerTimeReceiver()
         } catch (e: Exception) {
             Manager.handleException(e, "Failed to load user list from preferences")
         }
     }
-
 
 
     override fun setCurrentUser(id: String) {
@@ -131,7 +131,7 @@ class UserManagerImpl : UserManager {
             Manager.showToast("请稍后")
             // 如果不存储密码，先清空用户密码
 //            userList[userToAdd.getId()] = userToAdd
-            UserBoxUtils.updateUserData(userToAdd)
+            UserBoxUtils.insertUserData(userToAdd)
             BaseDataBoxUtils.updateBaseData { it.currentUserId = userToAdd.id }
         } catch (e: Exception) {
             Manager.handleException(e, "用户添加失败")
@@ -149,48 +149,38 @@ class UserManagerImpl : UserManager {
                 val user = UserBoxUtils.getUserById(currentUser)
                 if (user?.name?.isEmpty() == true) {
 
-                    val userData = Manager.getWebService().getUserData()
-                    if (userData.getString("status") != "error") {
-                        val data = userData.getJSONObject("data")
+                    val data = Manager.getWebService().getUserData()
+                    if (!data.isEmpty()) {
                         user.id = data.getString("id")
                         user.name = data.getString("name")
-                    } else {
-                        Manager.showToast(userData.getString("message"))
                     }
-                    try {
-                        val startDate = Manager.getWebService().getSemesterStartDate()
-                        if (!startDate.contains("error")) {
-                            val localDate = LocalDate.parse(startDate)
-                            val zonedDateTime = localDate.atStartOfDay(ZoneId.systemDefault())
-                            val timestamp = zonedDateTime.toInstant().toEpochMilli()
 
-                            BaseDataBoxUtils.updateBaseData {
-                                it.semesterStartDate = timestamp
-                                it.currentWeek = Manager.getTimeManager().calculateCurrentWeek(timestamp)
-                            }
-                        } else {
-                            Manager.showToast("获取学期开始日期失败，请稍后重试")
+                    val startDate = Manager.getWebService().getSemesterStartDate()
+                    if (!startDate.contains("error")) {
+                        val localDate = LocalDate.parse(startDate)
+                        val zonedDateTime = localDate.atStartOfDay(ZoneId.systemDefault())
+                        val timestamp = zonedDateTime.toInstant().toEpochMilli()
+
+                        BaseDataBoxUtils.updateBaseData {
+                            it.semesterStartDate = timestamp
+                            it.currentWeek =
+                                Manager.getTimeManager().calculateCurrentWeek(timestamp)
                         }
-                    } catch (e: Exception) {
+                    } else {
                         Manager.showToast("获取学期开始日期失败，请稍后重试")
                     }
-                    try {
-                        val allSorces = Manager.getWebService().getAllSorces()
-                        user.scores = allSorces.getJSONArray("data")
-//                        userList[currentUser]?.setAllSorces(allSorces)
-                    } catch (e: Exception) {
-                        Manager.showToast("获取成绩失败，请稍后重试")
-                    }
+                    val allSorces = Manager.getWebService().getAllSorces()
+                    println(allSorces.toJSONString())
+                    user.scores = allSorces.getJSONArray("data")
+                    user.gpa = Tools.calculateAverageGPA(user.scores)
                     UserBoxUtils.updateUserData(user)
                 }
 
                 updateUI()
             } catch (e: Exception) {
-                println("abcdef")
-                println(e.message)
+                Manager.handleException(e, "添加用户失败")
                 withContext(Dispatchers.Main) {
                     updateUI()
-                    Manager.handleException(e, "添加用户失败")
                 }
             }
         }
@@ -271,7 +261,7 @@ class UserManagerImpl : UserManager {
                 }
             }
             return userData.curriculums.toJSONString()
-        }catch (e: Exception) {
+        } catch (e: Exception) {
             Manager.handleException(e, "获取课程表失败")
             return "{}"
         }

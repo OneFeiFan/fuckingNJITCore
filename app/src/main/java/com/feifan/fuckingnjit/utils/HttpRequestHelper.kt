@@ -1,19 +1,19 @@
 package com.feifan.fuckingnjit.utils
 
-import android.annotation.SuppressLint
 import android.webkit.CookieManager
-import okhttp3.Call
-import okhttp3.Callback
 import okhttp3.FormBody
 import okhttp3.Headers.Companion.toHeaders
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
-import okhttp3.Response
+import org.jsoup.Connection
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.io.IOException
-import java.net.ProtocolException
+import java.net.ConnectException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
+import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
 
@@ -21,6 +21,8 @@ class HttpRequestHelper(
     private val okHttpClient: OkHttpClient,
     private val cookieManager: CookieManager
 ) {
+    private var lastLoginCheckTime = 0L
+    private val LOGIN_CHECK_INTERVAL = 5 * 60 * 1000 // 30分钟检查一次
     companion object {
         const val BASE_URL = "https://casb.njit.edu.cn"
         const val WEBVPN_PATH =
@@ -32,9 +34,14 @@ class HttpRequestHelper(
         )
     }
 
-
-
-    @SuppressLint("SuspiciousIndentation")
+    private fun getPersistentCookies(cookie: String): Map<String, String> {
+        return cookie.split(";")
+            .associate { it.split("=").let { parts -> parts[0] to parts.getOrElse(1) { "" } } }
+    }
+    private fun checkLoginIfNeeded(): Boolean {
+        val currentTime = System.currentTimeMillis()
+        return currentTime - lastLoginCheckTime >= LOGIN_CHECK_INTERVAL // 在有效期内，跳过检查
+    }
     private suspend fun makeRequest(
         url: String,
         method: HttpMethod = HttpMethod.GET,
@@ -43,10 +50,48 @@ class HttpRequestHelper(
     ): String {
         val cookie = cookieManager.getCookie(BASE_URL)
         if (cookie.isNullOrBlank()) {
-//            Manager.showToast("cookie为空，需要登录")
+            Manager.showToast("需要登录")
             Manager.startLogin(true)
-            throw Exception("需要登录")
+            return ""
         }
+
+        if (checkLoginIfNeeded()) {
+            try {
+                // 创建一个Connection对象
+                val connection: Connection =
+                    Jsoup.connect("https://casb.njit.edu.cn/http/webvpn3e1a11b7208e283ab07ade5d2913fc13d6f6fe09d2dc7372db2a51a14aa4167a/jwglxt/xtgl/index_initMenu.html")
+                // 设置Cookie
+                connection.cookies(getPersistentCookies(cookie))
+                // 执行请求并获取Document对象
+                val html: Document = connection.get()
+                if (html.text().contains("登录页面")) {
+                    Manager.showToast("需要登录")
+                    Manager.startLogin(true)
+                    return ""
+                }
+            } catch (e: IOException) {
+
+                when {
+                    // 网络异常
+                    e is ConnectException || e is UnknownHostException || e is SocketTimeoutException -> {
+//                    Manager.showToast("网络异常，请检查网络连接")
+                        Manager.handleException(e, "网络异常，请检查网络连接")
+                    }
+                    // 重定向过多（通常是Cookie失效）
+                    e.message?.contains("Too many redirects") == true -> {
+                        Manager.showToast("需要登录")
+                        Manager.startLogin(true)
+                    }
+                    // 其他异常
+                    else -> {
+                        Manager.handleException(e, "登录验证失败")
+                    }
+                }
+                return ""
+            }
+        }
+
+        lastLoginCheckTime = System.currentTimeMillis()
         var formBody: RequestBody = FormBody.Builder().build()
         if (method == HttpMethod.POST) {
             val builder = FormBody.Builder()
@@ -64,40 +109,15 @@ class HttpRequestHelper(
             builder.method("POST", formBody)
         }
         val request = builder.build()
-//        Handler(Looper.getMainLooper()).post {
-//            Manager.showToast("请求地址: $url")
-//        }
         return suspendCoroutine { continuation ->
-            okHttpClient.newCall(request).enqueue(object : Callback {
-                override fun onResponse(call: Call, response: Response) {
-//                    Handler(Looper.getMainLooper()).post {
-                        Manager.showToast("请求成功: ${response.code}")
-//                    }
-//                    okHttpClient.dispatcher.executorService.shutdown()
-                    if (!response.isSuccessful) {
-                        continuation.resumeWith(Result.failure(IOException("请求失败: ${response.code}")))
-                        return
-                    }
-                    continuation.resumeWith(Result.success(response.body?.string() ?: ""))
-                }
-
-                override fun onFailure(call: Call, e: IOException) {
-                    continuation.resumeWith(Result.failure(e))
-                    if (e is ProtocolException) {
-                        if (e.message?.contains("Too many follow-up requests") == true) {
-                            Manager.handleException(e,"重试次数过多，cookie可能失效,请重新登录")
-                            Manager.startLogin(true)
-                        } else {
-                            Manager.handleException(e,"捕获到其他IO异常")
-                        }
-                    } else {
-                        if(e.message?.contains("onnect") == true){
-                            Manager.showToast("网络异常")
-                        }
-                        Manager.handleException(e,"捕获到非ProtocolException异常")
-                    }
-                }
-            })
+            try {
+                val response = okHttpClient.newCall(request).execute()
+                continuation.resume(response.body?.string() ?: "")
+//                continuation.resumeWith(Result.success(response.body?.string() ?: ""))
+            } catch (e: Exception) {
+                Manager.handleException(e,"请求失败")
+                continuation.resume("")
+            }
         }
     }
 
@@ -108,11 +128,8 @@ class HttpRequestHelper(
         additionalHeaders: Map<String, String> = emptyMap(),
         requestBody: Map<String, String> = emptyMap()
     ): String {
-        return try {
-            makeRequest(url, method,additionalHeaders,requestBody)
-        } catch (e: Exception) {
-            """{"state":"error","message":"${e.message}"}"""
-        }
+        val result = makeRequest(url, method, additionalHeaders, requestBody)
+        return result
     }
 
     suspend fun getHtmlResponse(
@@ -121,11 +138,12 @@ class HttpRequestHelper(
         additionalHeaders: Map<String, String> = emptyMap(),
         requestBody: Map<String, String> = emptyMap()
     ): Document {
-        return try {
-            Jsoup.parse(makeRequest(url,method, additionalHeaders,requestBody))
-        } catch (e: Exception) {
-            Manager.handleException(e,"获取HTML失败")
-            Jsoup.parse("""<html><body><h1>获取HTML失败: ${e.message}</h1></body></html>""")
-        }
+
+            val result = makeRequest(url, method, additionalHeaders, requestBody)
+            if (result.isEmpty()) {
+                return Document.createShell("")
+            }else{
+                return Jsoup.parse(result)
+            }
     }
 }

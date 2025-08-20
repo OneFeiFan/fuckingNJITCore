@@ -5,6 +5,7 @@ import com.feifan.fuckingnjit.database.BaseData
 import com.feifan.fuckingnjit.database.MyObjectBox
 import io.objectbox.Box
 import io.objectbox.BoxStore
+import java.io.File
 
 object BaseDataBoxUtils {
     private lateinit var boxStore: BoxStore
@@ -15,6 +16,7 @@ object BaseDataBoxUtils {
     fun init(context: Context) {
         boxStore = MyObjectBox.builder()
             .androidContext(context.applicationContext)
+            .directory(File(context.filesDir, "BASE"))
             .build()
         baseDataBox = boxStore.boxFor(BaseData::class.java)
         // 初始化时检查，如果没有则创建

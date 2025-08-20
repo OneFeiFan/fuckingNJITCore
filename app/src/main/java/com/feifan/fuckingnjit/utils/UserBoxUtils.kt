@@ -6,6 +6,7 @@ import com.feifan.fuckingnjit.database.UserData
 import com.feifan.fuckingnjit.database.UserData_
 import io.objectbox.Box
 import io.objectbox.BoxStore
+import java.io.File
 
 object UserBoxUtils {
 
@@ -16,6 +17,7 @@ object UserBoxUtils {
     fun init(context: Context) {
         boxStore = MyObjectBox.builder()
             .androidContext(context.applicationContext)
+            .directory(File(context.filesDir, "USER"))
             .build()
         userDataBox = boxStore.boxFor(UserData::class.java)
     }

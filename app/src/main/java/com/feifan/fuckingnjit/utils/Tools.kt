@@ -5,6 +5,7 @@ import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.JSONArray
 import com.alibaba.fastjson.JSONObject
 import com.feifan.fuckingnjit.Model.Course
+import java.util.Collections
 
 
 class Tools {
@@ -88,13 +89,13 @@ class Tools {
                     .map { tableData.getJSONObject(it) }
                     .filter { item ->
                         item.getString("kcgsmc") != "劳动教育" &&
-                        item.getString("kcgsmc") != "跨专业选修" &&
-                        item.getString("kcgsmc") != "公选" &&
-                        item.getString("kcgsmc") != "劳动选修" &&
-                        item.getString("kcgsmc") != "xxx" &&
-                        item.getString("kclbmc") != "专业选修课程" &&
-                        item.getString("kclbmc") != "大学外语类课程" &&
-                        item.getInteger("bfzcj") >= 60 //不是挂科的
+                                item.getString("kcgsmc") != "跨专业选修" &&
+                                item.getString("kcgsmc") != "公选" &&
+                                item.getString("kcgsmc") != "劳动选修" &&
+                                item.getString("kcgsmc") != "xxx" &&
+                                item.getString("kclbmc") != "专业选修课程" &&
+                                item.getString("kclbmc") != "大学外语类课程" &&
+                                item.getInteger("bfzcj") >= 60 //不是挂科的
                     }
 
                 // 过滤特殊算法课程
@@ -187,23 +188,37 @@ class Tools {
         }
 
         fun getCourseTime(courseTime: String): ArrayList<Int> {
-            var courseTime = courseTime
-            courseTime = courseTime.replace("第", "")
-            courseTime = courseTime.replace("节", "")
-            val split =
-                courseTime.split(",")
             val timeArray = ArrayList<Int>()
-            for (i in split.indices) {
-                val split1 =
-                    split[i].split("-")
+            // 1. 去掉"第"和"节"
+            val cleaned = courseTime.replace("第".toRegex(), "").replace("节".toRegex(), "")
+            // 2. 按逗号分割多个时间段
+            val segments =
+                cleaned.split(",".toRegex()).dropLastWhile { it.isEmpty() }
+            for (segment in segments) {
+                // 3. 处理每个时间段
+                if (segment.contains("-")) {
+                    // 处理范围如"1-2"
+                    val range =
+                        segment.split("-".toRegex()).dropLastWhile { it.isEmpty() }
+                    val start = range[0].trim().toInt()
+                    val end = range[1].trim().toInt()
 
-                val left = split1[0].toInt()
-                val right = split1[1].toInt()
-
-                for (j in left..right) {
-                    timeArray.add(j)
+                    for (i in start..end) {
+                        if (!timeArray.contains(i)) {
+                            timeArray.add(i)
+                        }
+                    }
+                } else {
+                    // 处理单个数字如"3"
+                    val single = segment.trim().toInt()
+                    if (!timeArray.contains(single)) {
+                        timeArray.add(single)
+                        timeArray.add(single)
+                    }
                 }
             }
+            // 4. 排序结果
+            timeArray.sort()
             return timeArray
         }
 
@@ -216,10 +231,10 @@ class Tools {
             for (i in 1 until raw.size) {
                 val weekCourses = raw[i]
                 for (course in weekCourses) {
-                    val time = course.getTime()
-                    val week = time.getWeek() // 需确保是0-based（0-19）
-                    val weekday = time.getWeekday()
-                    val courseTimes = time.getCourseTime()
+                    val time = course.getTime()!!
+                    val week = time.week // 需确保是0-based（0-19）
+                    val weekday = time.weekday
+                    val courseTimes = time.courseTime
                     val value = "${course.getName()}@${course.getClassroom()}"
 
                     for (slot in courseTimes) {

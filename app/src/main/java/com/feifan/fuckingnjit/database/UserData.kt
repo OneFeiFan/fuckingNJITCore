@@ -21,7 +21,8 @@ data class UserData (
     var academicProgress: JSONObject = JSONObject(),
     @Convert(converter = JSONArrayConverter::class, dbType = String::class)
     var scores: JSONArray = JSONArray(),
-    var curriculums: String = ""
+    @Convert(converter = JSONObjectConverter::class, dbType = String::class)
+    var curriculums: JSONObject = JSONObject()
 )
 
 

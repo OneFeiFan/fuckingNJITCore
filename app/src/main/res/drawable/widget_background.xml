@@ -1,13 +1,8 @@
-<!-- res/drawable/widget_background.xml 需同步强化背景 -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item>
         <shape android:shape="rectangle">
-            <!-- 背景调整为深色半透明 -->
-            <solid android:color="#52000000"/> <!-- 40%黑色半透明 -->
+            <solid android:color="#661D1D1D"/>
             <corners android:radius="12dp"/>
-            <!-- 调整边框颜色与文字形成层次 -->
-            <stroke android:width="0.5dp" android:color="#7FFFFFFF"/> <!-- 70%白色 -->
         </shape>
     </item>
 </layer-list>
-

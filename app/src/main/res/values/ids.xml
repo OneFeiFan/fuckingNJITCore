@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="month_id" type="id" />
+    <item name="week_id" type="id" />
+    <item name="empty_view" type="id" />
+    <item name="location_id_2" type="id" />
+    <item name="time_id_2" type="id" />
+    <item name="course_id_2" type="id" />
+    <item name="course_block_2" type="id" />
+    <item name="location_id_1" type="id" />
+    <item name="time_id_1" type="id" />
+    <item name="course_id_1" type="id" />
+    <item name="course_block_1" type="id" />
+</resources>

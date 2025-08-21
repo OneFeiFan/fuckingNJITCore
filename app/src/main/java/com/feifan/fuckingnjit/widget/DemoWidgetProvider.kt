@@ -2,14 +2,17 @@
 package com.feifan.fuckingnjit.widget
 
 // 导入所需的Android类库
-
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.view.View
 import android.widget.RemoteViews
+import android.widget.TextView
 import android.widget.Toast
 import com.alibaba.fastjson.JSONArray
 import com.alibaba.fastjson.JSONObject
@@ -17,6 +20,8 @@ import com.feifan.fuckingnjit.R
 import com.feifan.fuckingnjit.database.UserData
 import com.feifan.fuckingnjit.utils.Manager
 import com.feifan.fuckingnjit.utils.Tools
+import java.io.File
+import java.io.FileOutputStream
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -45,11 +50,56 @@ class DemoWidgetProvider : AppWidgetProvider() {
             // 发送广播
             context.sendBroadcast(intent)
         }
+//fun saveWidgetAsImage(context: Context, widgetView: RemoteViews): Boolean {
+//    try {
+//        // 1. 获取小部件布局的实际视图
+//        val widget = widgetView.apply(context, null)
+//
+//        // 2. 测量视图大小
+//        widget.measure(
+//            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+//            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+//        )
+//
+//        // 3. 布局视图
+//        widget.layout(0, 0, widget.measuredWidth, widget.measuredHeight)
+//
+//        // 4. 创建位图
+//        val bitmap = Bitmap.createBitmap(
+//            widget.measuredWidth,
+//            widget.measuredHeight,
+//            Bitmap.Config.ARGB_8888
+//        )
+//
+//        // 5. 将视图绘制到位图上
+//        val canvas = Canvas(bitmap)
+//        widget.draw(canvas)
+//
+//        // 6. 保存图片到应用目录
+//        val fileName = "widget_${System.currentTimeMillis()}.png"
+//        val outputDir = context.filesDir
+//        val outputFile = File(outputDir, fileName)
+//
+//        FileOutputStream(outputFile).use { out ->
+//            bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+//            out.flush()
+//        }
+//
+//        return true
+//    } catch (e: Exception) {
+//        e.printStackTrace()
+//        return false
+//    }
+//}
 
         // 获取RemoteViews对象的方法
         fun getRemoteViews(context: Context, widgetId: Int): RemoteViews {
             // 创建RemoteViews对象，指定布局文件
+
             val remoteViews = RemoteViews(context.packageName, R.layout.widget)
+            remoteViews.setViewVisibility(R.id.empty_view, View.GONE)
+            remoteViews.setViewVisibility(R.id.course_block_1, View.VISIBLE)
+            remoteViews.setViewVisibility(R.id.course_block_2, View.VISIBLE)
             val onClick =
                 Intent().setClass(context, DemoWidgetProvider::class.java).setAction("CLICK_ACTION")
                     .putExtra("WIDGET_ID", widgetId)
@@ -77,6 +127,9 @@ class DemoWidgetProvider : AppWidgetProvider() {
             }
             val curriculums = user?.curriculums?.getString("validTimeCourses")
             if (curriculums == null||curriculums == "") {
+                remoteViews.setViewVisibility(R.id.empty_view, View.VISIBLE)
+                remoteViews.setViewVisibility(R.id.course_block_1, View.GONE)
+                remoteViews.setViewVisibility(R.id.course_block_2, View.GONE)
                 println("没有课表")
                 return remoteViews
             }
@@ -103,6 +156,9 @@ class DemoWidgetProvider : AppWidgetProvider() {
                 return remoteViews
             }
             if (sortedList.isEmpty()) {
+                remoteViews.setViewVisibility(R.id.empty_view, View.VISIBLE)
+                remoteViews.setViewVisibility(R.id.course_block_1, View.GONE)
+                remoteViews.setViewVisibility(R.id.course_block_2, View.GONE)
                 return remoteViews
             }
             // 获取前四个课程
@@ -135,7 +191,7 @@ class DemoWidgetProvider : AppWidgetProvider() {
                     ), location
                 )
             }
-
+//            saveWidgetAsImage(context, remoteViews)
             // 返回配置好的RemoteViews
             return remoteViews
         }

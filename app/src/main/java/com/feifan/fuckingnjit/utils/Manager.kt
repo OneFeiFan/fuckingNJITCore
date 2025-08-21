@@ -114,14 +114,14 @@ class Manager {
                         val diffMinutes = (currentTime.time - time.time) / (60 * 1000)
 
                         when {
-                            diffMinutes < -30 -> {
+                            diffMinutes < -40 -> {
                                 break
                             }
-                            diffMinutes > 30 -> {
+                            diffMinutes > 40 -> {
                                 iterator.remove()
                                 break // 退出循环
                             }
-                            abs(diffMinutes) <= 10 -> {
+                            abs(diffMinutes) <= 25 -> {
                                 DemoWidgetProvider.updateWidgets(context)
                                 iterator.remove()
                                 break // 退出循环

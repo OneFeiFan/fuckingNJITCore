@@ -28,7 +28,7 @@ class UserManagerImpl : UserManager {
 
     // 在类中定义可控的协程作用域
     private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    private lateinit var context: Context
+    private var context: Context
     private var webViewRef = WeakReference<WebView>(null)
 
     constructor(context: Context) {
@@ -36,7 +36,7 @@ class UserManagerImpl : UserManager {
         try {
             Manager.registerTimeReceiver()
         } catch (e: Exception) {
-            Manager.handleException(e, "Failed to load user list from preferences")
+            Manager.handleException(e, "Failed to register time receiver")
         }
     }
 
@@ -46,7 +46,6 @@ class UserManagerImpl : UserManager {
         cookieManager.removeAllCookies(null)
         if (UserBoxUtils.getUserById(id) != null) {
             BaseDataBoxUtils.updateBaseData { it.currentUserId = id }
-//            preferences.edit { putString("current_user", id) }
             Manager.startLogin(true)
         }
     }
@@ -66,11 +65,10 @@ class UserManagerImpl : UserManager {
 //    }
 
     override fun getAllUsers(): String {
-        val resultList = JSONArray()
+        val resultList = JSONObject()
         val userDataList = UserBoxUtils.getAllUserData()
         for (userData in userDataList) {
             val temp = JSONObject()
-            temp["id"] = userData.id
             temp["name"] = userData.name
             temp["gpa"] = userData.gpa
             if (userData.id == BaseDataBoxUtils.getCurrentUserId()) {
@@ -78,7 +76,7 @@ class UserManagerImpl : UserManager {
             } else {
                 temp["current"] = false
             }
-            resultList.add(temp)
+            resultList[userData.id] = temp
         }
         return try {
             resultList.toJSONString()
@@ -142,46 +140,41 @@ class UserManagerImpl : UserManager {
         webViewRef = WeakReference(view)
         coroutineScope.launch(Dispatchers.IO) {
             try {
-                withContext(Dispatchers.Main) {
-                    Manager.openDialog("正在更新用户信息", context)
-                }
                 val currentUser = BaseDataBoxUtils.getCurrentUserId()
                 val user = UserBoxUtils.getUserById(currentUser)
                 if (user?.name?.isEmpty() == true) {
-
-                    val data = Manager.getWebService().getUserData()
-                    if (!data.isEmpty()) {
-                        user.id = data.getString("id")
-                        user.name = data.getString("name")
-                    }
-
-                    val startDate = Manager.getWebService().getSemesterStartDate()
-                    if (!startDate.contains("error")) {
+                    try{
+                        val startDate = Manager.getWebService().getSemesterStartDate()
                         val localDate = LocalDate.parse(startDate)
                         val zonedDateTime = localDate.atStartOfDay(ZoneId.systemDefault())
                         val timestamp = zonedDateTime.toInstant().toEpochMilli()
-
                         BaseDataBoxUtils.updateBaseData {
                             it.semesterStartDate = timestamp
                             it.currentWeek =
                                 Manager.getTimeManager().calculateCurrentWeek(timestamp)
                         }
-                    } else {
-                        Manager.showToast("获取学期开始日期失败，请稍后重试")
+                    }catch(e:Exception){
+                        Manager.handleException(e,"获取学期开始日期失败")
                     }
-                    val allSorces = Manager.getWebService().getAllSorces()
-                    println(allSorces.toJSONString())
-                    user.scores = allSorces.getJSONArray("data")
-                    user.gpa = Tools.calculateAverageGPA(user.scores)
-                    UserBoxUtils.updateUserData(user)
-                }
 
-                updateUI()
+                    val data = Manager.getWebService().getUserData()
+                    if (!data.isEmpty()) {
+                        user.id = data.getString("id")
+                        user.name = data.getString("name")
+                        val allSorces = Manager.getWebService().getAllSorces()
+                        println(allSorces.toJSONString())
+                        user.scores = allSorces.getJSONArray("data")
+                        user.gpa = Tools.calculateAverageGPA(user.scores)
+                        UserBoxUtils.updateUserData(user)
+                    }else{
+                        Manager.showToast("获取用户信息失败")
+                        UserBoxUtils.deleteUserData(user)
+                    }
+                }
             } catch (e: Exception) {
                 Manager.handleException(e, "添加用户失败")
-                withContext(Dispatchers.Main) {
-                    updateUI()
-                }
+            } finally {
+                updateUI()
             }
         }
     }

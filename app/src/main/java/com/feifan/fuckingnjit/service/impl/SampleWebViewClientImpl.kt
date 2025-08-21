@@ -47,6 +47,7 @@ class SampleWebViewClientImpl(private val context: Context, private val webView:
         """.trimIndent(),null)
         }
         if(url.startsWith("https://casb.njit.edu.cn/http/webvpn3e1a11b7208e283ab07ade5d2913fc13d6f6fe09d2dc7372db2a51a14aa4167a/jwglxt/xtgl/index_initMenu.html")){
+            Manager.openDialog("正在更新用户信息", context)
             Manager.getUserManager()?.updateUserName(view)
 
 //            val cookieManager: CookieManager = CookieManager.getInstance()

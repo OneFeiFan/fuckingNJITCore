@@ -11,6 +11,8 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.io.IOException
 import java.net.ConnectException
+import java.net.ProtocolException
+import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import kotlin.coroutines.resume
@@ -70,17 +72,17 @@ class HttpRequestHelper(
                     return ""
                 }
             } catch (e: IOException) {
-
                 when {
                     // 网络异常
-                    e is ConnectException || e is UnknownHostException || e is SocketTimeoutException -> {
-//                    Manager.showToast("网络异常，请检查网络连接")
+                    e is ConnectException || e is UnknownHostException || e is SocketException -> {
                         Manager.handleException(e, "网络异常，请检查网络连接")
                     }
-                    // 重定向过多（通常是Cookie失效）
                     e.message?.contains("Too many redirects") == true -> {
                         Manager.showToast("需要登录")
                         Manager.startLogin(true)
+                    }
+                    e is SocketTimeoutException -> {
+                        Manager.handleException(e, "请求超时，请稍后再试")
                     }
                     // 其他异常
                     else -> {
@@ -113,9 +115,20 @@ class HttpRequestHelper(
             try {
                 val response = okHttpClient.newCall(request).execute()
                 continuation.resume(response.body?.string() ?: "")
-//                continuation.resumeWith(Result.success(response.body?.string() ?: ""))
             } catch (e: Exception) {
-                Manager.handleException(e,"请求失败")
+                if (e is ProtocolException) {
+                    if (e.message?.contains("Too many follow-up requests") == true) {
+                        Manager.handleException(e,"重试次数过多，cookie可能失效,请重新登录")
+                        Manager.startLogin(true)
+                    } else {
+                        Manager.handleException(e,"捕获到其他IO异常")
+                    }
+                } else {
+                    if(e.message?.contains("onnect") == true){
+                        Manager.handleException(e,"网络异常，请检查网络连接")
+                    }
+                    Manager.handleException(e,"捕获到非ProtocolException异常")
+                }
                 continuation.resume("")
             }
         }

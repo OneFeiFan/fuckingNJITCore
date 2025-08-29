@@ -5,9 +5,9 @@ import io.objectbox.annotation.Id
 
 
 @Entity
-data class BaseData (
+data class BaseData(
     @Id(assignable = true)
-    var uuid: Long  = 0,
+    var uuid: Long = 0,
     var currentUserId: String = "",
     var semesterStartDate: Long = 0,  // 存储Unix时间戳
     var storePassword: Boolean = true,

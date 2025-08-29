@@ -9,7 +9,7 @@ import android.widget.RemoteViews
 import com.feifan.fuckingnjit.R
 import com.feifan.fuckingnjit.utils.XiaomiUtilities
 
-class DemoMainWidget (val context: Context){
+class DemoMainWidget(val context: Context) {
 
     fun getPermission() {
         val intent = XiaomiUtilities.getPermissionManagerIntent(context).apply {
@@ -25,7 +25,7 @@ class DemoMainWidget (val context: Context){
     }
 
 
-    fun createWidget():String {
+    fun createWidget(): String {
         val appWidgetManager = AppWidgetManager.getInstance(context)
         val provider = ComponentName(context, DemoWidgetProvider::class.java)
 
@@ -35,7 +35,11 @@ class DemoMainWidget (val context: Context){
         // 检查是否是小米手机
         if (XiaomiUtilities.isMIUI) {
             // 检查是否已授予自定义权限
-            if (!XiaomiUtilities.isCustomPermissionGranted(context, XiaomiUtilities.OP_INSTALL_SHORTCUT)) {
+            if (!XiaomiUtilities.isCustomPermissionGranted(
+                    context,
+                    XiaomiUtilities.OP_INSTALL_SHORTCUT
+                )
+            ) {
                 return """{"state":"need_permission","message":""}"""
             }
         }
@@ -47,7 +51,7 @@ class DemoMainWidget (val context: Context){
         val bundle = Bundle()
         bundle.putParcelable(AppWidgetManager.EXTRA_APPWIDGET_PREVIEW, remoteViews)
 
-        if(!appWidgetManager.requestPinAppWidget(provider, bundle, null)){
+        if (!appWidgetManager.requestPinAppWidget(provider, bundle, null)) {
             return """{"state":"error","message":"小部件大概率创建失败了，可能是你的桌面不支持？？？或者没有快捷方式权限？？？"}"""
         }
 

@@ -6,13 +6,11 @@ import android.view.View
 import android.webkit.CookieManager
 import android.webkit.WebView
 import com.alibaba.fastjson.JSON
-import com.alibaba.fastjson.JSONArray
 import com.alibaba.fastjson.JSONObject
 import com.feifan.fuckingnjit.database.UserData
 import com.feifan.fuckingnjit.service.UserManager
 import com.feifan.fuckingnjit.utils.BaseDataBoxUtils
 import com.feifan.fuckingnjit.utils.Manager
-import com.feifan.fuckingnjit.utils.SecureUtil
 import com.feifan.fuckingnjit.utils.Tools
 import com.feifan.fuckingnjit.utils.UserBoxUtils
 import kotlinx.coroutines.CoroutineScope
@@ -114,23 +112,25 @@ class UserManagerImpl : UserManager {
 
     override fun addUser(user: UserData) {
         try {
+            if (user.id.isEmpty()) return
+
+            val finalPassword = if (isPasswordStorageEnabled()) user.password else ""
+
             var userData = UserBoxUtils.getUserById(user.id)
             if (userData == null) {
-                userData = UserData(id = user.id, password = SecureUtil.rsaEncrypt(user.password))
-            }
-            if (user.id.isEmpty()) return
-            val userToAdd = if (!isPasswordStorageEnabled()) {
-                userData.password = ""
-                userData
+                // 新用户
+                userData = UserData(
+                    id = user.id,
+                    password = finalPassword
+                )
             } else {
-                userData
+                // 已存在用户
+                userData.password = finalPassword
             }
 
             Manager.showToast("请稍后")
-            // 如果不存储密码，先清空用户密码
-//            userList[userToAdd.getId()] = userToAdd
-            UserBoxUtils.insertUserData(userToAdd)
-            BaseDataBoxUtils.updateBaseData { it.currentUserId = userToAdd.id }
+            UserBoxUtils.insertUserData(userData)
+            BaseDataBoxUtils.updateBaseData { it.currentUserId = userData.id }
         } catch (e: Exception) {
             Manager.handleException(e, "用户添加失败")
         }
@@ -143,7 +143,7 @@ class UserManagerImpl : UserManager {
                 val currentUser = BaseDataBoxUtils.getCurrentUserId()
                 val user = UserBoxUtils.getUserById(currentUser)
                 if (user?.name?.isEmpty() == true) {
-                    try{
+                    try {
                         val startDate = Manager.getWebService().getSemesterStartDate()
                         val localDate = LocalDate.parse(startDate)
                         val zonedDateTime = localDate.atStartOfDay(ZoneId.systemDefault())
@@ -153,8 +153,8 @@ class UserManagerImpl : UserManager {
                             it.currentWeek =
                                 Manager.getTimeManager().calculateCurrentWeek(timestamp)
                         }
-                    }catch(e:Exception){
-                        Manager.handleException(e,"获取学期开始日期失败")
+                    } catch (e: Exception) {
+                        Manager.handleException(e, "获取学期开始日期失败")
                     }
 
                     val data = Manager.getWebService().getUserData()
@@ -166,7 +166,7 @@ class UserManagerImpl : UserManager {
                         user.scores = allSorces.getJSONArray("data")
                         user.gpa = Tools.calculateAverageGPA(user.scores)
                         UserBoxUtils.updateUserData(user)
-                    }else{
+                    } else {
                         Manager.showToast("获取用户信息失败")
                         UserBoxUtils.deleteUserData(user)
                     }

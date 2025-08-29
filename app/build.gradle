@@ -68,7 +68,8 @@ dependencies {
     androidTestImplementation libs.androidx.rules
     implementation libs.jsoup
     implementation libs.android.loading.animation
-    implementation(libs.objectbox.kotlin)
+    implementation libs.objectbox.kotlin
+    implementation libs.smartupdatedemo
 //    compileOnly libs.leakcanary.android
 //    implementation libs.kotlin.test
 

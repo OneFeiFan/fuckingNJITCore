@@ -101,13 +101,13 @@ class SecureUtil {
          */
         fun rsaEncrypt(plaintext: String): String {
             try {
-            val publicKey = publicKey
-            val cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding")
-            cipher.init(Cipher.ENCRYPT_MODE, publicKey)
-            val encryptedBytes = cipher.doFinal(plaintext.toByteArray())
-            return Base64.encodeToString(encryptedBytes, Base64.DEFAULT)
-                } catch (e: Exception) {
-                    Manager.handleException(e, "RSA加密失败")
+                val publicKey = publicKey
+                val cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding")
+                cipher.init(Cipher.ENCRYPT_MODE, publicKey)
+                val encryptedBytes = cipher.doFinal(plaintext.toByteArray())
+                return Base64.encodeToString(encryptedBytes, Base64.DEFAULT)
+            } catch (e: Exception) {
+                Manager.handleException(e, "RSA加密失败")
             }
             return plaintext
         }
@@ -120,14 +120,14 @@ class SecureUtil {
                 return ""
             }
             try {
-            val privateKey = privateKey
-            val cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding")
-            cipher.init(Cipher.DECRYPT_MODE, privateKey)
-            val decodedBytes = Base64.decode(ciphertext, Base64.DEFAULT)
-            val decryptedBytes = cipher.doFinal(decodedBytes)
-            return String(decryptedBytes)
-                } catch (e: Exception) {
-                    Manager.handleException(e, "RSA解密失败")
+                val privateKey = privateKey
+                val cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding")
+                cipher.init(Cipher.DECRYPT_MODE, privateKey)
+                val decodedBytes = Base64.decode(ciphertext, Base64.DEFAULT)
+                val decryptedBytes = cipher.doFinal(decodedBytes)
+                return String(decryptedBytes)
+            } catch (e: Exception) {
+                Manager.handleException(e, "RSA解密失败")
             }
             return ciphertext
         }

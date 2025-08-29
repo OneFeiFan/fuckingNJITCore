@@ -23,10 +23,11 @@ class SampleWebViewClientImpl(private val context: Context, private val webView:
 //            val cookieManager: CookieManager = CookieManager.getInstance()
 //            cookieManager.removeAllCookie()
 //        }else
-        if(url.startsWith("https://casb.njit.edu.cn/http/webvpnea5e00498bb033e68046c95dbdf6e09fbc127bea836184c80a0792b662ced92f/authserver/login?service=")){
+        if (url.startsWith("https://casb.njit.edu.cn/http/webvpnea5e00498bb033e68046c95dbdf6e09fbc127bea836184c80a0792b662ced92f/authserver/login?service=")) {
             val userManager = Manager.getUserManager()
             val user = userManager?.getCurrentUser()
-            view.evaluateJavascript("""
+            view.evaluateJavascript(
+                """
                 (function() {
                 getObj("load").onclick = function() {
                     J2J.addUser(document.querySelector("#mobileUsername").value,document.querySelector("#mobilePassword").value)
@@ -35,18 +36,21 @@ class SampleWebViewClientImpl(private val context: Context, private val webView:
                 document.querySelector("#mobilePassword").value = "${user?.password}"
                 
             })();
-        """.trimIndent(),null)
+        """.trimIndent(), null
+            )
         }
-        if(url.startsWith("https://casb.njit.edu.cn/enlink/sso/login")){
-            Manager.openDialog( "处理SSO登录",context)
-            view.evaluateJavascript("""
+        if (url.startsWith("https://casb.njit.edu.cn/enlink/sso/login")) {
+            Manager.openDialog("处理SSO登录", context)
+            view.evaluateJavascript(
+                """
             (function() {
                 document.querySelector(".commonBtn.sso").click();
                 J2J.login();
             })();
-        """.trimIndent(),null)
+        """.trimIndent(), null
+            )
         }
-        if(url.startsWith("https://casb.njit.edu.cn/http/webvpn3e1a11b7208e283ab07ade5d2913fc13d6f6fe09d2dc7372db2a51a14aa4167a/jwglxt/xtgl/index_initMenu.html")){
+        if (url.startsWith("https://casb.njit.edu.cn/http/webvpn3e1a11b7208e283ab07ade5d2913fc13d6f6fe09d2dc7372db2a51a14aa4167a/jwglxt/xtgl/index_initMenu.html")) {
             Manager.openDialog("正在更新用户信息", context)
             Manager.getUserManager()?.updateUserName(view)
 
@@ -55,14 +59,14 @@ class SampleWebViewClientImpl(private val context: Context, private val webView:
 
     }
 
-    override fun getCaptchaFromWebView(view: WebView) {
-        val userManager = Manager.getUserManager()
-        val user = userManager?.getCurrentUser()
-        view.evaluateJavascript("""
-            (function() {
-                document.querySelector("#mobileUsername").value = "${user?.id}"
-                document.querySelector("#mobilePassword").value = "${user?.password}"
-            })();
-        """.trimIndent(),null)
-    }
+//    override fun getCaptchaFromWebView(view: WebView) {
+//        val userManager = Manager.getUserManager()
+//        val user = userManager?.getCurrentUser()
+//        view.evaluateJavascript("""
+//            (function() {
+//                document.querySelector("#mobileUsername").value = "${user?.id}"
+//                document.querySelector("#mobilePassword").value = "${user?.password}"
+//            })();
+//        """.trimIndent(),null)
+//    }
 }

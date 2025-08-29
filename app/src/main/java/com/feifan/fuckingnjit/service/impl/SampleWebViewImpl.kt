@@ -56,7 +56,6 @@ class SampleWebViewImpl : SampleWebView, Activity() {
     }
 
 
-
 //    override fun onPause() {
 //        super.onPause()
 //        unregisterReceiver(destroyReceiver)

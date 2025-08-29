@@ -23,6 +23,7 @@ runner = "1.6.2"
 securityCrypto = "1.1.0-alpha07"
 junitJunit = "4.12"
 activity = "1.10.1"
+smartupdatedemo = "1.0.2"
 workRuntimeKtx = "2.10.1"
 objectbox = "4.3.0"
 objectboxKotlin = "4.3.0"
@@ -52,6 +53,7 @@ robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectr
 androidx-activity = { group = "androidx.activity", name = "activity", version.ref = "activity" }
 androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workRuntimeKtx" }
 objectbox-kotlin = { module = "io.objectbox:objectbox-kotlin", version.ref = "objectboxKotlin" }
+smartupdatedemo = { module = "com.github.OneFeiFan:SmartUpdateDemo", version.ref = "smartupdatedemo" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

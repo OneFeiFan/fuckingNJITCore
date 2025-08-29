@@ -46,7 +46,7 @@ class DemoWidgetConfigurationActivity : Activity() {
         if (widgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
             // 如果无效，直接结束Activity
             finish()
-        }else {
+        } else {
             save()  // 点击时调用save方法
         }
     }

@@ -4,10 +4,15 @@ import com.alibaba.fastjson.JSONObject
 
 
 interface WebService {
-    suspend fun getCurriculum() : JSONObject
+    suspend fun getCurriculum(): JSONObject
     suspend fun getUserData(): JSONObject
     suspend fun getSemesterStartDate(): String
-    suspend fun getEmptyClassrooms(dateRange:String,coursePeriod:String,buildingId:String): String
+    suspend fun getEmptyClassrooms(
+        dateRange: String,
+        coursePeriod: String,
+        buildingId: String
+    ): String
+
     suspend fun getAllSorces(): JSONObject
     suspend fun getSorcesDetail(
         classId: String,

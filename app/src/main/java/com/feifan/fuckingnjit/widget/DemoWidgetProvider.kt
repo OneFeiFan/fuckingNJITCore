@@ -8,11 +8,8 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.graphics.Bitmap
-import android.graphics.Canvas
 import android.view.View
 import android.widget.RemoteViews
-import android.widget.TextView
 import android.widget.Toast
 import com.alibaba.fastjson.JSONArray
 import com.alibaba.fastjson.JSONObject
@@ -20,8 +17,6 @@ import com.feifan.fuckingnjit.R
 import com.feifan.fuckingnjit.database.UserData
 import com.feifan.fuckingnjit.utils.Manager
 import com.feifan.fuckingnjit.utils.Tools
-import java.io.File
-import java.io.FileOutputStream
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -34,7 +29,7 @@ class DemoWidgetProvider : AppWidgetProvider() {
 
     // 伴生对象，包含静态方法和属性
     companion object {
-//        private const val UPDATE_INTERVAL_MINUTES = 45L
+        //        private const val UPDATE_INTERVAL_MINUTES = 45L
 //        private const val WORKER_TAG = "widget_update_work"
         // 更新所有小部件的方法
         fun updateWidgets(context: Context) {
@@ -105,7 +100,12 @@ class DemoWidgetProvider : AppWidgetProvider() {
                     .putExtra("WIDGET_ID", widgetId)
             //为布局文件中的按钮设置点击监听
             val pendingIntent =
-                PendingIntent.getBroadcast(context, 0, onClick, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+                PendingIntent.getBroadcast(
+                    context,
+                    0,
+                    onClick,
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                )
             remoteViews.setOnClickPendingIntent(R.id.small_widget, pendingIntent)
             // 获取当前日期和时间
             val currentDate = LocalDate.now()
@@ -118,15 +118,15 @@ class DemoWidgetProvider : AppWidgetProvider() {
             remoteViews.setTextViewText(R.id.month_id, monthDayText)
             remoteViews.setTextViewText(R.id.week_id, weekDayText)
 
-           val user: UserData?
+            val user: UserData?
             try {
                 user = Manager.getUserManager()?.getCurrentUser()
-            }catch (e: Exception){
+            } catch (e: Exception) {
                 e.printStackTrace()
                 return remoteViews
             }
             val curriculums = user?.curriculums?.getString("validTimeCourses")
-            if (curriculums == null||curriculums == "") {
+            if (curriculums == null || curriculums == "") {
                 remoteViews.setViewVisibility(R.id.empty_view, View.VISIBLE)
                 remoteViews.setViewVisibility(R.id.course_block_1, View.GONE)
                 remoteViews.setViewVisibility(R.id.course_block_2, View.GONE)
@@ -135,10 +135,13 @@ class DemoWidgetProvider : AppWidgetProvider() {
             }
             val curriculumsObject = JSONObject.parseArray(curriculums) as List<List<List<String>>>
 
-                   // 使用 fastjson 解析 JSON 数组字符串
-            val list: List<HashMap<String, String>> = Tools.parseCourseSchedule(JSONArray.parseArray(
-                curriculumsObject[Manager.getCurrentWeek()][Manager.getTimeManager().todayWeekIndex()].toString()
-            ))
+            // 使用 fastjson 解析 JSON 数组字符串
+            val list: List<HashMap<String, String>> = Tools.parseCourseSchedule(
+                JSONArray.parseArray(
+                    curriculumsObject[Manager.getCurrentWeek()][Manager.getTimeManager()
+                        .todayWeekIndex()].toString()
+                )
+            )
             // 过滤出还没结束的课程
             var sortedList: List<HashMap<String, String>> = emptyList<HashMap<String, String>>()
             try {

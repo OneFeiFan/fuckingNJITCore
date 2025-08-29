@@ -10,7 +10,7 @@ import java.util.Date
 import java.util.Locale
 
 class TimeManager {
-    private val SDF by lazy { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())}
+    private val SDF by lazy { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
     private val DATELIST by lazy {
         val today = LocalDate.now() // 今天的日期
         val timeFormatter = DateTimeFormatter.ofPattern("HH:mm") // 时间格式化器
@@ -26,6 +26,7 @@ class TimeManager {
                 .let { Date.from(it) } // 转为旧版 Date（如需兼容旧代码）
         }.filterNotNull()
     }
+
     fun isInLateNightPeriod(): Boolean {
         val currentHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
         return currentHour >= 20 || currentHour < 5
@@ -35,6 +36,7 @@ class TimeManager {
     fun getDateList(): List<Date> {
         return DATELIST
     }
+
     fun calculateCurrentWeek(startDate: String, currentDate: String): Int {
 
         val start = SDF.parse(startDate)?.time as Long
@@ -48,6 +50,7 @@ class TimeManager {
             (diff / 7).toInt() + 1
         }
     }
+
     fun calculateCurrentWeek(start: Long): Int {
         // 获取当前日期
         val today = Calendar.getInstance().apply {
@@ -66,7 +69,10 @@ class TimeManager {
         }
     }
 
-    fun dateChangeSimple(dateRange: Pair<String, String>, semesterStartDate: String): Map<String, List<String>> {
+    fun dateChangeSimple(
+        dateRange: Pair<String, String>,
+        semesterStartDate: String
+    ): Map<String, List<String>> {
         val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         val startDate = sdf.parse(dateRange.first)
         val endDate = sdf.parse(dateRange.second)
@@ -92,6 +98,7 @@ class TimeManager {
 
         return weekAndDay
     }
+
     fun getCurrentSchoolYear(): String {
         val calendar = Calendar.getInstance()
         val currentMonth = calendar[Calendar.MONTH] // 获取当前月份（0-11）
@@ -113,6 +120,7 @@ class TimeManager {
         // 教务系统采用的3表示第一学期，12表示第二学期，很有意思
         return "$schoolYearStart-$schoolYearEnd-$semester"
     }
+
     fun todayWeekIndex(): Int {
         val weekIndex = Calendar.getInstance().get(Calendar.DAY_OF_WEEK) - 2
         return if (weekIndex < 0) 6 else weekIndex

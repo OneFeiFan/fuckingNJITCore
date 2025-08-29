@@ -103,14 +103,14 @@ class WebServiceImpl : WebService {
                 val courseName = item.getString("kcmc")
                 val time = item.getString("sksj")
 
-                if(time == null || classroom == null){
+                if (time == null || classroom == null) {
                     val course = Course()
                     course.setName(courseName)
                     course.setTeacher(teacher)
 
-                    if(classroom == null){
+                    if (classroom == null) {
                         course.setClassroom("未安排地点")
-                    }else{
+                    } else {
                         course.setClassroom(classroom)
                     }
                     course.setTime(null)
@@ -199,7 +199,8 @@ class WebServiceImpl : WebService {
                 Array(maxWeek + 1) { getOrElse(it) { emptyList() } }
             }
             val result = JSONObject()
-            result["validTimeCourses"] = JSON.toJSONString(Tools.getTimeTableData(validTimeCoursesList))
+            result["validTimeCourses"] =
+                JSON.toJSONString(Tools.getTimeTableData(validTimeCoursesList))
             result["nullTimeCourses"] = JSON.toJSONString(nullTimeCourses)
             result
         } catch (e: Exception) {
@@ -416,11 +417,13 @@ class WebServiceImpl : WebService {
                 val percentage = tds[1].text()
                 val score = tds[2].text()
                 // 将映射添加到列表中
-                details.add(mapOf(
-                    "scoreItem" to scoreItem,
-                    "percentage" to percentage,
-                    "score" to score
-                ))
+                details.add(
+                    mapOf(
+                        "scoreItem" to scoreItem,
+                        "percentage" to percentage,
+                        "score" to score
+                    )
+                )
             }
             JSON.toJSONString(details)
         } catch (e: Exception) {

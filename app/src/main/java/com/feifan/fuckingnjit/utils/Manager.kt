@@ -5,18 +5,24 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Handler
 import android.os.Looper
 import android.webkit.CookieManager
 import android.widget.Toast
+import androidx.core.content.FileProvider
 import com.alibaba.fastjson.JSONArray
 import com.example.loadinganimation.LoadingAnimationDialog
+import com.feifan.apkpatch.PatchUtils
 import com.feifan.fuckingnjit.R
 import com.feifan.fuckingnjit.service.impl.SampleWebViewImpl
 import com.feifan.fuckingnjit.service.impl.UserManagerImpl
 import com.feifan.fuckingnjit.service.impl.WebServiceImpl
 import com.feifan.fuckingnjit.widget.DemoWidgetProvider
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -47,7 +53,7 @@ class Manager {
                 } else {
                     throw IllegalStateException("Manager already initialized")
                 }
-            }catch (e: Exception){
+            } catch (e: Exception) {
                 println("init error: ${e.message}")
             }
 
@@ -117,10 +123,12 @@ class Manager {
                             diffMinutes < -40 -> {
                                 break
                             }
+
                             diffMinutes > 40 -> {
                                 iterator.remove()
                                 break // 退出循环
                             }
+
                             abs(diffMinutes) <= 25 -> {
                                 DemoWidgetProvider.updateWidgets(context)
                                 iterator.remove()
@@ -159,7 +167,8 @@ class Manager {
                 return
             }
             val dateList = timeManager.getDateList()
-            val timeTable = timetableData[BaseDataBoxUtils.getCurrentWeek()][getTimeManager().todayWeekIndex()]
+            val timeTable =
+                timetableData[BaseDataBoxUtils.getCurrentWeek()][getTimeManager().todayWeekIndex()]
             for (i in timeTable.indices) {
                 if (timeTable[i] != "") {
                     timeMap[i] = dateList[i]
@@ -191,7 +200,10 @@ class Manager {
                 logout()
             }
             CookieManager.getInstance().removeAllCookies(null)
-            val intent = Intent(context, SampleWebViewImpl::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            val intent = Intent(
+                context,
+                SampleWebViewImpl::class.java
+            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(intent)
             return ""
         }
@@ -214,22 +226,22 @@ class Manager {
         }
 
         fun openDialog(text: String, context_: Context) {
-                if(::dialog.isInitialized){
-                    dialog.dismiss()
-                }
-                dialog = LoadingAnimationDialog(context_)
+            if (::dialog.isInitialized) {
+                dialog.dismiss()
+            }
+            dialog = LoadingAnimationDialog(context_)
 
-                dialog.apply {
-                    setCloseOnClick(false)
-                    setProgressVector(R.drawable.loading)
-                    setTextViewVisibility(true)
-                    setTextStyle(true)
-                    setTextColor(Color.WHITE)
-                    setTextSize(20F)
-                    setEnlarge(5)
-                    setTextMsg(text)
-                    show()
-                }
+            dialog.apply {
+                setCloseOnClick(false)
+                setProgressVector(R.drawable.loading)
+                setTextViewVisibility(true)
+                setTextStyle(true)
+                setTextColor(Color.WHITE)
+                setTextSize(20F)
+                setEnlarge(5)
+                setTextMsg(text)
+                show()
+            }
         }
 
         fun dismissDialog() {
@@ -239,7 +251,7 @@ class Manager {
         fun handleException(e: Exception, message: String) {
             e.printStackTrace()
             println("handleException: $message")
-            showToast(message)
+//            showToast(message)
         }
 
         fun goHome() {
@@ -253,5 +265,71 @@ class Manager {
             context.startActivity(intent)
         }
 
+        suspend fun updateApp(url: String): Boolean = withContext(Dispatchers.IO) {
+            try {
+                withContext(Dispatchers.Main) {
+                    openDialog("正在增量更新...", context)
+                }
+                val pm: PackageManager = context.packageManager
+                val appInfo = pm.getApplicationInfo(context.packageName, 0)
+                val oldPath = appInfo.sourceDir
+                val newApkFile = File(context.filesDir, "new.apk")
+                val patchFile = File(context.filesDir, "bin")
+
+                newApkFile.delete()
+                patchFile.delete()
+                // 异步下载文件
+                HttpRequestHelper.downloadFile(url, "bin", context)
+
+                if (!patchFile.exists()) {
+                    withContext(Dispatchers.Main) {
+                        showToast("下载增量包失败")
+                    }
+                    return@withContext false
+                }
+
+                // 在IO线程执行耗时操作
+                val result =
+                    PatchUtils.patch(oldPath, newApkFile.absolutePath, patchFile.absolutePath)
+
+                if (result == 0) {
+                    withContext(Dispatchers.Main) {
+                        install(newApkFile.absolutePath)
+                    }
+                    true
+                } else {
+                    withContext(Dispatchers.Main) {
+                        showToast("合并失败")
+                    }
+                    false
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    handleException(e, "操作失败")
+                }
+                false
+            } finally {
+                withContext(Dispatchers.Main) {
+                    dismissDialog()
+                }
+            }
+        }
+
+        private fun install(apkPath: String) {
+            val file = File(apkPath)
+            val uri =
+                FileProvider.getUriForFile(
+                    context,
+                    context.packageName + ".fileprovider", file
+                )
+
+            val intent = Intent(Intent.ACTION_VIEW)
+            intent.setDataAndType(uri, "application/vnd.android.package-archive")
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            // 添加临时读取权限
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+
+            context.startActivity(intent)
+        }
     }
 }

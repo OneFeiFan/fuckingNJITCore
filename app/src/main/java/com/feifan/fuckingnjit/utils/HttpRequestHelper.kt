@@ -1,5 +1,6 @@
 package com.feifan.fuckingnjit.utils
 
+import android.content.Context
 import android.webkit.CookieManager
 import okhttp3.FormBody
 import okhttp3.Headers.Companion.toHeaders
@@ -9,6 +10,7 @@ import okhttp3.RequestBody
 import org.jsoup.Connection
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
+import java.io.File
 import java.io.IOException
 import java.net.ConnectException
 import java.net.ProtocolException
@@ -19,13 +21,19 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
 
-class HttpRequestHelper(
-    private val okHttpClient: OkHttpClient,
-    private val cookieManager: CookieManager
-) {
+class HttpRequestHelper {
+
+    constructor(okHttpClient: OkHttpClient, cookieManager: CookieManager) {
+        HttpRequestHelper.okHttpClient = okHttpClient
+        HttpRequestHelper.cookieManager = cookieManager
+    }
+
     private var lastLoginCheckTime = 0L
     private val LOGIN_CHECK_INTERVAL = 5 * 60 * 1000 // 30分钟检查一次
+
     companion object {
+        private lateinit var okHttpClient: OkHttpClient
+        private lateinit var cookieManager: CookieManager
         const val BASE_URL = "https://casb.njit.edu.cn"
         const val WEBVPN_PATH =
             "/http/webvpn3e1a11b7208e283ab07ade5d2913fc13d6f6fe09d2dc7372db2a51a14aa4167a"
@@ -34,16 +42,51 @@ class HttpRequestHelper(
             "Accept" to "*/*",
             "Connection" to "keep-alive"
         )
+
+        suspend fun downloadFile(
+            url: String,
+            fileName: String,
+            context: Context
+        ): Boolean {
+            val request = Request.Builder()
+                .url(url)
+                .headers(COMMON_HEADERS.toHeaders())
+                .build()
+
+            return suspendCoroutine { continuation ->
+                try {
+                    val response = okHttpClient.newCall(request).execute()
+                    if (response.isSuccessful) {
+                        response.body?.let { body ->
+                            val file = File(context.filesDir, fileName)
+                            file.outputStream().use { output ->
+                                body.byteStream().use { input ->
+                                    input.copyTo(output)
+                                }
+                            }
+                            continuation.resume(true)
+                        } ?: continuation.resume(false)
+                    } else {
+                        continuation.resume(false)
+                    }
+                } catch (e: Exception) {
+                    Manager.handleException(e, "文件下载失败")
+                    continuation.resume(false)
+                }
+            }
+        }
     }
 
     private fun getPersistentCookies(cookie: String): Map<String, String> {
         return cookie.split(";")
             .associate { it.split("=").let { parts -> parts[0] to parts.getOrElse(1) { "" } } }
     }
+
     private fun checkLoginIfNeeded(): Boolean {
         val currentTime = System.currentTimeMillis()
         return currentTime - lastLoginCheckTime >= LOGIN_CHECK_INTERVAL // 在有效期内，跳过检查
     }
+
     private suspend fun makeRequest(
         url: String,
         method: HttpMethod = HttpMethod.GET,
@@ -77,10 +120,12 @@ class HttpRequestHelper(
                     e is ConnectException || e is UnknownHostException || e is SocketException -> {
                         Manager.handleException(e, "网络异常，请检查网络连接")
                     }
+
                     e.message?.contains("Too many redirects") == true -> {
                         Manager.showToast("需要登录")
                         Manager.startLogin(true)
                     }
+
                     e is SocketTimeoutException -> {
                         Manager.handleException(e, "请求超时，请稍后再试")
                     }
@@ -118,16 +163,16 @@ class HttpRequestHelper(
             } catch (e: Exception) {
                 if (e is ProtocolException) {
                     if (e.message?.contains("Too many follow-up requests") == true) {
-                        Manager.handleException(e,"重试次数过多，cookie可能失效,请重新登录")
+                        Manager.handleException(e, "重试次数过多，cookie可能失效,请重新登录")
                         Manager.startLogin(true)
                     } else {
-                        Manager.handleException(e,"捕获到其他IO异常")
+                        Manager.handleException(e, "捕获到其他IO异常")
                     }
                 } else {
-                    if(e.message?.contains("onnect") == true){
-                        Manager.handleException(e,"网络异常，请检查网络连接")
+                    if (e.message?.contains("onnect") == true) {
+                        Manager.handleException(e, "网络异常，请检查网络连接")
                     }
-                    Manager.handleException(e,"捕获到非ProtocolException异常")
+                    Manager.handleException(e, "捕获到非ProtocolException异常")
                 }
                 continuation.resume("")
             }
@@ -152,11 +197,11 @@ class HttpRequestHelper(
         requestBody: Map<String, String> = emptyMap()
     ): Document {
 
-            val result = makeRequest(url, method, additionalHeaders, requestBody)
-            if (result.isEmpty()) {
-                return Document.createShell("")
-            }else{
-                return Jsoup.parse(result)
-            }
+        val result = makeRequest(url, method, additionalHeaders, requestBody)
+        if (result.isEmpty()) {
+            return Document.createShell("")
+        } else {
+            return Jsoup.parse(result)
+        }
     }
 }

@@ -37,7 +37,7 @@ class Manager {
         private lateinit var context: Context
         private val webService = WebServiceImpl()
         private val timeManager = TimeManager()
-        private lateinit var dialog: LoadingAnimationDialog
+        private var dialog: LoadingAnimationDialog? = null
         private var inLogin = false
         private lateinit var receiver: BroadcastReceiver
         private lateinit var timetableData: List<List<List<String>>>
@@ -210,7 +210,6 @@ class Manager {
 
         fun endLogin() {
             inLogin = false
-            getSemesterStartDate()
         }
 
         fun logout(removeCurrentUser: Boolean = true) {
@@ -226,12 +225,12 @@ class Manager {
         }
 
         fun openDialog(text: String, context_: Context) {
-            if (::dialog.isInitialized) {
-                dialog.dismiss()
+            if (dialog != null && dialog!!.isShowing) {
+                dialog!!.dismiss()
             }
             dialog = LoadingAnimationDialog(context_)
 
-            dialog.apply {
+            dialog?.apply {
                 setCloseOnClick(false)
                 setProgressVector(R.drawable.loading)
                 setTextViewVisibility(true)
@@ -245,7 +244,8 @@ class Manager {
         }
 
         fun dismissDialog() {
-            dialog.dismiss()
+            dialog?.dismiss()
+            dialog = null
         }
 
         fun handleException(e: Exception, message: String) {

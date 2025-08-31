@@ -1,10 +1,6 @@
 package com.feifan.fuckingnjit.service.impl
 
 import android.content.Context
-import android.content.Intent
-import android.view.View
-import android.webkit.CookieManager
-import android.webkit.WebView
 import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.JSONObject
 import com.feifan.fuckingnjit.database.UserData
@@ -13,21 +9,15 @@ import com.feifan.fuckingnjit.utils.BaseDataBoxUtils
 import com.feifan.fuckingnjit.utils.Manager
 import com.feifan.fuckingnjit.utils.Tools
 import com.feifan.fuckingnjit.utils.UserBoxUtils
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
-import java.lang.ref.WeakReference
 import java.time.LocalDate
 import java.time.ZoneId
 
 class UserManagerImpl : UserManager {
-
     // 在类中定义可控的协程作用域
-    private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var context: Context
-    private var webViewRef = WeakReference<WebView>(null)
 
     constructor(context: Context) {
         this.context = context
@@ -38,10 +28,7 @@ class UserManagerImpl : UserManager {
         }
     }
 
-
     override fun setCurrentUser(id: String) {
-        val cookieManager = CookieManager.getInstance()
-        cookieManager.removeAllCookies(null)
         if (UserBoxUtils.getUserById(id) != null) {
             BaseDataBoxUtils.updateBaseData { it.currentUserId = id }
             Manager.startLogin(true)
@@ -55,12 +42,6 @@ class UserManagerImpl : UserManager {
     fun removeCurrentUser() {
         BaseDataBoxUtils.updateBaseData { it.currentUserId = "" }
     }
-//    override fun getOriginalPassword(id: String): String {
-//        val userData = UserBoxUtils.getUserById(id)
-//
-//        SecureUtil.rsaDecrypt(userData?.password ?: "")
-//        return userList[currentUser]?.getPassword() ?: ""
-//    }
 
     override fun getAllUsers(): String {
         val resultList = JSONObject()
@@ -98,92 +79,56 @@ class UserManagerImpl : UserManager {
         }
     }
 
-    override fun reStoreUserList() {
-        coroutineScope.launch(Dispatchers.IO) {
-//            try {
-//                println("更新用户列表")
-//                println(userList)
-//                preferences.edit { putString("userList", JSON.toJSONString(userList)) }
-//            } catch (e: Exception) {
-//                Manager.handleException(e, "更新用户列表失败")
-//            }
-        }
-    }
-
-    override fun addUser(user: UserData) {
+    override suspend fun addUser(user: UserData) = withContext(Dispatchers.IO) {
         try {
-            if (user.id.isEmpty()) return
-
-            val finalPassword = if (isPasswordStorageEnabled()) user.password else ""
-
-            var userData = UserBoxUtils.getUserById(user.id)
-            if (userData == null) {
-                // 新用户
-                userData = UserData(
-                    id = user.id,
-                    password = finalPassword
-                )
-            } else {
-                // 已存在用户
-                userData.password = finalPassword
-            }
-
-            Manager.showToast("请稍后")
-            UserBoxUtils.insertUserData(userData)
-            BaseDataBoxUtils.updateBaseData { it.currentUserId = userData.id }
-        } catch (e: Exception) {
-            Manager.handleException(e, "用户添加失败")
-        }
-    }
-
-    fun updateUserName(view: WebView) {
-        webViewRef = WeakReference(view)
-        coroutineScope.launch(Dispatchers.IO) {
-            try {
-                val currentUser = BaseDataBoxUtils.getCurrentUserId()
-                val user = UserBoxUtils.getUserById(currentUser)
-                if (user?.name?.isEmpty() == true) {
-                    try {
-                        val startDate = Manager.getWebService().getSemesterStartDate()
-                        val localDate = LocalDate.parse(startDate)
-                        val zonedDateTime = localDate.atStartOfDay(ZoneId.systemDefault())
-                        val timestamp = zonedDateTime.toInstant().toEpochMilli()
-                        BaseDataBoxUtils.updateBaseData {
-                            it.semesterStartDate = timestamp
-                            it.currentWeek =
-                                Manager.getTimeManager().calculateCurrentWeek(timestamp)
-                        }
-                    } catch (e: Exception) {
-                        Manager.handleException(e, "获取学期开始日期失败")
+            if (user.id.isEmpty()) throw Exception("用户ID不能为空")
+            // 并行执行两个网络请求
+            val semesterDeferred = async {
+                try {
+                    val startDate = Manager.getWebService().getSemesterStartDate()
+                    val timestamp = LocalDate.parse(startDate)
+                        .atStartOfDay(ZoneId.systemDefault())
+                        .toInstant()
+                        .toEpochMilli()
+                    BaseDataBoxUtils.updateBaseData {
+                        it.semesterStartDate = timestamp
+                        it.currentWeek = Manager.getTimeManager().calculateCurrentWeek(timestamp)
                     }
-
-                    val data = Manager.getWebService().getUserData()
-                    if (!data.isEmpty()) {
-                        user.id = data.getString("id")
-                        user.name = data.getString("name")
-                        val allSorces = Manager.getWebService().getAllSorces()
-                        println(allSorces.toJSONString())
-                        user.scores = allSorces.getJSONArray("data")
-                        user.gpa = Tools.calculateAverageGPA(user.scores)
-                        UserBoxUtils.updateUserData(user)
-                    } else {
-                        Manager.showToast("获取用户信息失败")
-                        UserBoxUtils.deleteUserData(user)
-                    }
+                } catch (e: Exception) {
+                    Manager.handleException(e, "获取学期开始日期失败")
+                    null  // 返回null表示失败，但不会中断整个流程
                 }
-            } catch (e: Exception) {
-                Manager.handleException(e, "添加用户失败")
-            } finally {
-                updateUI()
             }
-        }
-    }
 
-    private suspend fun updateUI() = withContext(Dispatchers.Main) {
-        Manager.dismissDialog()
-        webViewRef.get()?.visibility = View.GONE
-        context.sendBroadcast(Intent("CLOSE_WEBVIEW_STRING").setPackage(context.packageName))
-        webViewRef.clear()
+            // 等待学期日期处理完成（如果有）
+            semesterDeferred.await()
+            val userData = (async { Manager.getWebService().getUserData() }).await()
+            val scores = (async { Manager.getWebService().getAllSorces() }).await()
+
+            if (userData.isEmpty()) {
+                Manager.showToast("获取用户信息失败")
+                return@withContext
+            }
+
+            // 更新用户数据
+            user.id = userData.getString("id")
+            user.name = userData.getString("name")
+            println(scores.toJSONString())
+            user.scores = scores.getJSONArray("data")
+            user.gpa = Tools.calculateAverageGPA(user.scores)
+            if (!isPasswordStorageEnabled()) {
+                user.password = ""
+            }
+
+            // 更新存储
+            UserBoxUtils.updateUserData(user)
+            BaseDataBoxUtils.updateBaseData { it.currentUserId = user.id }
+        } catch (e: Exception) {
+            Manager.handleException(e, "添加用户失败")
+            throw e  // 重新抛出异常，让调用方知道失败
+        } finally {
+            Manager.dismissDialog()
+        }
     }
 
     /**

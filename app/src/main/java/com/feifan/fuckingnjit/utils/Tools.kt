@@ -261,15 +261,15 @@ class Tools {
             return timetableData
         }
 
-        fun parseCourseSchedule(courseArray: JSONArray): MutableList<HashMap<String, String>> {
+        fun parseCourseSchedule(courseArray: List<String>): MutableList<HashMap<String, String>> {
 
             val result = mutableListOf<HashMap<String, String>>()
             try {
                 var i = 0
 
                 while (i < courseArray.size) {
-                    val courseStr = courseArray.getString(i)
-                    if (courseStr.isNullOrEmpty()) {
+                    val courseStr = courseArray[i]
+                    if (courseStr.isEmpty()) {
                         i++
                         continue
                     }
@@ -283,7 +283,7 @@ class Tools {
 
                     // 检查后续连续时间段是否同一门课程
                     while (endIndex + 1 < courseArray.size &&
-                        courseArray.getString(endIndex + 1) == courseStr
+                        courseArray[endIndex + 1] == courseStr
                     ) {
                         endIndex++
                     }

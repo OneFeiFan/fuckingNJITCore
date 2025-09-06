@@ -1,6 +1,5 @@
 package com.feifan.fuckingnjit.service.impl
 
-import android.content.Context
 import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.JSONObject
 import com.feifan.fuckingnjit.database.UserData
@@ -15,17 +14,10 @@ import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.ZoneId
 
-class UserManagerImpl : UserManager {
-    // 在类中定义可控的协程作用域
-    private var context: Context
-
-    constructor(context: Context) {
-        this.context = context
-        try {
-            Manager.registerTimeReceiver()
-        } catch (e: Exception) {
-            Manager.handleException(e, "Failed to register time receiver")
-        }
+class UserManagerImpl private constructor() : UserManager {
+    companion object {
+        private val instance_: UserManagerImpl by lazy { UserManagerImpl() }
+        fun getInstance(): UserManagerImpl = instance_
     }
 
     override fun setCurrentUser(id: String) {

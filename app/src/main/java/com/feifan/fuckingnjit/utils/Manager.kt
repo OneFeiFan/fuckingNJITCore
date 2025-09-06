@@ -1,10 +1,8 @@
 package com.feifan.fuckingnjit.utils
 
 import android.annotation.SuppressLint
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Handler
@@ -12,7 +10,6 @@ import android.os.Looper
 import android.webkit.CookieManager
 import android.widget.Toast
 import androidx.core.content.FileProvider
-import com.alibaba.fastjson.JSONArray
 import com.example.loadinganimation.LoadingAnimationDialog
 import com.feifan.apkpatch.PatchUtils
 import com.feifan.fuckingnjit.R
@@ -20,38 +17,78 @@ import com.feifan.fuckingnjit.service.impl.SampleWebViewImpl
 import com.feifan.fuckingnjit.service.impl.UserManagerImpl
 import com.feifan.fuckingnjit.service.impl.WebServiceImpl
 import com.feifan.fuckingnjit.widget.DemoWidgetProvider
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.Date
 import java.util.Locale
-import kotlin.math.abs
 
 class Manager {
-
-    @SuppressLint("StaticFieldLeak")
     companion object {
-
-        private lateinit var userManager: UserManagerImpl
+        @SuppressLint("StaticFieldLeak")
         private lateinit var context: Context
-        private val webService = WebServiceImpl()
-        private val timeManager = TimeManager()
         private var dialog: LoadingAnimationDialog? = null
         private var inLogin = false
-        private lateinit var receiver: BroadcastReceiver
-        private lateinit var timetableData: List<List<List<String>>>
-        private val timeMap = hashMapOf<Int, Date>()
-
+        private val coroutineScope = CoroutineScope(Dispatchers.IO + Job())
         fun init(context: Context) {
             try {
-                if (!::userManager.isInitialized) {
-                    this.context = context
+                this.context = context
+                if (!UserBoxUtils.isInitialized()) {
                     UserBoxUtils.init(context)
+                }
+                if (!BaseDataBoxUtils.isInitialized()) {
                     BaseDataBoxUtils.init(context)
-                    userManager = UserManagerImpl(context)
-                } else {
-                    throw IllegalStateException("Manager already initialized")
+                }
+
+//                if(XiaomiUtilities.isFlyme) {
+//                    XXPermissions.with(this.context)
+//                        // 申请多个权限
+//                        .permission(PermissionLists.getScheduleExactAlarmPermission())
+//                        // 设置不触发错误检测机制（局部设置）
+//                        //.unchecked()
+//                        .request(object : OnPermissionCallback {
+//
+//                            override fun onResult(
+//                                grantedList: MutableList<IPermission>,
+//                                deniedList: MutableList<IPermission>
+//                            ) {
+//                                val allGranted = deniedList.isEmpty()
+//                                if (!allGranted) {
+//                                    // 判断请求失败的权限是否被用户勾选了不再询问的选项
+////                                val doNotAskAgain = XXPermissions.isDoNotAskAgainPermissions(activity, deniedList)
+//                                    // 在这里处理权限请求失败的逻辑
+//                                    // ......
+//                                    return
+//                                }
+//                                // 在这里处理权限请求成功的逻辑
+//                                // ......
+//                            }
+//                        })
+//                }
+                coroutineScope.launch {
+                    val week = withContext(Dispatchers.Default) {
+                        val startTime = LocalDate.parse(getSemesterStartDate())
+                            .atStartOfDay(ZoneId.systemDefault())
+                            .toInstant()
+                            .toEpochMilli()
+                        TimeManager.getInstance().calculateCurrentWeek(startTime)
+                    }
+
+                    // 阶段2：IO操作 → IO
+                    withContext(Dispatchers.IO) {
+                        BaseDataBoxUtils.updateBaseData { it.currentWeek = week }
+                    }
+
+                    // 阶段3：UI更新 → Main
+                    withContext(Dispatchers.Main) {
+                        DemoWidgetProvider.updateWidgets(context)
+                    }
                 }
             } catch (e: Exception) {
                 println("init error: ${e.message}")
@@ -68,6 +105,7 @@ class Manager {
                 }
             } catch (e: Exception) {
                 showToast("获取学期开始日期失败，请稍后重试")
+                handleException(e, "获取学期开始日期失败")
             }
             return "2025-02-17"
         }
@@ -77,114 +115,15 @@ class Manager {
         }
 
         fun getTimeManager(): TimeManager {
-            return timeManager
+            return TimeManager.getInstance()
         }
 
-        fun getUserManager(): UserManagerImpl? {
-            if (!::userManager.isInitialized) {
-                println("userManager not initialized")
-                return null
-            }
-            return userManager
+        fun getUserManager(): UserManagerImpl {
+            return UserManagerImpl.getInstance()
         }
 
         fun getWebService(): WebServiceImpl {
-            return webService
-        }
-
-        fun registerTimeReceiver() {
-            receiver = object : BroadcastReceiver() {
-                override fun onReceive(context: Context, intent: Intent) {
-                    println("onReceive")
-                    if (getTimeManager().isInLateNightPeriod()) {
-                        println("isInLateNightPeriod")
-                        return
-                    }
-                    if (getTimetableData().isEmpty()) {
-                        updateTimetableData()
-                        return
-                    }
-                    if (getTimeMap().isEmpty()) {
-                        updateTimeMap()
-                        return
-                    }
-
-                    val currentTime = Date() // 获取当前时间
-
-                    // 遍历时间映射表
-                    val iterator = getTimeMap().iterator()
-                    while (iterator.hasNext()) {
-                        val (index, time) = iterator.next()
-
-                        // 计算时间差（分钟）
-                        val diffMinutes = (currentTime.time - time.time) / (60 * 1000)
-
-                        when {
-                            diffMinutes < -40 -> {
-                                break
-                            }
-
-                            diffMinutes > 40 -> {
-                                iterator.remove()
-                                break // 退出循环
-                            }
-
-                            abs(diffMinutes) <= 25 -> {
-                                DemoWidgetProvider.updateWidgets(context)
-                                iterator.remove()
-                                break // 退出循环
-                            }
-                        }
-                    }
-                }
-            }
-            val filter = IntentFilter(Intent.ACTION_TIME_TICK)
-            context.registerReceiver(receiver, filter)
-            val currentWeek = BaseDataBoxUtils.getCurrentWeek()
-
-            if (currentWeek == -1 || currentWeek > 19) {
-                println("thisWeek is -1 or >19: $currentWeek")
-                context.unregisterReceiver(receiver)
-            }
-        }
-
-        fun unregisterTimeReceiver() {
-            context.unregisterReceiver(receiver)
-        }
-
-        fun updateTimetableData() {
-            val userData = UserBoxUtils.getUserById(BaseDataBoxUtils.getCurrentUserId())
-            val validTimeCourses = userData?.curriculums?.getString("validTimeCourses")
-            if (validTimeCourses == null || validTimeCourses == "") {
-                return
-            }
-            timetableData = JSONArray.parseArray(validTimeCourses) as List<List<List<String>>>
-        }
-
-        fun updateTimeMap() {
-            if (timetableData.isEmpty()) {
-                updateTimetableData()
-                return
-            }
-            val dateList = timeManager.getDateList()
-            val timeTable =
-                timetableData[BaseDataBoxUtils.getCurrentWeek()][getTimeManager().todayWeekIndex()]
-            for (i in timeTable.indices) {
-                if (timeTable[i] != "") {
-                    timeMap[i] = dateList[i]
-                }
-            }
-        }
-
-        fun getTimeMap(): HashMap<Int, Date> {
-            return timeMap
-        }
-
-        fun getTimetableData(): List<List<List<String>>> {
-            if (!::timetableData.isInitialized) {
-                return emptyList()
-            }
-            return timetableData
+            return WebServiceImpl.getInstance()
         }
 
         fun startLogin(relogin: Boolean = false): String {
@@ -214,7 +153,7 @@ class Manager {
 
         fun logout(removeCurrentUser: Boolean = true) {
             if (removeCurrentUser) {
-                userManager.removeCurrentUser()
+                UserManagerImpl.getInstance().removeCurrentUser()
             }
         }
 

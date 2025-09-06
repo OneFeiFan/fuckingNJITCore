@@ -1,25 +1,14 @@
 package com.feifan.fuckingnjit.utils
 
-import android.content.Context
-import com.feifan.fuckingnjit.database.MyObjectBox
 import com.feifan.fuckingnjit.database.UserData
 import com.feifan.fuckingnjit.database.UserData_
 import io.objectbox.Box
-import io.objectbox.BoxStore
-import java.io.File
 
-object UserBoxUtils {
 
-    private lateinit var boxStore: BoxStore
-    private lateinit var userDataBox: Box<UserData>
-
-    // 初始化必须在 Application 中调用
-    fun init(context: Context) {
-        boxStore = MyObjectBox.builder()
-            .androidContext(context.applicationContext)
-            .directory(File(context.filesDir, "USER"))
-            .build()
-        userDataBox = boxStore.boxFor(UserData::class.java)
+object UserBoxUtils : BaseBoxUtils() {
+    override fun getDatabaseName() = "USER"
+    private val userDataBox: Box<UserData> by lazy {
+        getBox(UserData::class.java)
     }
 
     // 返回储存的 BoxStore 对象
@@ -66,10 +55,5 @@ object UserBoxUtils {
     // 删除所有用户数据
     fun deleteAllUserData() {
         userDataBox.removeAll()
-    }
-
-    // 关闭数据库
-    fun close() {
-        boxStore.close()
     }
 }

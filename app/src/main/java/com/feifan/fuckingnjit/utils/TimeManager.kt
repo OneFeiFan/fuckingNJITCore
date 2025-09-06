@@ -9,7 +9,14 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-class TimeManager {
+class TimeManager private constructor() {
+
+    companion object {
+        private val instance_: TimeManager by lazy { TimeManager() }
+
+        fun getInstance(): TimeManager = instance_
+    }
+
     private val SDF by lazy { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
     private val DATELIST by lazy {
         val today = LocalDate.now() // 今天的日期

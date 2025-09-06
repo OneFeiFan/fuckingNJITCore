@@ -70,6 +70,10 @@ dependencies {
     implementation libs.android.loading.animation
     implementation libs.objectbox.kotlin
     implementation libs.smartupdatedemo
+
+    implementation 'com.umeng.umsdk:common:+'
+    implementation 'com.umeng.umsdk:asms:+'
+    implementation 'com.umeng.umsdk:union:+'
 //    compileOnly libs.leakcanary.android
 //    implementation libs.kotlin.test
 

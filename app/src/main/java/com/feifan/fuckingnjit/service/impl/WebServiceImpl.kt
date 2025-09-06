@@ -6,7 +6,6 @@ import com.alibaba.fastjson.JSONArray
 import com.alibaba.fastjson.JSONObject
 import com.feifan.fuckingnjit.Model.Course
 import com.feifan.fuckingnjit.Model.Time
-import com.feifan.fuckingnjit.database.UserData
 import com.feifan.fuckingnjit.service.WebService
 import com.feifan.fuckingnjit.utils.HttpMethod
 import com.feifan.fuckingnjit.utils.HttpRequestHelper
@@ -20,8 +19,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import okhttp3.OkHttpClient
-import org.jsoup.Connection
-import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.select.Elements
 import java.lang.Integer.parseInt
@@ -31,7 +28,7 @@ import java.util.regex.Pattern
 import kotlin.math.pow
 
 
-class WebServiceImpl : WebService {
+class WebServiceImpl private constructor() : WebService {
     private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val pattern = Pattern.compile(".*?(1ABB.*?)(?<!start)\\b")
     private val okHttpClient = OkHttpClient.Builder()
@@ -42,6 +39,11 @@ class WebServiceImpl : WebService {
 
     private val httpRequestHelper: HttpRequestHelper =
         HttpRequestHelper(okHttpClient, CookieManager.getInstance())
+
+    companion object {
+        private val instance_: WebServiceImpl by lazy { WebServiceImpl() }
+        fun getInstance(): WebServiceImpl = instance_
+    }
 
     private fun buildUrl(path: String, vararg params: Pair<String, String>): String {
         val baseUrl = "${HttpRequestHelper.BASE_URL}${HttpRequestHelper.WEBVPN_PATH}$path"
@@ -288,7 +290,7 @@ class WebServiceImpl : WebService {
             Manager.showToast("日期格式错误")
             return "{}"
         }
-        val timeManager = TimeManager()
+        val timeManager = TimeManager.getInstance()
         val dateMap =
             timeManager.dateChangeSimple(Pair(dateList[0], dateList[1]), semesterStartDate)
         val schoolYearFull = timeManager.getCurrentSchoolYear()
@@ -461,19 +463,14 @@ class WebServiceImpl : WebService {
 
     override suspend fun getAcademicProgress(refresh: Boolean): String {
         return try {
-            val id = Manager.getUserManager()?.getCurrentUser()?.id ?: ""
-            var userData = UserBoxUtils.getUserById(id)
-            if (userData == null) {
-                userData = UserData()
-                userData.id = id
-                UserBoxUtils.insertUserData(userData)
-            }
+            val userData = Manager.getUserManager().getCurrentUser()
             if (!refresh) {
                 val result = userData.academicProgress
-                if (!result.isEmpty()) {
+                if (result.isNotEmpty()) {
                     return result.toJSONString()
                 }
             }
+            //获取基础的3个参数
             val url = buildUrl(
                 "/jwglxt/jxzxjhgl/jxzxjhck_cxJxzxjhckIndex.html",
                 "gnmkdm" to "N153540",
@@ -486,8 +483,8 @@ class WebServiceImpl : WebService {
             }
 
             val jg_id = doc.select("#jg_id option[selected]").attr("value") ?: ""
-            val njdm_id = doc.select("#nj_cx option[selected]").attr("value") ?: ""
-            val zyh_id = doc.select("#zyh_id_cx option[selected]").attr("value") ?: ""
+            val njdm_id = doc.select("#nj_cx option[selected]").attr("value") ?: ""//年级
+            val zyh_id = doc.select("#zyh_id_cx option[selected]").attr("value") ?: ""//专业
 
 
             val url1 = buildUrl(
@@ -530,19 +527,30 @@ class WebServiceImpl : WebService {
                     }
                 }
 
-            val connection: Connection =
-                Jsoup.connect(
-                    "https://casb.njit.edu.cn/http/webvpn3e1a11b7208e283ab07ade5d2913fc13d6f6fe09d2dc7372db2a51a14aa4167a/jwglxt/jxzxjhgl/jxzxjhck_cxJxzxjhxdyqIndex.html?jxzxjhxx_id=$jxzxjhxx_id&_=" + System.currentTimeMillis()
-                        .toString() + "&gnmkdm=N153540"
-                )
-            connection.header(
-                "User-Agent",
-                "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:29.0) Gecko/20100101 Firefox/29.0"
+            val url_ = buildUrl(
+                "/jwglxt/jxzxjhgl/jxzxjhck_cxJxzxjhxdyqIndex.html",
+                "jxzxjhxx_id" to jxzxjhxx_id,
+                "_" to System.currentTimeMillis().toString(),
+                "gnmkdm" to "N153540"
             )
-            val response1 =
-                connection.cookies(cookies).method(Connection.Method.GET).ignoreContentType(true)
-                    .execute()
-            val doc1 = Jsoup.parse(response1.body())
+
+            val doc1 = httpRequestHelper.getHtmlResponse(url_)
+            if (isShellDocument(doc1)) {
+                return "{}"
+            }
+
+//            val connection: Connection =
+//                Jsoup.connect(
+//                    "https://casb.njit.edu.cn/http/webvpn3e1a11b7208e283ab07ade5d2913fc13d6f6fe09d2dc7372db2a51a14aa4167a?
+//                )
+//            connection.header(
+//                "User-Agent",
+//                "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:29.0) Gecko/20100101 Firefox/29.0"
+//            )
+//            val response1 =
+//                connection.cookies(cookies).method(Connection.Method.GET).ignoreContentType(true)
+//                    .execute()
+//            val doc1 = Jsoup.parse(response1.body())
 
             //        System.out.println(doc);
 

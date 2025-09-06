@@ -10,6 +10,7 @@ import android.webkit.WebView
 import com.feifan.fuckingnjit.database.UserData
 import com.feifan.fuckingnjit.utils.J2J
 import com.feifan.fuckingnjit.utils.Manager
+import com.feifan.fuckingnjit.widget.DemoWidgetProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -34,6 +35,7 @@ class SampleWebViewImpl : Activity(), Observer {
         webView?.apply {
             val instance = J2J.getInstance()
             instance.addObserver(this@SampleWebViewImpl)
+            instance.addObserver(DemoWidgetProvider.observer)
             addJavascriptInterface(instance, "J2J")
             visibility = View.VISIBLE
             val webSettings = settings
@@ -52,6 +54,7 @@ class SampleWebViewImpl : Activity(), Observer {
 
     override fun onDestroy() {
         J2J.getInstance().deleteObserver(this)
+        J2J.getInstance().deleteObserver(DemoWidgetProvider.observer)
         releaseWebView()
         Manager.endLogin()
         coroutineScope.cancel() // 避免内存泄漏

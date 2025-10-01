@@ -11,10 +11,8 @@ import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.view.View
 import android.widget.RemoteViews
-import android.widget.Toast
 import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.TypeReference
 import com.feifan.fuckingnjit.R
@@ -35,15 +33,15 @@ import java.util.Observable
 import java.util.Observer
 
 
-// 定义DemoWidgetProvider类，继承自AppWidgetProvider
-class DemoWidgetProvider : AppWidgetProvider() {
+// 定义CurriculumsWidgetProvider类，继承自AppWidgetProvider
+class CurriculumsWidgetProvider : AppWidgetProvider() {
 
     // 伴生对象，包含静态方法和属性
     companion object {
         private val CHINA_DATE_FORMATTER =
             DateTimeFormatter.ofPattern("M.d hh:mm a", Locale.CHINA) // 日期格式化器
         private val CHINA_WEEK_FORMATTER = TextStyle.FULL to Locale.CHINA // 星期格式化器
-        private val FILTER = IntentFilter(Intent.ACTION_TIME_TICK)
+//        private val FILTER = IntentFilter(Intent.ACTION_TIME_TICK)
 
         private var cachedSemesterStartDate: Long? = null
         private var cachedCurrentWeek = -1
@@ -69,12 +67,15 @@ class DemoWidgetProvider : AppWidgetProvider() {
         fun updateWidgets(context: Context) {
             val appWidgetManager = AppWidgetManager.getInstance(context.applicationContext)
             val widgetIds = appWidgetManager.getAppWidgetIds(
-                ComponentName(context.applicationContext, DemoWidgetProvider::class.java)
+                ComponentName(context.applicationContext, CurriculumsWidgetProvider::class.java)
             )
 
             if (widgetIds.isNotEmpty()) {
                 val updateIntent =
-                    Intent(context.applicationContext, DemoWidgetProvider::class.java).apply {
+                    Intent(
+                        context.applicationContext,
+                        CurriculumsWidgetProvider::class.java
+                    ).apply {
                         action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
                         putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, widgetIds)
                     }
@@ -203,36 +204,44 @@ class DemoWidgetProvider : AppWidgetProvider() {
 //                    if(!XiaomiUtilities.isFlyme) {
 //                        context.applicationContext.registerReceiver(receiver, FILTER)
 //                    }else {
-                        val appWidgetManager = AppWidgetManager.getInstance(context.applicationContext)
-                        val widgetIds = appWidgetManager.getAppWidgetIds(
-                            ComponentName(context.applicationContext, DemoWidgetProvider::class.java)
+                    val appWidgetManager = AppWidgetManager.getInstance(context.applicationContext)
+                    val widgetIds = appWidgetManager.getAppWidgetIds(
+                        ComponentName(
+                            context.applicationContext,
+                            CurriculumsWidgetProvider::class.java
                         )
-
-                        if (widgetIds.isNotEmpty()) {
-                            val updateIntent =
-                                Intent(context.applicationContext, DemoWidgetProvider::class.java).apply {
-                                    action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
-                                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, widgetIds)
-                                }
-                            val alarmManager =
-                                context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-
-                            // 直接使用 PendingIntent 调用 updateWidgets 函数
-                            val pendingIntent = PendingIntent.getBroadcast(
+                    )
+                    widgetIds.forEach {
+                        println(it)
+                    }
+                    if (widgetIds.isNotEmpty()) {
+                        val updateIntent =
+                            Intent(
                                 context,
-                                0,
-                                updateIntent,
-                                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-                            )
+                                CurriculumsWidgetProvider::class.java
+                            ).apply {
+                                action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
+                                putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, widgetIds)
+                            }
+                        val alarmManager =
+                            context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
-                            // 设置每分钟触发一次的闹钟
-                            alarmManager.setRepeating(
-                                AlarmManager.RTC,
-                                System.currentTimeMillis(),
-                                60 * 1000,
-                                pendingIntent
-                            )
-                        }
+                        // 直接使用 PendingIntent 调用 updateWidgets 函数
+                        val pendingIntent = PendingIntent.getBroadcast(
+                            context,
+                            0,
+                            updateIntent,
+                            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                        )
+                        println("PendingIntent created")
+                        // 设置每分钟触发一次的闹钟
+                        alarmManager.setRepeating(
+                            AlarmManager.RTC,
+                            System.currentTimeMillis(),
+                            60 * 1000,
+                            pendingIntent
+                        )
+                    }
 //                    }
 
                     println("Receiver registered")
@@ -242,12 +251,13 @@ class DemoWidgetProvider : AppWidgetProvider() {
                     println(e.message)
                 }
             }
-            val remoteViews = RemoteViews(context.packageName, R.layout.widget)
+            val remoteViews = RemoteViews(context.packageName, R.layout.curriculums_widget)
             remoteViews.setViewVisibility(R.id.empty_view, View.GONE)
             remoteViews.setViewVisibility(R.id.course_block_1, View.VISIBLE)
             remoteViews.setViewVisibility(R.id.course_block_2, View.VISIBLE)
             val onClick =
-                Intent().setClass(context, DemoWidgetProvider::class.java).setAction("CLICK_ACTION")
+                Intent().setClass(context, CurriculumsWidgetProvider::class.java)
+                    .setAction("CLICK_ACTION")
                     .putExtra("WIDGET_ID", widgetId)
             //为布局文件中的按钮设置点击监听
             val pendingIntent =
@@ -348,8 +358,8 @@ class DemoWidgetProvider : AppWidgetProvider() {
     }
 
     override fun onReceive(context: Context, intent: Intent) {
+        println("Received intent: ${intent.action}")
         // 调用父类方法
-        super.onReceive(context, intent)
         if (intent.action.equals("CLICK_ACTION")) {
             val widgetId = intent.getIntExtra("WIDGET_ID", AppWidgetManager.INVALID_APPWIDGET_ID)
             if (widgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
@@ -360,7 +370,13 @@ class DemoWidgetProvider : AppWidgetProvider() {
             }
         } else if (intent.action.equals(AppWidgetManager.ACTION_APPWIDGET_UPDATE)) {
             // 获取所有需要更新的小部件ID
-            val widgetIds = intent.getIntArrayExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS)
+            val appWidgetManager = AppWidgetManager.getInstance(context)
+            val widgetIds = appWidgetManager.getAppWidgetIds(
+                ComponentName(
+                    context,
+                    this::class.java
+                )
+            )
             // 遍历所有需要更新的小部件ID
             if (widgetIds != null) {
                 for (widgetId: Int in widgetIds) {
@@ -373,38 +389,7 @@ class DemoWidgetProvider : AppWidgetProvider() {
         }
     }
 
-    // 重写onUpdate方法，当小部件需要更新时调用
-//    override fun onUpdate(
-//        context: Context,
-//        appWidgetManager: AppWidgetManager,
-//        appWidgetIds: IntArray
-//    ) {
-//        // 调用父类方法
-//        super.onUpdate(context, appWidgetManager, appWidgetIds)
-//        println("onUpdate called")
-//        // 遍历所有需要更新的小部件ID
-//        for (widgetId: Int in appWidgetIds) {
-//            // 更新每个小部件的UI
-//            appWidgetManager.updateAppWidget(widgetId, getRemoteViews(context, widgetId))
-//        }
-////        Toast.makeText(context, "小部件已经创建成功", Toast.LENGTH_SHORT).show()
-//    }
-
-    // 重写onDeleted方法，当小部件被删除时调用
-    override fun onDeleted(context: Context, appWidgetIds: IntArray) {
-        // 调用父类方法
-        super.onDeleted(context, appWidgetIds)
-
-    }
-
-    override fun onEnabled(context: Context) {
-//        schedulePeriodicUpdate(context)
-        super.onEnabled(context)
-        Toast.makeText(context, "小部件已经启用", Toast.LENGTH_SHORT).show()
-    }
-
     override fun onDisabled(context: Context) {
-//        cancelPeriodicUpdate(context)
         super.onDisabled(context)
         try {
             context.applicationContext.unregisterReceiver(receiver)

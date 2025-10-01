@@ -24,7 +24,9 @@ data class UserData(
     @Convert(converter = JSONArrayConverter::class, dbType = String::class)
     var scores: JSONArray = JSONArray(),
     @Convert(converter = JSONObjectConverter::class, dbType = String::class)
-    var curriculums: JSONObject = JSONObject()
+    var curriculums: JSONObject = JSONObject(),
+    @Convert(converter = JSONObjectConverter::class, dbType = String::class)
+    var localCurriculums: JSONObject? = JSONObject(),
 )
 
 class RSAPasswordConverter : PropertyConverter<String?, String?> {

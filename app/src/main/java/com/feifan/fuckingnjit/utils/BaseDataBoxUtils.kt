@@ -19,9 +19,10 @@ object BaseDataBoxUtils : BaseBoxUtils() {
 
     // 获取单个 BaseData 对象
     fun getBaseData(): BaseData {
-        val data = baseDataBox.get(defaultUuid)
+        var data = baseDataBox.get(defaultUuid)
         if (data == null) {
-            baseDataBox.put(BaseData().apply { uuid = defaultUuid })
+            data = BaseData().apply { uuid = defaultUuid }
+            baseDataBox.put(data)
         }
         return data
     }
@@ -33,6 +34,8 @@ object BaseDataBoxUtils : BaseBoxUtils() {
     fun getSemesterStartDate(): Long = getBaseData().semesterStartDate
 
     fun getCurrentWeek(): Int = getBaseData().currentWeek
+
+    fun getWifiAuthTupe(): String = getBaseData().wifiAuthTupe ?: ""
 
     // 更新 BaseData 对象
     fun updateBaseData(updater: (BaseData) -> Unit) {

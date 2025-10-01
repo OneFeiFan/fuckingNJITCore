@@ -1,0 +1,14 @@
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:configure="com.feifan.fuckingnjit.widget.VerifyWifiConfiguration"
+    android:initialLayout="@layout/wifiwidget"
+    android:minWidth="40dp"
+    android:minHeight="40dp"
+    android:previewImage="@drawable/wifi_widget"
+    android:resizeMode="none"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen|keyguard"/>
+
+<!--1单元格：74dp
+2单元格：124dp
+3单元格：174dp
+4单元格：224dp-->

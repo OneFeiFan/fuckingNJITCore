@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 底层：白色椭圆 -->
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="#FFFFFF" />
+            <size android:width="1000dp" android:height="1000dp" />
+        </shape>
+    </item>
+    <!-- 上层：图片 -->
+    <item android:drawable="@android:drawable/ic_dialog_info" />
+</layer-list>

@@ -12,4 +12,5 @@ data class BaseData(
     var semesterStartDate: Long = 0,  // 存储Unix时间戳
     var storePassword: Boolean = true,
     var currentWeek: Int = 1,
+    var wifiAuthTupe: String? = ""
 )

@@ -16,7 +16,7 @@ import com.feifan.fuckingnjit.R
 import com.feifan.fuckingnjit.service.impl.SampleWebViewImpl
 import com.feifan.fuckingnjit.service.impl.UserManagerImpl
 import com.feifan.fuckingnjit.service.impl.WebServiceImpl
-import com.feifan.fuckingnjit.widget.DemoWidgetProvider
+import com.feifan.fuckingnjit.widget.CurriculumsWidgetProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -28,6 +28,9 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.util.Date
 import java.util.Locale
+import com.alibaba.fastjson.JSONArray
+import com.alibaba.fastjson.JSONObject
+
 
 class Manager {
     companion object {
@@ -45,32 +48,6 @@ class Manager {
                 if (!BaseDataBoxUtils.isInitialized()) {
                     BaseDataBoxUtils.init(context)
                 }
-
-//                if(XiaomiUtilities.isFlyme) {
-//                    XXPermissions.with(this.context)
-//                        // 申请多个权限
-//                        .permission(PermissionLists.getScheduleExactAlarmPermission())
-//                        // 设置不触发错误检测机制（局部设置）
-//                        //.unchecked()
-//                        .request(object : OnPermissionCallback {
-//
-//                            override fun onResult(
-//                                grantedList: MutableList<IPermission>,
-//                                deniedList: MutableList<IPermission>
-//                            ) {
-//                                val allGranted = deniedList.isEmpty()
-//                                if (!allGranted) {
-//                                    // 判断请求失败的权限是否被用户勾选了不再询问的选项
-////                                val doNotAskAgain = XXPermissions.isDoNotAskAgainPermissions(activity, deniedList)
-//                                    // 在这里处理权限请求失败的逻辑
-//                                    // ......
-//                                    return
-//                                }
-//                                // 在这里处理权限请求成功的逻辑
-//                                // ......
-//                            }
-//                        })
-//                }
                 coroutineScope.launch {
                     val week = withContext(Dispatchers.Default) {
                         val startTime = LocalDate.parse(getSemesterStartDate())
@@ -87,7 +64,8 @@ class Manager {
 
                     // 阶段3：UI更新 → Main
                     withContext(Dispatchers.Main) {
-                        DemoWidgetProvider.updateWidgets(context)
+                        CurriculumsWidgetProvider.updateWidgets(context)
+//                        WifiUtils.initialize(context)
                     }
                 }
             } catch (e: Exception) {
@@ -112,6 +90,64 @@ class Manager {
 
         fun getCurrentWeek(): Int {
             return BaseDataBoxUtils.getCurrentWeek()
+        }
+
+        fun getPermissionsManager(): PermissionsManager {
+            return PermissionsManager.getInstance(context)
+        }
+
+        fun setLocalCurriculums(data: String) {
+            println(data)
+            val json = JSONObject.parseObject(data)
+            val userId = BaseDataBoxUtils.getCurrentUserId()
+            val user = UserBoxUtils.getUserById(userId)
+            var localCurriculums = user?.localCurriculums
+
+            if (localCurriculums == null) {
+                localCurriculums = JSONObject()
+            }
+
+
+
+                // 遍历 localCurriculums 的所有键
+                val keys = json.keys.iterator()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    localCurriculums[key] = json[key] // 获取值
+                }
+                user?.localCurriculums = localCurriculums
+            user?.let { UserBoxUtils.updateUserData(it) }
+
+        }
+
+        fun modifyLocalCurriculums(keys: String) {
+            println(keys)
+            val array = JSONArray.parseArray(keys)
+            val userId = BaseDataBoxUtils.getCurrentUserId()
+            val user = UserBoxUtils.getUserById(userId)
+            var localCurriculums = user?.localCurriculums
+
+            if (localCurriculums == null) {
+                localCurriculums = JSONObject()
+            }
+
+                println(localCurriculums.toJSONString())
+                // 遍历 localCurriculums 的所有键
+                for (key in array) {
+                    if(localCurriculums.containsKey(key)){
+                        localCurriculums.remove(key)
+                    }
+                }
+                user?.localCurriculums = localCurriculums
+            user?.let { UserBoxUtils.updateUserData(it) }
+
+        }
+
+        fun reSetLocalCurriculums() {
+            val userId = BaseDataBoxUtils.getCurrentUserId()
+            val user = UserBoxUtils.getUserById(userId)
+            user?.localCurriculums = JSONObject()
+            user?.let { UserBoxUtils.updateUserData(it) }
         }
 
         fun getTimeManager(): TimeManager {
@@ -202,6 +238,14 @@ class Manager {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }
             context.startActivity(intent)
+        }
+
+        fun setWifiAuthTupe(type: String) {
+            BaseDataBoxUtils.updateBaseData { it.wifiAuthTupe = type }
+        }
+
+        fun getWifiAuthTupe() {
+            BaseDataBoxUtils.getWifiAuthTupe()
         }
 
         suspend fun updateApp(url: String): Boolean = withContext(Dispatchers.IO) {

@@ -5,6 +5,7 @@ class Course {
     private var time: Time? = Time()
     private var classroom: String = ""
     private var teacher: String = ""
+    private var uuid: String = ""
 
     fun getName(): String {
         return name
@@ -36,5 +37,13 @@ class Course {
 
     fun setTeacher(teacher: String) {
         this.teacher = teacher
+    }
+
+    fun getUuid(): String {
+        return uuid
+    }
+
+    fun setUuid(uuid: String) {
+        this.uuid = uuid
     }
 }

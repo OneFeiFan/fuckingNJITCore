@@ -1,6 +1,5 @@
 package com.feifan.fuckingnjit.utils
 
-import android.annotation.SuppressLint
 import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.JSONArray
 import com.alibaba.fastjson.JSONObject
@@ -8,22 +7,30 @@ import com.feifan.fuckingnjit.Model.Course
 
 
 class Tools {
+    data class TimeSlot(val index: Int, val name: String)
     companion object {
-        val timeSlotsJson = """
-    [
-        {"index": "1", "name": "08:00-08:45"},
-        {"index": "2", "name": "08:55-09:40"},
-        {"index": "3", "name": "10:10-10:55"},
-        {"index": "4", "name": "11:05-11:50"},
-        {"index": "5", "name": "13:40-14:25"},
-        {"index": "6", "name": "14:35-15:20"},
-        {"index": "7", "name": "15:40-16:25"},
-        {"index": "8", "name": "16:35-17:20"},
-        {"index": "9", "name": "18:30-19:15"},
-        {"index": "10", "name": "19:25-20:10"},
-        {"index": "11", "name": "20:20-21:05"}
-    ]
-""".trimIndent()
+        private val timeSlots = listOf(
+            TimeSlot(1, "08:00-08:45"),
+            TimeSlot(2, "08:55-09:40"),
+            TimeSlot(3, "10:10-10:55"),
+            TimeSlot(4, "11:05-11:50"),
+            TimeSlot(5, "13:40-14:25"),
+            TimeSlot(6, "14:35-15:20"),
+            TimeSlot(7, "15:40-16:25"),
+            TimeSlot(8, "16:35-17:20"),
+            TimeSlot(9, "18:30-19:15"),
+            TimeSlot(10, "19:25-20:10"),
+            TimeSlot(11, "20:20-21:05")
+        )
+
+        fun getTimeSlot(index: Int): TimeSlot = timeSlots[index - 1]
+
+        fun getTimeRange(startIndex: Int, endIndex: Int): String {
+            val start = getTimeSlot(startIndex).name.split("-")[0]
+            val end = getTimeSlot(endIndex).name.split("-")[1]
+            return "$start-$end"
+        }
+
 
         fun getScores(raw: JSONObject): JSONArray {
             val result = mutableListOf<Map<String, Any>>()
@@ -51,36 +58,7 @@ class Tools {
             }
             return JSONArray.parseArray(JSON.toJSONString(result))
         }
-//        fun processGrades(tableData: JSONArray) {
-//
-//
-//            // 计算平均GPA
-//            val averageGPA = calculateAverageGPA(finalCourseList )
-//        }
 
-//        fun appendToPrivateFile(fileName: String, content: String) {
-//            try {
-//                // 构建完整路径（确保包名正确）
-//                val filePath = "/data/user/0/uni.UNI2090008/files/$fileName"
-//                val file = File(filePath)
-//
-//                // 如果文件不存在，先创建父目录
-//                if (!file.parentFile.exists()) {
-//                    file.parentFile.mkdirs()
-//                }
-//
-//                // 使用 FileWriter 追加内容（true 表示追加模式）
-//                FileWriter(file, true).use { writer ->
-//                    writer.append(content)
-//                    writer.append("\n") // 可选：换行分隔每次写入
-//                }
-//            } catch (e: IOException) {
-//                e.printStackTrace()
-//            }
-//        }
-
-
-        @SuppressLint("DefaultLocale")
         fun calculateAverageGPA(tableData: JSONArray): String {
             try {
                 // 删除不计入GPA的课程和特殊算法课程
@@ -91,7 +69,7 @@ class Tools {
                                 item.getString("kcgsmc") != "跨专业选修" &&
                                 item.getString("kcgsmc") != "公选" &&
                                 item.getString("kcgsmc") != "劳动选修" &&
-                                item.getString("kcgsmc") != "xxx" &&
+                                item.getString("kcgsmc") != "素质拓展" &&
                                 item.getString("kclbmc") != "专业选修课程" &&
                                 item.getString("kclbmc") != "大学外语类课程" &&
                                 item.getInteger("bfzcj") >= 60 //不是挂科的
@@ -128,60 +106,55 @@ class Tools {
 
                     if (item.getString("cj") == "合格" || item.getString("cj") == "通过") {
                         if (item.getString("ksxz") != "正常考试") {
-                            gradePoint = 3.0;
+                            gradePoint = 3.0
                         } else {
-                            gradePoint = 3.5;
+                            gradePoint = 3.5
                         }
                     } else if (item.getString("cj") == "优秀") {
-                        gradePoint = 4.5;
+                        gradePoint = 4.5
                     } else if (item.getString("cj") == "良好") {
-                        gradePoint = 3.5;
+                        gradePoint = 3.5
                     } else if (item.getString("cj") == "中等") {
-                        gradePoint = 2.5;
+                        gradePoint = 2.5
                     } else if (item.getString("cj") == "及格") {
-                        gradePoint = 1.5;
+                        gradePoint = 1.5
                     } else if (item.getInteger("cj") >= 95) {
-                        gradePoint = 5.0;
+                        gradePoint = 5.0
                     } else if (item.getInteger("cj") >= 90) {
-                        gradePoint = 4.5;
+                        gradePoint = 4.5
                     } else if (item.getInteger("cj") >= 85) {
-                        gradePoint = 4.0;
+                        gradePoint = 4.0
                     } else if (item.getInteger("cj") >= 80) {
-                        gradePoint = 3.5;
+                        gradePoint = 3.5
                     } else if (item.getInteger("cj") >= 75) {
-                        gradePoint = 3.0;
+                        gradePoint = 3.0
                     } else if (item.getInteger("cj") >= 70) {
-                        gradePoint = 2.5;
+                        gradePoint = 2.5
                     } else if (item.getInteger("cj") >= 65) {
-                        gradePoint = 2.0;
+                        gradePoint = 2.0
                     } else if (item.getInteger("cj") >= 60) {
-                        gradePoint = 1.0;
+                        gradePoint = 1.0
                     }
 
                     if (item.getString("ksxz") != "正常考试") {
                         if (gradePoint != 1.0) {
-                            gradePoint -= 0.5;
+                            gradePoint -= 0.5
                         }
                     }
 
                     val credit = item.getDouble("xf")
 
-                    val courseName = item.getString("kcmc")
+                    item.getString("kcmc")
 
                     totalCredit += credit
                     totalCreditPoint += credit * gradePoint
-
-//        appendToPrivateFile(
-//            "result.txt",
-//            "$courseName: $credit * $gradePoint = ${credit * gradePoint} ${item.getString("ksxz")}"
-//        )
                 }
 
                 return (totalCreditPoint / totalCredit).let {
                     String.format("%.2f", it)
                 }
             } catch (e: Exception) {
-                Manager.handleException(e, "calculateAverageGPA")
+//                Manager.handleException(e, "calculateAverageGPA")
                 return "0.00"
             }
         }
@@ -227,36 +200,90 @@ class Tools {
                     MutableList(11) { "" }
                 }
             }
+            val weekCourseMap = HashMap<String, MutableSet<Int>>()
             for (i in 1 until raw.size) {
                 val weekCourses = raw[i]
                 for (course in weekCourses) {
                     val time = course.getTime()!!
-                    val week = time.week // 需确保是0-based（0-19）
-                    val weekday = time.weekday
-                    val courseTimes = time.courseTime
-                    val value = "${course.getName()}@${course.getClassroom()}"
+                    val week = time.week // 第几周 需确保是0-based（0-19）
+                    val weekday = time.weekday //星期几
+                    val courseTimes = time.courseTime //课程时间段
+                    val baseName = "${course.getName()}@${course.getClassroom()}@${course.getTeacher().replace(" ", "")}"
+                    val value = "${baseName}@${course.getUuid()}"
 
                     for (slot in courseTimes) {
                         val adjustedSlot = slot - 1 // 节次转0-based索引
                         val adjustedWeekday = weekday - 1 // 星期转0-based索引
 
-                        // 获取当前单元格内容
-                        val currentCell = timetableData[week][adjustedWeekday][adjustedSlot]
+                        if (!weekCourseMap.containsKey(baseName + adjustedWeekday)) {
+                            weekCourseMap[baseName + adjustedWeekday] = HashSet()
+                        }
+                        weekCourseMap[baseName + adjustedWeekday]!!.add(week)
 
-                        if (currentCell.isNotEmpty() && !currentCell.contains(value)) {
-                            // 非空且不重复时拼接
-                            timetableData[week][adjustedWeekday][adjustedSlot] =
-                                "$currentCell!$value"
-                            // 同步更新第0周
-                            timetableData[0][adjustedWeekday][adjustedSlot] =
-                                timetableData[week][adjustedWeekday][adjustedSlot]
+                        // 获取当前单元格内容
+                        var currentCell = timetableData[week][adjustedWeekday][adjustedSlot]
+
+                        if(currentCell.isNotEmpty()){
+                            val valueParts = baseName.split("@")
+                            val baseParts = valueParts[0].replace("mod","")// 分离 mod 前后部分
+
+
+                            if(!currentCell.contains(baseName)){
+                                println("重复课程：$currentCell $baseParts")
+                                if(currentCell.contains(baseParts)) {
+                                    val segments = currentCell.split("!").toMutableList()
+
+                                    // 遍历现有段，检查是否需替换
+                                    for (j in segments.indices) {
+                                        val segment = segments[j]
+                                        if (segment.contains(baseParts)) {
+                                            segments.removeAt(j)
+                                        }
+                                        break
+                                    }
+                                    currentCell = segments.joinToString("!")
+                                }
+                                if(currentCell.isNotEmpty()) {
+                                    timetableData[week][adjustedWeekday][adjustedSlot] = "$currentCell!$value"
+                                }else{
+                                    timetableData[week][adjustedWeekday][adjustedSlot] = value
+                                }
+                            }
                         } else {
-                            // 直接赋值（包括空或重复时覆盖）
                             timetableData[week][adjustedWeekday][adjustedSlot] = value
+                        }
+
+//                        if (currentCell.isNotEmpty() && !currentCell.contains(baseName)) {
+//                            timetableData[week][adjustedWeekday][adjustedSlot] = "$currentCell!$value"
+//                        }
+
+                        val week0Cell = timetableData[0][adjustedWeekday][adjustedSlot]
+                        if (week0Cell.isNotEmpty()) {
+                            // 分割已有记录检查重复
+                            val exists = week0Cell.split("!").any { it == value }
+                            if (!exists) {
+                                timetableData[0][adjustedWeekday][adjustedSlot] = "$week0Cell!$value"
+                            }
+                        } else {
                             timetableData[0][adjustedWeekday][adjustedSlot] = value
                         }
                     }
                 }
+            }
+            //单独胡处理总课表
+            for (i in 0 until 7) {
+                timetableData[0][i].mapIndexed { index, cell ->
+                    if (cell == "") return@mapIndexed "占位$index@@@WD0"
+                    // 合并相同课程的周数
+                    val entries = cell.split("!")
+                    val merged = entries.map { entry ->
+                        val parts = entry.split("@")  // 先按@分割
+                        val firstThreeParts = parts.take(3).joinToString("@")  // 取前三个并用@重新连接
+                        val uniqueWeeks = weekCourseMap[firstThreeParts + i]?.joinToString(",") ?: ""
+                        "${entry}WD$uniqueWeeks"
+                    }
+                    merged.joinToString("!")
+                }.also { timetableData[0][i].clear() }.let { timetableData[0][i].addAll(it) }
             }
             return timetableData
         }
@@ -288,17 +315,11 @@ class Tools {
                         endIndex++
                     }
 
-                    // 获取时间范围
-                    val startTime = JSONArray.parseArray(timeSlotsJson).getJSONObject(startIndex)
-                        .getString("name").split("-")[0] // 取第一节课的开始时间
-                    val endTime = JSONArray.parseArray(timeSlotsJson).getJSONObject(endIndex)
-                        .getString("name").split("-")[1] // 取最后一节课的结束时间
-
                     result.add(
                         hashMapOf(
                             "course_name" to courseName,
                             "location" to location,
-                            "time" to "$startTime-$endTime"
+                            "time" to getTimeRange(startIndex + 1, endIndex + 1)
                         )
                     )
 

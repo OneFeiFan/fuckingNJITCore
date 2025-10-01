@@ -9,7 +9,6 @@ android {
     compileSdk 35
 
     defaultConfig {
-//        applicationId "com.feifan.fuckingnjit"
         minSdk 26
         targetSdkVersion 34
         versionCode 1
@@ -31,51 +30,30 @@ android {
     kotlinOptions {
         jvmTarget = '11'
     }
-//    testOptions {
-//        unitTests {
-//            includeAndroidResources = true
-//            all {
-//                systemProperty 'robolectric.dependency.resolver.enabled', 'true'
-//            }
-//        }
-//    }
-
 }
 
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
-    implementation libs.androidx.constraintlayout
-    implementation libs.kotlin.stdlib
 
-    implementation libs.androidx.core.ktx
-    implementation libs.androidx.appcompat
-    implementation libs.material
-    implementation libs.androidx.activity
-    implementation libs.androidx.work.runtime.ktx
-//    implementation libs.material
-    testImplementation libs.junit
-    implementation libs.mockito.core
-    testImplementation libs.junit.junit
-    androidTestImplementation libs.androidx.junit
-    androidTestImplementation libs.androidx.espresso.core
-
-//    implementation libs.htmlunit
-//    implementation libs.androidx.security.crypto
+    implementation libs.kotlinx.coroutines.core
+    implementation libs.androidx.core
+    implementation libs.appcompat
     implementation libs.fastjson
     implementation libs.okhttp
-//    testImplementation libs.robolectric
-    androidTestImplementation libs.androidx.runner
-    androidTestImplementation libs.androidx.rules
     implementation libs.jsoup
     implementation libs.android.loading.animation
-    implementation libs.objectbox.kotlin
     implementation libs.smartupdatedemo
 
-    implementation 'com.umeng.umsdk:common:+'
-    implementation 'com.umeng.umsdk:asms:+'
-    implementation 'com.umeng.umsdk:union:+'
-//    compileOnly libs.leakcanary.android
-//    implementation libs.kotlin.test
+    // 设备兼容框架：https://github.com/getActivity/DeviceCompat
+    implementation libs.devicecompat
+    // 权限请求框架：https://github.com/getActivity/XXPermissions
+    implementation libs.xxpermissions
+    implementation libs.easywindow
 
-
+//    androidTestImplementation libs.androidx.runner
+//    androidTestImplementation libs.androidx.rules
+//    testImplementation libs.junit
+//    testImplementation libs.junit.junit
+//    androidTestImplementation libs.androidx.junit
+//    androidTestImplementation libs.androidx.espresso.core
 }

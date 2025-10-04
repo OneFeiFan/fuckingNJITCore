@@ -17,29 +17,16 @@ import com.feifan.fuckingnjit.utils.UserBoxUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.select.Elements
-import java.io.File
 import java.lang.Integer.parseInt
-import java.util.concurrent.TimeUnit
-import java.util.logging.Logger
 import java.util.regex.Pattern
 import kotlin.math.pow
 
 
 class WebServiceImpl private constructor() : WebService {
-    private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val pattern = Pattern.compile(".*?(1ABB.*?)(?<!start)\\b")
-    private val okHttpClient = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .writeTimeout(15, TimeUnit.SECONDS)
-        .build()
-
     private val httpRequestHelper: HttpRequestHelper =
-        HttpRequestHelper(okHttpClient, CookieManager.getInstance())
+        HttpRequestHelper( CookieManager.getInstance())
 
     companion object {
         private val instance_: WebServiceImpl by lazy { WebServiceImpl() }
@@ -220,11 +207,6 @@ class WebServiceImpl private constructor() : WebService {
             val validTimeCoursesList = validTimeCourses.groupBy { it.getTime()!!.week }.run {
                 Array(maxWeek + 1) { getOrElse(it) { emptyList() } }
             }
-            val file = withContext(Dispatchers.IO) {
-                File.createTempFile("curriculum_", ".json")
-            }
-            file.writeText(validTimeCoursesList.joinToString("\n"))
-            Logger.getLogger("WebServiceImpl").info("完整课程表已写入: ${file.absolutePath}")
             val result = JSONObject()
             result["validTimeCourses"] =
                 JSON.toJSONString(Tools.getTimeTableData(validTimeCoursesList))

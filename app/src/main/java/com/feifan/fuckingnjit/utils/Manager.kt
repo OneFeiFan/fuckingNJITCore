@@ -10,6 +10,8 @@ import android.os.Looper
 import android.webkit.CookieManager
 import android.widget.Toast
 import androidx.core.content.FileProvider
+import com.alibaba.fastjson.JSONArray
+import com.alibaba.fastjson.JSONObject
 import com.example.loadinganimation.LoadingAnimationDialog
 import com.feifan.apkpatch.PatchUtils
 import com.feifan.fuckingnjit.R
@@ -28,8 +30,6 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.util.Date
 import java.util.Locale
-import com.alibaba.fastjson.JSONArray
-import com.alibaba.fastjson.JSONObject
 
 
 class Manager {

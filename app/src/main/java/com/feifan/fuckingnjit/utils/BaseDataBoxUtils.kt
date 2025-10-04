@@ -37,6 +37,8 @@ object BaseDataBoxUtils : BaseBoxUtils() {
 
     fun getWifiAuthTupe(): String = getBaseData().wifiAuthTupe ?: ""
 
+    fun getSmartUpdate(): Boolean = getBaseData().smartUpdate ?: true
+
     // 更新 BaseData 对象
     fun updateBaseData(updater: (BaseData) -> Unit) {
         val data = getBaseData()

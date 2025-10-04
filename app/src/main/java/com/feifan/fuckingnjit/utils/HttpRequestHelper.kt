@@ -17,14 +17,14 @@ import java.net.ProtocolException
 import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
+import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
 
 class HttpRequestHelper {
 
-    constructor(okHttpClient: OkHttpClient, cookieManager: CookieManager) {
-        HttpRequestHelper.okHttpClient = okHttpClient
+    constructor(cookieManager: CookieManager) {
         HttpRequestHelper.cookieManager = cookieManager
     }
 
@@ -32,7 +32,13 @@ class HttpRequestHelper {
     private val LOGIN_CHECK_INTERVAL = 5 * 60 * 1000 // 30分钟检查一次
 
     companion object {
-        private lateinit var okHttpClient: OkHttpClient
+        private val okHttpClient by lazy {
+            OkHttpClient.Builder()
+                .connectTimeout(10, TimeUnit.SECONDS)
+                .readTimeout(15, TimeUnit.SECONDS)
+                .writeTimeout(15, TimeUnit.SECONDS)
+                .build()
+        }
         private lateinit var cookieManager: CookieManager
         const val BASE_URL = "https://casb.njit.edu.cn"
         const val WEBVPN_PATH =

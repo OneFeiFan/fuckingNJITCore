@@ -2,7 +2,6 @@ package com.feifan.fuckingnjit.widget
 
 import android.animation.ArgbEvaluator
 import android.animation.ValueAnimator
-import android.annotation.SuppressLint
 import android.app.Application
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
@@ -18,7 +17,6 @@ import android.view.View
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.FrameLayout
 import android.widget.RemoteViews
-import androidx.core.graphics.toColorInt
 import com.feifan.fuckingnjit.R
 import com.feifan.fuckingnjit.utils.BaseDataBoxUtils
 import com.feifan.fuckingnjit.utils.UserBoxUtils

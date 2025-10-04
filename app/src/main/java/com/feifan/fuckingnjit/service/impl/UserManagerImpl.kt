@@ -115,6 +115,7 @@ class UserManagerImpl private constructor() : UserManager {
             // 更新存储
             UserBoxUtils.updateUserData(user)
             BaseDataBoxUtils.updateBaseData { it.currentUserId = user.id }
+            getCurriculum(true)
         } catch (e: Exception) {
             Manager.handleException(e, "添加用户失败")
             throw e  // 重新抛出异常，让调用方知道失败

@@ -83,7 +83,7 @@ class SampleWebViewImpl : Activity(), Observer {
     override fun update(o: Observable?, arg: Any?) {
         coroutineScope.launch {
             try {
-                Manager.getUserManager()?.addUser(arg as UserData)
+                Manager.getUserManager().addUser(arg as UserData)
                 finish() // 确保在主线程执行
             } catch (e: Exception) {
                 Manager.handleException(e, "失败")

@@ -1,13 +1,13 @@
 package com.feifan.fuckingnjit.utils
 
 import android.webkit.JavascriptInterface
-import com.feifan.fuckingnjit.database.UserData
+import com.feifan.fuckingnjit.model.User
 import java.util.Observable
 
 //import leakcanary.AppWatcher
 
 class J2J private constructor() : Observable() {
-    private lateinit var user: UserData
+    private lateinit var user: User
 
     companion object {
         private val _instance: J2J by lazy { J2J() }
@@ -19,14 +19,14 @@ class J2J private constructor() : Observable() {
 
     @JavascriptInterface
     fun setUserCredentials(id: String, password: String) {
-        user = UserData(id = id, password = password)
+        user = User(id = id, password = password)
     }
 
     @JavascriptInterface
     fun notifyUserChangeAndReset() {
         setChanged()
         notifyObservers(user)
-        user = UserData()
+        user = User()
     }
 
 }

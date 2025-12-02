@@ -7,7 +7,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebSettings
 import android.webkit.WebView
-import com.feifan.fuckingnjit.database.UserData
+import com.feifan.fuckingnjit.model.User
 import com.feifan.fuckingnjit.utils.J2J
 import com.feifan.fuckingnjit.utils.Manager
 import com.feifan.fuckingnjit.widget.CurriculumsWidgetProvider
@@ -83,7 +83,7 @@ class SampleWebViewImpl : Activity(), Observer {
     override fun update(o: Observable?, arg: Any?) {
         coroutineScope.launch {
             try {
-                Manager.getUserManager().addUser(arg as UserData)
+                Manager.getUserManager().addUser(arg as User)
                 finish() // 确保在主线程执行
             } catch (e: Exception) {
                 Manager.handleException(e, "失败")

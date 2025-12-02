@@ -19,15 +19,15 @@ class SampleWebViewClientImpl() : WebViewClient() {
         super.onPageFinished(view, url)
         if (url.startsWith("https://casb.njit.edu.cn/http/webvpnea5e00498bb033e68046c95dbdf6e09fbc127bea836184c80a0792b662ced92f/authserver/login")) {
             val userManager = Manager.getUserManager()
-            val user = userManager?.getCurrentUser()
+            val user = userManager.getCurrentUser()
             view.evaluateJavascript(
                 """
                 (function() {
                     getObj("load").onclick = function() {
                         J2J.setUserCredentials(document.querySelector("#mobileUsername").value,document.querySelector("#mobilePassword").value)
                     }
-                    document.querySelector("#mobileUsername").value = "${user?.id}"
-                    document.querySelector("#mobilePassword").value = "${user?.password}"
+                    document.querySelector("#mobileUsername").value = "${user.id}"
+                    document.querySelector("#mobilePassword").value = "${user.password}"
                 })();
                 """.trimIndent(), null
             )

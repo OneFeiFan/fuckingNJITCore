@@ -16,7 +16,7 @@ import android.widget.RemoteViews
 import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.TypeReference
 import com.feifan.fuckingnjit.R
-import com.feifan.fuckingnjit.database.UserData
+import com.feifan.fuckingnjit.model.User
 import com.feifan.fuckingnjit.utils.BaseDataBoxUtils
 import com.feifan.fuckingnjit.utils.Manager
 import com.feifan.fuckingnjit.utils.TimeManager
@@ -184,7 +184,7 @@ class CurriculumsWidgetProvider : AppWidgetProvider() {
             }
             // 带缓存的学期开始日期获取
             if (cachedSemesterStartDate == null) {
-                cachedSemesterStartDate = LocalDate.parse(Manager.getSemesterStartDate())
+                cachedSemesterStartDate = LocalDate.parse(TimeManager.getInstance().getSemesterStartDate())
                     .atStartOfDay(ZoneId.systemDefault())
                     .toInstant()
                     .toEpochMilli()
@@ -284,7 +284,7 @@ class CurriculumsWidgetProvider : AppWidgetProvider() {
             }
 
             val user = try {
-                UserBoxUtils.getUserById(BaseDataBoxUtils.getCurrentUserId()) ?: UserData()
+                UserBoxUtils.getUserById(BaseDataBoxUtils.getCurrentUserId()) ?: User()
             } catch (e: Exception) {
                 e.printStackTrace()
                 return remoteViews

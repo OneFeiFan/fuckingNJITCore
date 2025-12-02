@@ -1,28 +1,28 @@
 package com.feifan.fuckingnjit.utils
 
-import com.feifan.fuckingnjit.database.BaseData
+import com.feifan.fuckingnjit.model.Base
 import io.objectbox.Box
 
 object BaseDataBoxUtils : BaseBoxUtils() {
     override fun getDatabaseName() = "BASE"
     private val defaultUuid = 1L // 固定使用ID=1的对象
-    private val baseDataBox: Box<BaseData> by lazy {
-        val box = getBox(BaseData::class.java)
+    private val baseBox: Box<Base> by lazy {
+        val box = getBox(Base::class.java)
         if (box.count() == 0L) {
-            box.put(BaseData().apply { uuid = defaultUuid })
+            box.put(Base().apply { uuid = defaultUuid })
         }
         box // 确保返回 Box<BaseData> 对象
     }
 
     // 返回储存的 BoxStore 对象
-    fun getBoxStore(): Box<BaseData> = baseDataBox
+    fun getBoxStore(): Box<Base> = baseBox
 
     // 获取单个 BaseData 对象
-    fun getBaseData(): BaseData {
-        var data = baseDataBox.get(defaultUuid)
+    fun getBaseData(): Base {
+        var data = baseBox.get(defaultUuid)
         if (data == null) {
-            data = BaseData().apply { uuid = defaultUuid }
-            baseDataBox.put(data)
+            data = Base().apply { uuid = defaultUuid }
+            baseBox.put(data)
         }
         return data
     }
@@ -40,10 +40,10 @@ object BaseDataBoxUtils : BaseBoxUtils() {
     fun getSmartUpdate(): Boolean = getBaseData().smartUpdate ?: true
 
     // 更新 BaseData 对象
-    fun updateBaseData(updater: (BaseData) -> Unit) {
+    fun updateBaseData(updater: (Base) -> Unit) {
         val data = getBaseData()
         updater(data)
-        baseDataBox.put(data)
+        baseBox.put(data)
     }
 
 }

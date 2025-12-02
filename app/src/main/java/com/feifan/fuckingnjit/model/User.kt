@@ -1,4 +1,4 @@
-package com.feifan.fuckingnjit.database
+package com.feifan.fuckingnjit.model
 
 import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.JSONArray
@@ -11,7 +11,7 @@ import io.objectbox.converter.PropertyConverter
 
 
 @Entity
-data class UserData(
+data class User(
     @Id
     var uuid: Long = 0,
     var id: String = "",

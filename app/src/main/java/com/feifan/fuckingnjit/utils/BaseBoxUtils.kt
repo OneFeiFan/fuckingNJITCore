@@ -1,7 +1,7 @@
 package com.feifan.fuckingnjit.utils
 
 import android.content.Context
-import com.feifan.fuckingnjit.database.MyObjectBox
+import com.feifan.fuckingnjit.model.MyObjectBox
 import io.objectbox.Box
 import io.objectbox.BoxStore
 import java.io.File

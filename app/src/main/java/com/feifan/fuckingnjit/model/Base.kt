@@ -1,11 +1,11 @@
-package com.feifan.fuckingnjit.database
+package com.feifan.fuckingnjit.model
 
 import io.objectbox.annotation.Entity
 import io.objectbox.annotation.Id
 
 
 @Entity
-data class BaseData(
+data class Base(
     @Id(assignable = true)
     var uuid: Long = 0,
     var currentUserId: String = "",

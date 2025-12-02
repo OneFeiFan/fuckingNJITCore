@@ -1,59 +1,59 @@
 package com.feifan.fuckingnjit.utils
 
-import com.feifan.fuckingnjit.database.UserData
-import com.feifan.fuckingnjit.database.UserData_
+import com.feifan.fuckingnjit.model.User
+import com.feifan.fuckingnjit.model.User_
 import io.objectbox.Box
 
 
 object UserBoxUtils : BaseBoxUtils() {
     override fun getDatabaseName() = "USER"
-    private val userDataBox: Box<UserData> by lazy {
-        getBox(UserData::class.java)
+    private val UserBox: Box<User> by lazy {
+        getBox(User::class.java)
     }
 
     // 返回储存的 BoxStore 对象
-    fun getBoxStore(): Box<UserData> = userDataBox
+    fun getBoxStore(): Box<User> = UserBox
 
     // 插入/更新单个用户数据
-    fun insertUserData(userData: UserData?) = userData?.let {
-        userDataBox.put(it)
+    fun insertUser(User: User?) = User?.let {
+        UserBox.put(it)
     }
 
     // 批量插入用户数据
-    fun insertUserDataList(list: List<UserData>) {
-        userDataBox.put(list)
+    fun insertUserList(list: List<User>) {
+        UserBox.put(list)
     }
 
     // 获取全部数据
-    fun getAllUserData(): List<UserData> {
-        return userDataBox.all
+    fun getAllUser(): List<User> {
+        return UserBox.all
     }
 
     // 通过 UUID 查询
-    fun getUserByUuid(uuid: Long): UserData? {
-        return userDataBox.get(uuid)
+    fun getUserByUuid(uuid: Long): User? {
+        return UserBox.get(uuid)
     }
 
     // 通过用户ID查询（假设id是唯一字段）
-    fun getUserById(id: String): UserData? {
-        return userDataBox
-            .query(UserData_.id.equal(id))
+    fun getUserById(id: String): User? {
+        return UserBox
+            .query(User_.id.equal(id))
             .build()
             .findFirst()
     }
 
     // 更新用户数据
-    fun updateUserData(userData: UserData) {
-        userDataBox.put(userData)
+    fun updateUser(User: User) {
+        UserBox.put(User)
     }
 
     // 删除单个用户
-    fun deleteUserData(userData: UserData) {
-        userDataBox.remove(userData)
+    fun deleteUser(User: User) {
+        UserBox.remove(User)
     }
 
     // 删除所有用户数据
-    fun deleteAllUserData() {
-        userDataBox.removeAll()
+    fun deleteAllUser() {
+        UserBox.removeAll()
     }
 }

@@ -1,33 +1,29 @@
 package com.feifan.fuckingnjit.service.impl
 
-import android.webkit.CookieManager
 import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.JSONArray
 import com.alibaba.fastjson.JSONObject
-import com.feifan.fuckingnjit.Model.Course
-import com.feifan.fuckingnjit.Model.Time
+import com.feifan.fuckingnjit.model.Course
 import com.feifan.fuckingnjit.service.WebService
 import com.feifan.fuckingnjit.utils.BaseDataBoxUtils
+import com.feifan.fuckingnjit.utils.CourseManager
+import com.feifan.fuckingnjit.utils.CourseParser
 import com.feifan.fuckingnjit.utils.HttpMethod
 import com.feifan.fuckingnjit.utils.HttpRequestHelper
 import com.feifan.fuckingnjit.utils.Manager
 import com.feifan.fuckingnjit.utils.TimeManager
 import com.feifan.fuckingnjit.utils.Tools
-import com.feifan.fuckingnjit.utils.UserBoxUtils
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
+import com.feifan.fuckingnjit.utils.NetworkStatus
 import org.jsoup.nodes.Document
 import org.jsoup.select.Elements
 import java.lang.Integer.parseInt
-import java.util.regex.Pattern
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.math.pow
 
 
 class WebServiceImpl private constructor() : WebService {
-    private val httpRequestHelper: HttpRequestHelper =
-        HttpRequestHelper( CookieManager.getInstance())
-
     companion object {
         private val instance_: WebServiceImpl by lazy { WebServiceImpl() }
         fun getInstance(): WebServiceImpl = instance_
@@ -51,7 +47,8 @@ class WebServiceImpl private constructor() : WebService {
 
     override suspend fun getCurriculum(): JSONObject {
         return try {
-            val schoolYearFull = Manager.getTimeManager().getCurrentSchoolYear()
+            // 1. 准备请求 (保持你原有的逻辑)
+            val schoolYearFull = TimeManager.getInstance().getCurrentSchoolYear()
             val schoolYear = schoolYearFull.split('-')[0]
             val semester = schoolYearFull.split('-')[2]
             val url = buildUrl(
@@ -68,149 +65,55 @@ class WebServiceImpl private constructor() : WebService {
                 "queryModel.sortOrder" to "asc",
                 "time" to "1"
             )
-            val additionalHeaders = mapOf(
-                "Referer" to "${HttpRequestHelper.BASE_URL}/http/webvpnea5e00498bb033e68046c95dbdf6e09fbc127bea836184c80a0792b662ced92f/authserver/login",
-                "Origin" to HttpRequestHelper.BASE_URL
-            )
 
-            val raw = httpRequestHelper.getJsonResponse(url, HttpMethod.GET, additionalHeaders)
+            val raw = HttpRequestHelper.getJsonResponse(url, HttpMethod.GET)
             if (raw.isEmpty()) {
                 JSONArray()
             }
             val jsonObject = JSON.parseObject(raw)
-            val items = jsonObject.getJSONArray("items")
+            val items = jsonObject.getJSONArray("items") ?: JSONArray()
 
-            val userId = BaseDataBoxUtils.getCurrentUserId()
-            var localCurriculums = UserBoxUtils.getUserById(userId)?.localCurriculums
-            if (localCurriculums == null) {
-                localCurriculums = JSONObject()
+            // 2. 容器：存放所有解析好的课程
+            var allCourses = ArrayList<Course>()
+
+            // 3. 解析教务系统数据
+            for (i in 0 until items.size) {
+                val item = items.getJSONObject(i)
+                // 调用上面写的 Parser
+                val parsedList = CourseParser.parseSystemItem(item)
+                allCourses.addAll(parsedList)
             }
-            println(localCurriculums)
-            // 遍历 localCurriculums 的所有键
-            val keys = localCurriculums.keys.iterator()
-            while (keys.hasNext()) {
-                val key = keys.next()
-                val value = localCurriculums[key] // 获取值
-                items.add(value) // 将值添加到 items 数组
+            // 1. 获取隐藏名单
+            val studentId = BaseDataBoxUtils.getCurrentUserId()
+            val hiddenMap = CourseManager.getHiddenRules(studentId)
+
+            // 3. 高效过滤
+            val (hiddenSystemCourses,validSystemCourses) = allCourses.partition { course ->
+                // 构造当前课程的 Key
+                val specificKey = "${course.id}@${course.day}@${course.startNode}"
+                hiddenMap.containsKey(specificKey)
+                // partition: true=保留, false=被隐藏
             }
+            // 3. 获取本地课程
+            val localCourses = CourseManager.getLocalCourses(studentId)
+            println("localCourses:$localCourses")
+            allCourses = ArrayList()
+            // 4. 合并
+            allCourses.addAll(validSystemCourses)
+            allCourses.addAll(localCourses)
 
-            val weekdayMap = mapOf(
-                "星期一" to 1, "星期二" to 2, "星期三" to 3,
-                "星期四" to 4, "星期五" to 5, "星期六" to 6, "星期日" to 7
-            )
-            val courses = ArrayList<Course>()
-            val size: Int = items.size
-            for (m in 0..<size) {
-                val item = items.getJSONObject(m)
-                val teacher = item.getString("jsxx").split("/")[1]
-                val classroom = item.getString("jxdd")
-                val courseName = item.getString("kcmc")
-                val time = item.getString("sksj")
-                val uuid = item.getString("uuid") ?: ""
 
-                if (time == null || classroom == null) {
-                    val course = Course()
-                    course.setName(courseName)
-                    course.setTeacher(teacher)
-
-                    if (classroom == null) {
-                        course.setClassroom("未安排地点")
-                    } else {
-                        course.setClassroom(classroom)
-                    }
-                    course.setTime(null)
-                    courses.add(course)
-                    continue
-                }
-
-                val times = time.split(";")
-                val classrooms = classroom.split(";")
-                for ((j, t) in times.withIndex()) {
-                    val weekday = t.substring(0, 3)
-                    val courseTime = t.substring(t.indexOf("第"), t.indexOf("{"))
-                    val weeks = t.substring(t.indexOf("{") + 1, t.indexOf("}"))
-                    val timeArray: ArrayList<Int> = Tools.getCourseTime(courseTime)
-                    val weekss =
-                        weeks.split(",".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
-
-                    for (week in weekss) {
-                        if (!week.contains("-")) {
-                            val course = Course()
-                            course.setUuid(uuid)
-                            course.setName(courseName)
-                            course.setTeacher(teacher)
-                            val time1 = Time(
-                                weekdayMap[weekday]!!,
-                                timeArray,
-                                week.substring(0, week.indexOf("周")).toInt()
-                            )
-                            course.setTime(time1)
-                            course.setClassroom(classrooms[j])
-                            courses.add(course)
-                        } else {
-                            val index = week.indexOf("(")
-                            val pos = week.indexOf("-")
-                            val left = week.substring(0, pos).toInt()
-                            val right = week.substring(pos + 1, week.indexOf("周")).toInt()
-                            if (index != -1) {
-                                val choice = week[index + 1]
-                                if (choice == '单') {
-                                    for (i in left..right) {
-                                        if (i % 2 == 1) {
-                                            val course = Course()
-                                            course.setUuid(uuid)
-                                            course.setName(courseName)
-                                            course.setTeacher(teacher)
-                                            val time1 =
-                                                Time(weekdayMap[weekday]!!, timeArray, i)
-                                            course.setTime(time1)
-                                            course.setClassroom(classrooms[j])
-                                            courses.add(course)
-                                        }
-                                    }
-                                } else if (choice == '双') {
-                                    for (i in left..right) {
-                                        if (i % 2 == 0) {
-                                            val course = Course()
-                                            course.setUuid(uuid)
-                                            course.setName(courseName)
-                                            course.setTeacher(teacher)
-                                            val time1 =
-                                                Time(weekdayMap[weekday]!!, timeArray, i)
-                                            course.setTime(time1)
-                                            course.setClassroom(classrooms[j])
-                                            courses.add(course)
-                                        }
-                                    }
-                                }
-                            } else {
-                                for (i in left..right) {
-                                    val course = Course()
-                                    course.setName(courseName)
-                                    course.setTeacher(teacher)
-                                    course.setUuid(uuid)
-                                    val time1 = Time(weekdayMap[weekday]!!, timeArray, i)
-                                    course.setTime(time1)
-                                    course.setClassroom(classrooms[j])
-                                    courses.add(course)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            val maxWeek = courses.maxOfOrNull { it.getTime()?.week ?: 0 } ?: 20
-
-            val (validTimeCourses, nullTimeCourses) = courses.partition { it.getTime() != null }
-
-            val validTimeCoursesList = validTimeCourses.groupBy { it.getTime()!!.week }.run {
-                Array(maxWeek + 1) { getOrElse(it) { emptyList() } }
-            }
+            // 6. 最终返回
             val result = JSONObject()
-            result["validTimeCourses"] =
-                JSON.toJSONString(Tools.getTimeTableData(validTimeCoursesList))
-            result["nullTimeCourses"] = JSON.toJSONString(nullTimeCourses)
+
+            // 有时间的课程 (用于画课表)
+            val validCourses = allCourses.filter { it.hasTime() }
+            // 没时间的课程 (用于在下面展示列表，如实践课、毕设)
+            val otherCourses = allCourses.filter { !it.hasTime() }
+
+            result["validTimeCourses"] = JSON.toJSON(validCourses)
+            result["nullTimeCourses"] = JSON.toJSON(otherCourses)
+            result["hiddenCourses"] = JSON.toJSON(hiddenSystemCourses)
             result
         } catch (e: Exception) {
             Manager.handleException(e, "获取课表失败")
@@ -226,7 +129,7 @@ class WebServiceImpl private constructor() : WebService {
                 "layout" to "default"
             )
 
-            val doc = httpRequestHelper.getHtmlResponse(url)
+            val doc = HttpRequestHelper.getHtmlResponse(url)
             if (isShellDocument(doc)) {
                 JSONArray()
             }
@@ -250,14 +153,9 @@ class WebServiceImpl private constructor() : WebService {
 
     override suspend fun getSemesterStartDate(): String {
         return try {
-            val schoolYearFull = Manager.getTimeManager().getCurrentSchoolYear()
+            val schoolYearFull = TimeManager.getInstance().getCurrentSchoolYear()
             val schoolYear = schoolYearFull.split('-')[0]
             val semester = schoolYearFull.split('-')[2]
-
-            val additionalHeaders = mapOf(
-                "Referer" to "${HttpRequestHelper.BASE_URL}/http/webvpnea5e00498bb033e68046c95dbdf6e09fbc127bea836184c80a0792b662ced92f/authserver/login",
-                "Origin" to HttpRequestHelper.BASE_URL
-            )
 
             val url = buildUrl(
                 "/jwglxt/kbcx/xskbcxMobile_cxXsKb.html",
@@ -267,7 +165,7 @@ class WebServiceImpl private constructor() : WebService {
                 "gnmkdm" to "N2154",
             )
 
-            val result = httpRequestHelper.getJsonResponse(url, HttpMethod.POST, additionalHeaders)
+            val result = HttpRequestHelper.getJsonResponse(url, HttpMethod.POST)
             if (result.isEmpty()) {
                 return "2025-02-17"
             }
@@ -290,7 +188,7 @@ class WebServiceImpl private constructor() : WebService {
         coursePeriod: String,
         buildingId: String
     ): String {
-        val semesterStartDate = Manager.getSemesterStartDate()
+        val semesterStartDate = TimeManager.getInstance().getSemesterStartDate()
 
         val dateList = dateRange.split("/")
         if (dateList.size != 2) {
@@ -308,10 +206,6 @@ class WebServiceImpl private constructor() : WebService {
                 "/jwglxt/cdjy/cdjy_cxKxcdlb.html",
                 "doType" to "query",
                 "gnmkdm" to "N253512"
-            )
-            val headers = mapOf(
-                "Referer" to "${HttpRequestHelper.BASE_URL}/http/webvpn0ce64a2014465dfe87dac723232b20edd0da6675d44948234864a5c4ff77b278/new/index.html",
-                "Origin" to HttpRequestHelper.BASE_URL
             )
             val resultObject = JSONObject()
             for (entry in dateMap) {
@@ -342,7 +236,7 @@ class WebServiceImpl private constructor() : WebService {
                     "time" to "1"
                 )
                 val result =
-                    httpRequestHelper.getJsonResponse(url, HttpMethod.POST, headers, formBody)
+                    HttpRequestHelper.getJsonResponse(url, HttpMethod.POST,  formBody)
                 if (result.isEmpty()) {
                     return "{}"
                 }
@@ -355,14 +249,14 @@ class WebServiceImpl private constructor() : WebService {
         }
     }
 
-    override suspend fun getAllSorces(): JSONObject {
+    override suspend fun getAllSorces(xnm:String,xqm:String): JSONObject {
         return try {
             val url = buildUrl(
                 "/jwglxt/cjcx/cjcx_cxXsgrcj.html",
                 "doType" to "query",
                 "gnmkdm" to "N305005",
-                "xnm" to "",
-                "xqm" to "",
+                "xnm" to xnm,//学年
+                "xqm" to xqm,//学期
                 "kcbj" to "",
                 "_search" to "false",
                 "nd" to System.currentTimeMillis().toString(),
@@ -372,16 +266,12 @@ class WebServiceImpl private constructor() : WebService {
                 "queryModel.sortOrder" to "desc",
                 "time" to "1"
             )
-            val headers = mapOf(
-                "Referer" to "${HttpRequestHelper.BASE_URL}/http/webvpn0ce64a2014465dfe87dac723232b20edd0da6675d44948234864a5c4ff77b278/new/index.html",
-                "Origin" to HttpRequestHelper.BASE_URL
-            )
-            val raw = httpRequestHelper.getJsonResponse(url, HttpMethod.GET, headers)
-            if (raw.isEmpty()) {
-                return JSONObject()
-            }
+            val raw = HttpRequestHelper.getJsonResponse(url, HttpMethod.GET)
             val result = JSONObject()
-            result["data"] = Tools.getScores(JSONObject.parseObject(raw))
+
+            if (raw.isNotEmpty()) {
+                result["data"] = Tools.getScores(JSONObject.parseObject(raw))
+            }
             result
         } catch (e: Exception) {
             Manager.handleException(e, "获取全部成绩失败")
@@ -395,7 +285,7 @@ class WebServiceImpl private constructor() : WebService {
         schoolYear: String,
         semester: String,
         courseName: String
-    ): String {
+    ): JSONObject {
         return try {
             val url = buildUrl(
                 "/jwglxt/cjcx/cjcx_cxCjxqGjh.html",
@@ -407,10 +297,10 @@ class WebServiceImpl private constructor() : WebService {
                 "kcmc" to courseName
             )
 
-            val doc = httpRequestHelper.getHtmlResponse(url)
+            val doc = HttpRequestHelper.getHtmlResponse(url)
 
             if (isShellDocument(doc)) {
-                return "[]"
+                return NetworkStatus.NotFound.toJsonResult()
             }
             // 选择所有的tr元素
             val rows: Elements = doc.select("#subtab tbody tr")
@@ -434,10 +324,10 @@ class WebServiceImpl private constructor() : WebService {
                     )
                 )
             }
-            JSON.toJSONString(details)
+            NetworkStatus.Success.toJsonResult(details)
         } catch (e: Exception) {
             Manager.handleException(e, "获取成绩详情失败")
-            "[]"
+            NetworkStatus.UnknownError.toJsonResult(e.message)
         }
     }
 
@@ -445,7 +335,7 @@ class WebServiceImpl private constructor() : WebService {
         return try {
             val url = buildUrl("/sso/jziotlogin")
 
-            val doc = httpRequestHelper.getHtmlResponse(url)
+            val doc = HttpRequestHelper.getHtmlResponse(url)
 
             if (isShellDocument(doc)) {
                 return "暂无信息"
@@ -456,7 +346,7 @@ class WebServiceImpl private constructor() : WebService {
             if (ps != null) {
                 for (p in ps) {
                     val temp = p.text()
-                    if (!temp.equals("")) {
+                    if (temp != "") {
                         text += p.text() + "\n"
                     }
                 }
@@ -468,15 +358,8 @@ class WebServiceImpl private constructor() : WebService {
         }
     }
 
-    override suspend fun getAcademicProgress(refresh: Boolean): String {
+    override suspend fun getAcademicProgress(): JSONObject {
         return try {
-            val userData = Manager.getUserManager().getCurrentUser()
-            if (!refresh) {
-                val result = userData.academicProgress
-                if (result.isNotEmpty()) {
-                    return result.toJSONString()
-                }
-            }
             //获取基础的3个参数
             val url = buildUrl(
                 "/jwglxt/xjyj/xjyj_cxXjyjIndex.html",
@@ -484,146 +367,14 @@ class WebServiceImpl private constructor() : WebService {
                 "layout" to "default"
             )
 
-            val doc = httpRequestHelper.getHtmlResponse(url)
+            val doc = HttpRequestHelper.getHtmlResponse(url)
             if (isShellDocument(doc)) {
-                return "{}"
+                return JSONObject()
             }
 
             val jg_id = doc.select("#jg_id option[selected]").attr("value") ?: ""
             val njdm_id = doc.select("#njdm_id option[selected]").attr("value") ?: ""//年级
             val zyh_id = doc.select("#zyh_id option[selected]").attr("value") ?: ""//专业
-
-
-//            val url1 = buildUrl(
-//                "/jwglxt/jxzxjhgl/jxzxjhck_cxJxzxjhckIndex.html",
-//                "doType" to "query",
-//                "gnmkdm" to "N153540",
-//                "jg_id" to jg_id,
-//                "njdm_id" to njdm_id,
-//                "zyh_id" to zyh_id,
-//                "_search" to "false",
-//                "nd" to System.currentTimeMillis().toString(),
-//                "queryModel.showCount" to "200",
-//                "queryModel.currentPage" to "1",
-//                "queryModel.sortName" to "",
-//                "queryModel.sortOrder" to "asc",
-//                "time" to "0"
-//            )
-//            val additionalHeaders = mapOf(
-//                "Referer" to "${HttpRequestHelper.BASE_URL}/http/webvpnea5e00498bb033e68046c95dbdf6e09fbc127bea836184c80a0792b662ced92f/authserver/login",
-//                "Origin" to HttpRequestHelper.BASE_URL
-//            )
-//
-//            val raw = httpRequestHelper.getJsonResponse(url1, HttpMethod.POST, additionalHeaders)
-//            if (raw.isEmpty()) {
-//                return "{}"
-//            }
-//            val items = JSONObject.parseObject(raw)["items"] as JSONArray
-//            val item = items[0] as JSONObject
-//            val jxzxjhxx_id = item["jxzxjhxx_id"] as String
-
-
-//            val cookies = CookieManager.getInstance()
-//                .getCookie(HttpRequestHelper.BASE_URL)
-//                .orEmpty()
-//                .splitToSequence(";")  // 改用 sequence 优化内存
-//                .map { it.trim() }
-//                .associateTo(mutableMapOf()) { cookie ->
-//                    cookie.split("=", limit = 2).let {
-//                        it.first() to it.getOrNull(1).orEmpty()
-//                    }
-//                }
-
-//            val url_ = buildUrl(
-//                "/jwglxt/jxzxjhgl/jxzxjhck_cxJxzxjhxdyqIndex.html",
-//                "jxzxjhxx_id" to jxzxjhxx_id,
-//                "_" to System.currentTimeMillis().toString(),
-//                "gnmkdm" to "N153540"
-//            )
-//
-//            val doc1 = httpRequestHelper.getHtmlResponse(url_)
-//            if (isShellDocument(doc1)) {
-//                return "{}"
-//            }
-
-//            val connection: Connection =
-//                Jsoup.connect(
-//                    "https://casb.njit.edu.cn/http/webvpn3e1a11b7208e283ab07ade5d2913fc13d6f6fe09d2dc7372db2a51a14aa4167a?
-//                )
-//            connection.header(
-//                "User-Agent",
-//                "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:29.0) Gecko/20100101 Firefox/29.0"
-//            )
-//            val response1 =
-//                connection.cookies(cookies).method(Connection.Method.GET).ignoreContentType(true)
-//                    .execute()
-//            val doc1 = Jsoup.parse(response1.body())
-
-            //        System.out.println(doc);
-
-//            val matcher: Matcher = pattern.matcher(doc1.select("script:not([src])").html())
-//
-//            val uniqueResults: MutableSet<String> = HashSet() // 用于去重
-//
-//            while (matcher.find()) {
-//                matcher.group(1)?.let {
-//                    // 正则已保证包含1ABB且不以start结尾
-//                    uniqueResults.add(it)
-//                }
-//            }
-//
-//            uniqueResults.add("qtkcxfyq")
-//            val deferredResults = uniqueResults.map { id ->
-//                coroutineScope.async(Dispatchers.IO) {  // 使用传入的scope而不是GlobalScope
-//                    val url0 = buildUrl(
-//                        "/jwglxt/xsxy/xsxyqk_cxJxzxjhxfyqKcxx.html",
-//                        "gnmkdm" to "N105515",
-//                        "xfyqjd_id" to id
-//                    )
-//                    val raw0 =
-//                        httpRequestHelper.getJsonResponse(url0, HttpMethod.POST, additionalHeaders)
-//                    if (raw0.isEmpty()) {
-//                        return@async JSONArray()
-//                    }
-//
-//                    var items0 = JSONArray.parseArray(raw0, JSONObject::class.java)
-//                    if (items0.size == 0) {
-//                        val url00 = buildUrl(
-//                            "/jwglxt/xsxy/xsxyqk_cxJxzxjhxfyqFKcxx.html",
-//                            "gnmkdm" to "N105515",
-//                            "xfyqjd_id" to id
-//                        )
-//                        val raw00 = httpRequestHelper.getJsonResponse(
-//                            url00,
-//                            HttpMethod.POST,
-//                            additionalHeaders
-//                        )
-//                        if (raw00.isEmpty()) {
-//                            return@async JSONArray()
-//                        }
-//                        items0 = JSONArray.parseArray(raw00, JSONObject::class.java)
-//                    }
-//                    return@async items0
-//                }
-//            }
-
-//            OkHttpClient client = new OkHttpClient().newBuilder()
-//                .build();
-//            MediaType mediaType = MediaType.parse(" application/x-www-form-urlencoded;charset=UTF-8");
-//            RequestBody body = RequestBody.create(mediaType, "jg_id=02&njdm_id=2022&zyh_id=0219");
-//            Request request = new Request.Builder()
-//                .url("https://casb.njit.edu.cn/http/webvpn3e1a11b7208e283ab07ade5d2913fc13d6f6fe09d2dc7372db2a51a14aa4167a/jwglxt/xjyj/xjyj_cxXjyjjdlb.html?gnmkdm=N105505")
-//                .method("POST", body)
-//                .addHeader("Host", " casb.njit.edu.cn")
-//                .addHeader("Origin", " https://casb.njit.edu.cn")
-//                .addHeader("Referer", " https://casb.njit.edu.cn/http/webvpn3e1a11b7208e283ab07ade5d2913fc13d6f6fe09d2dc7372db2a51a14aa4167a/jwglxt/xjyj/xjyj_cxXjyjIndex.html?gnmkdm=N105505&layout=default")
-//                .addHeader("User-Agent", " Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36")
-//                .addHeader("Cookie", " iPlanetDirectoryPro=9I4ZXT44JFTZNthpGbTC3a; GUESTSESSIONID=NDNkNzg1NWItM2Q1Zi00ODdhLTkwMDItNDRkNTY2YWEzMDUw; ENSSESSIONID=MDZmNjE5MmUtM2QzNS00OGVhLWEyNzktMGIzN2JkZjc2ZGY1; clientInfo=eyJ1c2VybmFtZSI6IjIwMjIyMDYyNSIsInVzZXJJZCI6IjhmY2YxOTJkNzdjYzRlZWI4YWQwZTA3ZjY1ZDhmYWExIiwibG9naW5LZXkiOiJBRmtmVE1IcUdoUkNJTjZ1Iiwic2lkIjoiMDZmNjE5MmUtM2QzNS00OGVhLWEyNzktMGIzN2JkZjc2ZGY1In0=; vpn_timestamp=1759128781")
-//                .addHeader("Content-Type", " application/x-www-form-urlencoded;charset=UTF-8")
-//                .addHeader("Accept", "*/*")
-//                .addHeader("Connection", "keep-alive")
-//                .build();
-//            Response response = client.newCall(request).execute();
 
             val url1 = buildUrl(
                 "/jwglxt/xjyj/xjyj_cxXjyjjdlb.html",
@@ -633,17 +384,15 @@ class WebServiceImpl private constructor() : WebService {
                 "zyh_id" to zyh_id,
             )
 
-            var raw = httpRequestHelper.getJsonResponse(url1, HttpMethod.POST)
+            var raw = HttpRequestHelper.getJsonResponse(url1, HttpMethod.POST)
             if (raw.isEmpty()) {
                 JSONArray().toJSONString()
             }
             val results = JSONArray.parseArray(raw, JSONObject::class.java)
 
             val result = JSONObject()
-//            val results = deferredResults.awaitAll()
 
             results.forEach { value ->
-
                 val items = value.getJSONArray("kcList") //课程
                 val kclbmc = value["xfyqjdmc"] as String // 课程类别名称
                 val yqzdxf = value.getFloatValue("yqzdxf") // 最低学分
@@ -665,16 +414,114 @@ class WebServiceImpl private constructor() : WebService {
                     put("total", yqzdxf)
                 }
             }
-
-            userData.academicProgress = result
-            UserBoxUtils.updateUserData(userData)
-            result.toJSONString()
+            result
         } catch (e: Exception) {
             Manager.handleException(e, "academicProgress:未知错误")
-            "{}"
+            JSONObject()
         }
     }
 
+    fun getDate(): String{
+        try {
+            val startTime = System.nanoTime()
+            val result = JSONObject()
+            val date = BaseDataBoxUtils.getSemesterStartDate()
+            if (date != 0L) {
+                val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                result["startDate"] = sdf.format(Date(date))
+            } else {
+                result["startDate"] = "2025-02-17"
+            }
+            result["currentWeek"] = BaseDataBoxUtils.getCurrentWeek()
+            val endTime = System.nanoTime()
+            val duration = (endTime - startTime).toDouble() / 1_000_000_000  // 计算耗时并转换为秒
+
+            println("执行时间: $duration 秒")
+            return result.toJSONString()
+        } catch (e: Exception) {
+            Manager.handleException(e,"时间获取失败：getDate")
+            return "{}"
+        }
+    }
+
+    fun saveCourse(courseJson: String,hideRule: String?): JSONObject {
+        try {
+            val studentId = BaseDataBoxUtils.getCurrentUserId()
+            // 1. 如果有 hideId (说明是修改系统课程)，先隐藏原课程
+            if (!hideRule.isNullOrEmpty()) {
+                val rule = JSONObject.parseObject(hideRule)
+                val id = rule.getString("id")
+                val day = rule.getInteger("day")
+                val start = rule.getInteger("start")
+
+                // 添加到隐藏规则列表
+                if (!id.isNullOrEmpty()) {
+                    CourseManager.addHiddenRule(studentId, id, day, start)
+                }
+            }
+            // 2. 保存新课程
+            val course = JSONObject.parseObject(courseJson, Course::class.java)
+
+            if(course.step == 0 || course.weekList.isEmpty()){
+                return NetworkStatus.UnknownError.toJsonResult("课程数据结构异常")
+            }
+            val success = CourseManager.saveLocalCourse(studentId, course)
+
+            if (success) {
+                return NetworkStatus.Success.toJsonResult("保存成功")
+            } else {
+                return NetworkStatus.UnknownError.toJsonResult("保存失败，请重试")
+            }
+        } catch (e: Exception) {
+            Manager.handleException(e, "saveCourse:未知错误")
+            return NetworkStatus.InternalError.toJsonResult("保存失败，请重试")
+        }
+    }
+
+    fun deleteCourse(courseId: String,isSystem: Boolean,day: Int?,start: Int?): JSONObject {
+        try {
+            val studentId = BaseDataBoxUtils.getCurrentUserId()
+            if (courseId.isEmpty()) {
+                return NetworkStatus.BadRequest.toJsonResult("参数错误：课程ID为空")
+            }
+
+            // 2. 调用之前的 CourseManager 逻辑
+            var success = false
+
+            if (isSystem) {
+                //如果是系统课程，进行“精准隐藏”
+                // 前端必须传 day 和 start
+                success = CourseManager.addHiddenRule(studentId, courseId, day!!, start!!)
+            } else {
+                // 如果是本地课程，直接物理删除
+                success = CourseManager.deleteLocalCourse(studentId, courseId)
+            }
+            // 3. 返回结果
+            if (success) {
+                return NetworkStatus.Success.toJsonResult("删除成功")
+            } else {
+                return NetworkStatus.UnknownError.toJsonResult("删除失败，请重试")
+            }
+        } catch (e: Exception) {
+            Manager.handleException(e, "deleteCourse:未知错误")
+            return NetworkStatus.InternalError.toJsonResult("服务器内部错误: ${e.message}")
+        }
+    }
+
+    fun restoreCourse(courseId: String,day: Int,start: Int): JSONObject {
+        try {
+            val studentId = BaseDataBoxUtils.getCurrentUserId()
+            val success = CourseManager.removeHiddenRule(studentId, courseId, day, start)
+            if (success) {
+                return NetworkStatus.Success.toJsonResult("恢复成功")
+            } else {
+                return NetworkStatus.UnknownError.toJsonResult("恢复失败")
+            }
+        } catch (e: Exception) {
+            Manager.handleException(e, "restoreCourse:未知错误")
+            return NetworkStatus.InternalError.toJsonResult("恢复异常: ${e.message}")
+        }
+    }
 //    suspend fun getAcademicProgressOld(refresh: Boolean): String {
 //        return try {
 //            val userData = Manager.getUserManager().getCurrentUser()
@@ -691,7 +538,7 @@ class WebServiceImpl private constructor() : WebService {
 //                "layout" to "default"
 //            )
 //
-//            val doc = httpRequestHelper.getHtmlResponse(url)
+//            val doc = HttpRequestHelper.getHtmlResponse(url)
 //            if (isShellDocument(doc)) {
 //                return "{}"
 //            }
@@ -721,7 +568,7 @@ class WebServiceImpl private constructor() : WebService {
 //                "Origin" to HttpRequestHelper.BASE_URL
 //            )
 //
-//            val raw = httpRequestHelper.getJsonResponse(url1, HttpMethod.POST, additionalHeaders)
+//            val raw = HttpRequestHelper.getJsonResponse(url1, HttpMethod.POST, additionalHeaders)
 //            if (raw.isEmpty()) {
 //                return "{}"
 //            }
@@ -748,7 +595,7 @@ class WebServiceImpl private constructor() : WebService {
 //                "gnmkdm" to "N153540"
 //            )
 //
-//            val doc1 = httpRequestHelper.getHtmlResponse(url_)
+//            val doc1 = HttpRequestHelper.getHtmlResponse(url_)
 //            if (isShellDocument(doc1)) {
 //                return "{}"
 //            }
@@ -788,7 +635,7 @@ class WebServiceImpl private constructor() : WebService {
 //                        "xfyqjd_id" to id
 //                    )
 //                    val raw0 =
-//                        httpRequestHelper.getJsonResponse(url0, HttpMethod.POST, additionalHeaders)
+//                        HttpRequestHelper.getJsonResponse(url0, HttpMethod.POST, additionalHeaders)
 //                    if (raw0.isEmpty()) {
 //                        return@async JSONArray()
 //                    }
@@ -800,7 +647,7 @@ class WebServiceImpl private constructor() : WebService {
 //                            "gnmkdm" to "N105515",
 //                            "xfyqjd_id" to id
 //                        )
-//                        val raw00 = httpRequestHelper.getJsonResponse(
+//                        val raw00 = HttpRequestHelper.getJsonResponse(
 //                            url00,
 //                            HttpMethod.POST,
 //                            additionalHeaders

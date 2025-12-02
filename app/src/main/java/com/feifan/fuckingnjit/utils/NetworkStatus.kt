@@ -1,0 +1,112 @@
+package com.feifan.fuckingnjit.utils
+
+import com.alibaba.fastjson.JSONObject
+
+/**
+ * 网络状态码基类
+ */
+sealed class NetworkStatus(
+    val code: Int,
+    val message: String
+) {
+    // 成功状态 (2xx)
+    object Success : NetworkStatus(200, "请求成功")
+    object Created : NetworkStatus(201, "资源创建成功")
+    object Accepted : NetworkStatus(202, "请求已接受")
+
+    // 客户端错误 (4xx)
+    object BadRequest : NetworkStatus(400, "无效请求")
+    object Unauthorized : NetworkStatus(401, "未授权")
+    object Forbidden : NetworkStatus(403, "禁止访问")
+    object NotFound : NetworkStatus(404, "资源未找到")
+    object RequestTimeout : NetworkStatus(408, "请求超时")
+
+    // 服务端错误 (5xx)
+    object InternalError : NetworkStatus(500, "服务器内部错误")
+    object ServiceUnavailable : NetworkStatus(503, "服务不可用")
+    object GatewayTimeout : NetworkStatus(504, "网关超时")
+
+    // 自定义状态码 (6xx)
+    object NetworkUnavailable : NetworkStatus(600, "网络不可用")
+    object ParseError : NetworkStatus(601, "数据解析失败")
+    object UnknownError : NetworkStatus(699, "未知错误")
+
+    // 扩展函数：检查状态码范围
+    fun isSuccess(): Boolean = code in 200..299
+    fun isClientError(): Boolean = code in 400..499
+    fun isServerError(): Boolean = code in 500..599
+    fun isCustomError(): Boolean = code >= 600
+
+    // 重写toString
+    override fun toString(): String = "$code: $message"
+    fun toJsonResult(data: Any? = null): JSONObject {
+        return JSONObject().apply {
+            put("code", code)
+            put("message", message)
+            data?.let { put("data", it) }
+        }
+    }
+}
+
+/**
+ * 状态码扩展工具
+ */
+object NetworkStatusUtils {
+    // 根据状态码获取对应枚举
+    fun fromCode(code: Int): NetworkStatus {
+        return when (code) {
+            200 -> NetworkStatus.Success
+            201 -> NetworkStatus.Created
+            202 -> NetworkStatus.Accepted
+            400 -> NetworkStatus.BadRequest
+            401 -> NetworkStatus.Unauthorized
+            403 -> NetworkStatus.Forbidden
+            404 -> NetworkStatus.NotFound
+            408 -> NetworkStatus.RequestTimeout
+            500 -> NetworkStatus.InternalError
+            503 -> NetworkStatus.ServiceUnavailable
+            504 -> NetworkStatus.GatewayTimeout
+            600 -> NetworkStatus.NetworkUnavailable
+            601 -> NetworkStatus.ParseError
+            else -> NetworkStatus.UnknownError
+        }
+    }
+
+    // 处理响应
+    fun handleResponse(responseCode: Int, data: Any? = null): Result<Any> {
+        val status = fromCode(responseCode)
+        return if (status.isSuccess()) {
+            Result.success(data ?: "操作成功")
+        } else {
+            Result.failure(Exception(status.toString()))
+        }
+    }
+}
+
+// 使用示例
+//fun main() {
+//    // 示例1: 直接使用状态码
+//    val responseCode = 404
+//    val status = NetworkStatusUtils.fromCode(responseCode)
+//
+//    println("状态码: ${status.code}")
+//    println("状态信息: ${status.message}")
+//    println("是否成功: ${status.isSuccess()}")
+//    println("是否是客户端错误: ${status.isClientError()}")
+//
+//    // 示例2: 处理API响应
+//    val apiResponse = NetworkStatusUtils.handleResponse(200, mapOf("data" to "示例数据"))
+//
+//    apiResponse.onSuccess {
+//        println("API请求成功: $it")
+//    }.onFailure {
+//        println("API请求失败: ${it.message}")
+//    }
+//
+//    // 示例3: 匹配特定状态
+//    when (NetworkStatusUtils.fromCode(503)) {
+//        is NetworkStatus.ServiceUnavailable -> println("服务不可用，请稍后重试")
+//        is NetworkStatus.NotFound -> println("请求的资源不存在")
+//        else -> println("其他错误")
+//    }
+//}

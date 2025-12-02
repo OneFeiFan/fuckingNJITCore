@@ -3,7 +3,6 @@ package com.feifan.fuckingnjit.utils
 import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.JSONArray
 import com.alibaba.fastjson.JSONObject
-import com.feifan.fuckingnjit.Model.Course
 
 
 class Tools {
@@ -159,134 +158,80 @@ class Tools {
             }
         }
 
-        fun getCourseTime(courseTime: String): ArrayList<Int> {
-            val timeArray = ArrayList<Int>()
-            // 1. 去掉"第"和"节"
-            val cleaned = courseTime.replace("第".toRegex(), "").replace("节".toRegex(), "")
-            // 2. 按逗号分割多个时间段
-            val segments =
-                cleaned.split(",".toRegex()).dropLastWhile { it.isEmpty() }
-            for (segment in segments) {
-                // 3. 处理每个时间段
-                if (segment.contains("-")) {
-                    // 处理范围如"1-2"
-                    val range =
-                        segment.split("-".toRegex()).dropLastWhile { it.isEmpty() }
-                    val start = range[0].trim().toInt()
-                    val end = range[1].trim().toInt()
-
-                    for (i in start..end) {
-                        if (!timeArray.contains(i)) {
-                            timeArray.add(i)
-                        }
-                    }
-                } else {
-                    // 处理单个数字如"3"
-                    val single = segment.trim().toInt()
-                    if (!timeArray.contains(single)) {
-                        timeArray.add(single)
-                        timeArray.add(single)
-                    }
-                }
-            }
-            // 4. 排序结果
-            timeArray.sort()
-            return timeArray
-        }
-
-        fun getTimeTableData(raw: Array<List<Course>>): List<List<List<String>>> {
-            val timetableData = MutableList(20) {
-                MutableList(7) {
-                    MutableList(11) { "" }
-                }
-            }
-            val weekCourseMap = HashMap<String, MutableSet<Int>>()
-            for (i in 1 until raw.size) {
-                val weekCourses = raw[i]
-                for (course in weekCourses) {
-                    val time = course.getTime()!!
-                    val week = time.week // 第几周 需确保是0-based（0-19）
-                    val weekday = time.weekday //星期几
-                    val courseTimes = time.courseTime //课程时间段
-                    val baseName = "${course.getName()}@${course.getClassroom()}@${course.getTeacher().replace(" ", "")}"
-                    val value = "${baseName}@${course.getUuid()}"
-
-                    for (slot in courseTimes) {
-                        val adjustedSlot = slot - 1 // 节次转0-based索引
-                        val adjustedWeekday = weekday - 1 // 星期转0-based索引
-
-                        if (!weekCourseMap.containsKey(baseName + adjustedWeekday)) {
-                            weekCourseMap[baseName + adjustedWeekday] = HashSet()
-                        }
-                        weekCourseMap[baseName + adjustedWeekday]!!.add(week)
-
-                        // 获取当前单元格内容
-                        var currentCell = timetableData[week][adjustedWeekday][adjustedSlot]
-
-                        if(currentCell.isNotEmpty()){
-                            val valueParts = baseName.split("@")
-                            val baseParts = valueParts[0].replace("mod","")// 分离 mod 前后部分
-
-
-                            if(!currentCell.contains(baseName)){
-                                println("重复课程：$currentCell $baseParts")
-                                if(currentCell.contains(baseParts)) {
-                                    val segments = currentCell.split("!").toMutableList()
-
-                                    // 遍历现有段，检查是否需替换
-                                    for (j in segments.indices) {
-                                        val segment = segments[j]
-                                        if (segment.contains(baseParts)) {
-                                            segments.removeAt(j)
-                                        }
-                                        break
-                                    }
-                                    currentCell = segments.joinToString("!")
-                                }
-                                if(currentCell.isNotEmpty()) {
-                                    timetableData[week][adjustedWeekday][adjustedSlot] = "$currentCell!$value"
-                                }else{
-                                    timetableData[week][adjustedWeekday][adjustedSlot] = value
-                                }
-                            }
-                        } else {
-                            timetableData[week][adjustedWeekday][adjustedSlot] = value
-                        }
-
-//                        if (currentCell.isNotEmpty() && !currentCell.contains(baseName)) {
-//                            timetableData[week][adjustedWeekday][adjustedSlot] = "$currentCell!$value"
+//        fun getCourseTime(courseTime: String): ArrayList<Int> {
+//            val timeArray = ArrayList<Int>()
+//            // 1. 去掉"第"和"节"
+//            val cleaned = courseTime.replace("第".toRegex(), "").replace("节".toRegex(), "")
+//            // 2. 按逗号分割多个时间段
+//            val segments =
+//                cleaned.split(",".toRegex()).dropLastWhile { it.isEmpty() }
+//            for (segment in segments) {
+//                // 3. 处理每个时间段
+//                if (segment.contains("-")) {
+//                    // 处理范围如"1-2"
+//                    val range =
+//                        segment.split("-".toRegex()).dropLastWhile { it.isEmpty() }
+//                    val start = range[0].trim().toInt()
+//                    val end = range[1].trim().toInt()
+//
+//                    for (i in start..end) {
+//                        if (!timeArray.contains(i)) {
+//                            timeArray.add(i)
 //                        }
+//                    }
+//                } else {
+//                    // 处理单个数字如"3"
+//                    val single = segment.trim().toInt()
+//                    if (!timeArray.contains(single)) {
+//                        timeArray.add(single)
+//                        timeArray.add(single)
+//                    }
+//                }
+//            }
+//            // 4. 排序结果
+//            timeArray.sort()
+//            return timeArray
+//        }
 
-                        val week0Cell = timetableData[0][adjustedWeekday][adjustedSlot]
-                        if (week0Cell.isNotEmpty()) {
-                            // 分割已有记录检查重复
-                            val exists = week0Cell.split("!").any { it == value }
-                            if (!exists) {
-                                timetableData[0][adjustedWeekday][adjustedSlot] = "$week0Cell!$value"
-                            }
-                        } else {
-                            timetableData[0][adjustedWeekday][adjustedSlot] = value
-                        }
-                    }
-                }
-            }
-            //单独胡处理总课表
-            for (i in 0 until 7) {
-                timetableData[0][i].mapIndexed { index, cell ->
-                    if (cell == "") return@mapIndexed "占位$index@@@WD0"
-                    // 合并相同课程的周数
-                    val entries = cell.split("!")
-                    val merged = entries.map { entry ->
-                        val parts = entry.split("@")  // 先按@分割
-                        val firstThreeParts = parts.take(3).joinToString("@")  // 取前三个并用@重新连接
-                        val uniqueWeeks = weekCourseMap[firstThreeParts + i]?.joinToString(",") ?: ""
-                        "${entry}WD$uniqueWeeks"
-                    }
-                    merged.joinToString("!")
-                }.also { timetableData[0][i].clear() }.let { timetableData[0][i].addAll(it) }
-            }
-            return timetableData
-        }
+//        fun getTimeTableData(raw: Array<List<Course>>): List<List<List<String>>> {
+//            val timetableData = MutableList(20) {
+//                MutableList(7) {
+//                    MutableList(11) { "" }
+//                }
+//            }
+//            for (i in 1 until raw.size) {
+//                val weekCourses = raw[i]
+//                for (course in weekCourses) {
+//                    val time = course.getTime()!!
+//                    val week = time.week // 需确保是0-based（0-19）
+//                    val weekday = time.weekday
+//                    val courseTimes = time.courseTime
+//                    val value = "${course.getName()}@${course.getClassroom()}"
+//
+//                    for (slot in courseTimes) {
+//                        val adjustedSlot = slot - 1 // 节次转0-based索引
+//                        val adjustedWeekday = weekday - 1 // 星期转0-based索引
+//
+//                        // 获取当前单元格内容
+//                        val currentCell = timetableData[week][adjustedWeekday][adjustedSlot]
+//
+//                        if (currentCell.isNotEmpty() && !currentCell.contains(value)) {
+//                            // 非空且不重复时拼接
+//                            timetableData[week][adjustedWeekday][adjustedSlot] =
+//                                "$currentCell!$value"
+//                            // 同步更新第0周
+//                            timetableData[0][adjustedWeekday][adjustedSlot] =
+//                                timetableData[week][adjustedWeekday][adjustedSlot]
+//                        } else {
+//                            // 直接赋值（包括空或重复时覆盖）
+//                            timetableData[week][adjustedWeekday][adjustedSlot] = value
+//                            timetableData[0][adjustedWeekday][adjustedSlot] = value
+//                        }
+//                    }
+//                }
+//            }
+//            return timetableData
+//        }
 
         fun parseCourseSchedule(courseArray: List<String>): MutableList<HashMap<String, String>> {
 

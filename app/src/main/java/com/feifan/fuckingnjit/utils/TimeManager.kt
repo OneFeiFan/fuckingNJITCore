@@ -24,14 +24,27 @@ class TimeManager private constructor() {
         arrayOf(
             "07:00", "07:55", "09:10", "10:05", "12:40",
             "13:35", "14:40", "15:35", "17:30", "18:25", "19:20"
-        ).map { timeStr ->
+        ).mapNotNull { timeStr ->
             val time = LocalTime.parse(timeStr, timeFormatter) // 解析时间
             // 合并为今天的日期 + 指定时间
             today.atTime(time)
                 .atZone(ZoneId.systemDefault())
                 .toInstant()
                 .let { Date.from(it) } // 转为旧版 Date（如需兼容旧代码）
-        }.filterNotNull()
+        }
+    }
+
+    fun getSemesterStartDate(): String {
+        val date = BaseDataBoxUtils.getSemesterStartDate()
+        try {
+            if (date != 0L) {
+                val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                return sdf.format(Date(date))
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return "2025-02-17"
     }
 
     fun isInLateNightPeriod(): Boolean {

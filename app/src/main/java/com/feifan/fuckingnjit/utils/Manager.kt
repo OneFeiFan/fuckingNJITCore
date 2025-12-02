@@ -50,7 +50,7 @@ class Manager {
                 }
                 coroutineScope.launch {
                     val week = withContext(Dispatchers.Default) {
-                        val startTime = LocalDate.parse(getSemesterStartDate())
+                        val startTime = LocalDate.parse(TimeManager.getInstance().getSemesterStartDate())
                             .atStartOfDay(ZoneId.systemDefault())
                             .toInstant()
                             .toEpochMilli()
@@ -74,23 +74,13 @@ class Manager {
 
         }
 
-        fun getSemesterStartDate(): String {
-            val date = BaseDataBoxUtils.getSemesterStartDate()
-            try {
-                if (date != 0L) {
-                    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                    return sdf.format(Date(date))
-                }
-            } catch (e: Exception) {
-                showToast("获取学期开始日期失败，请稍后重试")
-                handleException(e, "获取学期开始日期失败")
-            }
-            return "2025-02-17"
-        }
+//        fun getSemesterStartDate(): String {
+//            return TimeManager.getInstance().getSemesterStartDate()
+//        }
 
-        fun getCurrentWeek(): Int {
-            return BaseDataBoxUtils.getCurrentWeek()
-        }
+//        fun getCurrentWeek(): Int {
+//            return BaseDataBoxUtils.getCurrentWeek()
+//        }
 
         fun getPermissionsManager(): PermissionsManager {
             return PermissionsManager.getInstance(context)
@@ -116,39 +106,39 @@ class Manager {
                     localCurriculums[key] = json[key] // 获取值
                 }
                 user?.localCurriculums = localCurriculums
-            user?.let { UserBoxUtils.updateUserData(it) }
+            user?.let { UserBoxUtils.updateUser(it) }
 
         }
 
-        fun modifyLocalCurriculums(keys: String) {
-            println(keys)
-            val array = JSONArray.parseArray(keys)
-            val userId = BaseDataBoxUtils.getCurrentUserId()
-            val user = UserBoxUtils.getUserById(userId)
-            var localCurriculums = user?.localCurriculums
+//        fun modifyLocalCurriculums(keys: String) {
+//            println(keys)
+//            val array = JSONArray.parseArray(keys)
+//            val userId = BaseDataBoxUtils.getCurrentUserId()
+//            val user = UserBoxUtils.getUserById(userId)
+//            var localCurriculums = user?.localCurriculums
+//
+//            if (localCurriculums == null) {
+//                localCurriculums = JSONObject()
+//            }
+//
+//                println(localCurriculums.toJSONString())
+//                // 遍历 localCurriculums 的所有键
+//                for (key in array) {
+//                    if(localCurriculums.containsKey(key)){
+//                        localCurriculums.remove(key)
+//                    }
+//                }
+//                user?.localCurriculums = localCurriculums
+//            user?.let { UserBoxUtils.updateUser(it) }
+//
+//        }
 
-            if (localCurriculums == null) {
-                localCurriculums = JSONObject()
-            }
-
-                println(localCurriculums.toJSONString())
-                // 遍历 localCurriculums 的所有键
-                for (key in array) {
-                    if(localCurriculums.containsKey(key)){
-                        localCurriculums.remove(key)
-                    }
-                }
-                user?.localCurriculums = localCurriculums
-            user?.let { UserBoxUtils.updateUserData(it) }
-
-        }
-
-        fun reSetLocalCurriculums() {
-            val userId = BaseDataBoxUtils.getCurrentUserId()
-            val user = UserBoxUtils.getUserById(userId)
-            user?.localCurriculums = JSONObject()
-            user?.let { UserBoxUtils.updateUserData(it) }
-        }
+//        fun reSetLocalCurriculums() {
+//            val userId = BaseDataBoxUtils.getCurrentUserId()
+//            val user = UserBoxUtils.getUserById(userId)
+//            user?.localCurriculums = JSONObject()
+//            user?.let { UserBoxUtils.updateUser(it) }
+//        }
 
         fun getTimeManager(): TimeManager {
             return TimeManager.getInstance()
@@ -226,7 +216,7 @@ class Manager {
         fun handleException(e: Exception, message: String) {
             e.printStackTrace()
             println("handleException: $message")
-//            showToast(message)
+            showToast(message)
         }
 
         fun goHome() {
@@ -241,11 +231,13 @@ class Manager {
         }
 
         fun setWifiAuthTupe(type: String) {
+            println("wifi类型:"+type)
             BaseDataBoxUtils.updateBaseData { it.wifiAuthTupe = type }
+            println(BaseDataBoxUtils.getWifiAuthTupe())
         }
 
-        fun getWifiAuthTupe() {
-            BaseDataBoxUtils.getWifiAuthTupe()
+        fun getWifiAuthTupe() : String {
+            return BaseDataBoxUtils.getWifiAuthTupe()
         }
 
         suspend fun updateApp(url: String): Boolean = withContext(Dispatchers.IO) {

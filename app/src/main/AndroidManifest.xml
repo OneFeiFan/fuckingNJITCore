@@ -1,10 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <uses-permission android:name="android.permission.OVERLAY_WINDOW" />
+<!--    <uses-permission android:name="android.permission.OVERLAY_WINDOW" />-->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
 
-    <application>
+    <!-- 允许 App 访问网络（认证时发送请求需要） -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 允许检查网络状态（绑定网络进程需要） -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- 允许改变网络状态（某些 ROM 兼容性需要） -->
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+
+    <queries>
+        <intent>
+            <action android:name="android.net.conn.CAPTIVE_PORTAL" />
+        </intent>
+    </queries>
+
+    <application
+        android:usesCleartextTraffic="true">
         <activity
             android:name=".service.impl.SampleWebViewImpl"
             android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize"
@@ -25,6 +39,19 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".utils.wifiauth.PortalActivity"
+            android:exported="true"
+            android:enabled="false"
+            android:taskAffinity="">
+
+            <!-- 拦截系统 WiFi 认证信号 -->
+            <intent-filter>
+                <action android:name="android.net.conn.CAPTIVE_PORTAL"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
+        </activity>
+
         <receiver
             android:name=".widget.CurriculumsWidgetProvider"
             android:exported="false">
@@ -36,17 +63,17 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/curriculums_widget_provider" />
         </receiver>
-        <receiver
-            android:name=".widget.VerifyWifiProvider"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
+<!--        <receiver-->
+<!--            android:name=".widget.VerifyWifiProvider"-->
+<!--            android:exported="false">-->
+<!--            <intent-filter>-->
+<!--                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />-->
+<!--            </intent-filter>-->
 
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/wifiwidgetprovider" />
-        </receiver>
+<!--            <meta-data-->
+<!--                android:name="android.appwidget.provider"-->
+<!--                android:resource="@xml/wifiwidgetprovider" />-->
+<!--        </receiver>-->
 
         <provider
             android:name="androidx.core.content.FileProvider"

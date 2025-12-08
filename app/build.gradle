@@ -50,6 +50,8 @@ dependencies {
     implementation libs.xxpermissions
     implementation libs.easywindow
 
+    implementation 'com.github.OneFeiFan:FYIBAN:-SNAPSHOT'
+
 //    androidTestImplementation libs.androidx.runner
 //    androidTestImplementation libs.androidx.rules
 //    testImplementation libs.junit

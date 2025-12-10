@@ -6,29 +6,29 @@ import com.alibaba.fastjson.JSONObject
 
 
 class Tools {
-    data class TimeSlot(val index: Int, val name: String)
+//    data class TimeSlot(val index: Int, val name: String)
     companion object {
-        private val timeSlots = listOf(
-            TimeSlot(1, "08:00-08:45"),
-            TimeSlot(2, "08:55-09:40"),
-            TimeSlot(3, "10:10-10:55"),
-            TimeSlot(4, "11:05-11:50"),
-            TimeSlot(5, "13:40-14:25"),
-            TimeSlot(6, "14:35-15:20"),
-            TimeSlot(7, "15:40-16:25"),
-            TimeSlot(8, "16:35-17:20"),
-            TimeSlot(9, "18:30-19:15"),
-            TimeSlot(10, "19:25-20:10"),
-            TimeSlot(11, "20:20-21:05")
-        )
+//        private val timeSlots = listOf(
+//            TimeSlot(1, "08:00-08:45"),
+//            TimeSlot(2, "08:55-09:40"),
+//            TimeSlot(3, "10:10-10:55"),
+//            TimeSlot(4, "11:05-11:50"),
+//            TimeSlot(5, "13:40-14:25"),
+//            TimeSlot(6, "14:35-15:20"),
+//            TimeSlot(7, "15:40-16:25"),
+//            TimeSlot(8, "16:35-17:20"),
+//            TimeSlot(9, "18:30-19:15"),
+//            TimeSlot(10, "19:25-20:10"),
+//            TimeSlot(11, "20:20-21:05")
+//        )
 
-        fun getTimeSlot(index: Int): TimeSlot = timeSlots[index - 1]
+//        fun getTimeSlot(index: Int): TimeSlot = timeSlots[index - 1]
 
-        fun getTimeRange(startIndex: Int, endIndex: Int): String {
-            val start = getTimeSlot(startIndex).name.split("-")[0]
-            val end = getTimeSlot(endIndex).name.split("-")[1]
-            return "$start-$end"
-        }
+//        fun getTimeRange(startIndex: Int, endIndex: Int): String {
+//            val start = getTimeSlot(startIndex).name.split("-")[0]
+//            val end = getTimeSlot(endIndex).name.split("-")[1]
+//            return "$start-$end"
+//        }
 
 
         fun getScores(raw: JSONObject): JSONArray {
@@ -233,48 +233,48 @@ class Tools {
 //            return timetableData
 //        }
 
-        fun parseCourseSchedule(courseArray: List<String>): MutableList<HashMap<String, String>> {
-
-            val result = mutableListOf<HashMap<String, String>>()
-            try {
-                var i = 0
-
-                while (i < courseArray.size) {
-                    val courseStr = courseArray[i]
-                    if (courseStr.isEmpty()) {
-                        i++
-                        continue
-                    }
-
-                    // 解析当前课程信息
-                    val parts = courseStr.split("@")
-                    val courseName = parts[0]
-                    val location = if (parts.size > 1) parts[1] else ""
-                    var startIndex = i
-                    var endIndex = i
-
-                    // 检查后续连续时间段是否同一门课程
-                    while (endIndex + 1 < courseArray.size &&
-                        courseArray[endIndex + 1] == courseStr
-                    ) {
-                        endIndex++
-                    }
-
-                    result.add(
-                        hashMapOf(
-                            "course_name" to courseName,
-                            "location" to location,
-                            "time" to getTimeRange(startIndex + 1, endIndex + 1)
-                        )
-                    )
-
-                    i = endIndex + 1
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-            return result
-        }
+//        fun parseCourseSchedule(courseArray: List<String>): MutableList<HashMap<String, String>> {
+//
+//            val result = mutableListOf<HashMap<String, String>>()
+//            try {
+//                var i = 0
+//
+//                while (i < courseArray.size) {
+//                    val courseStr = courseArray[i]
+//                    if (courseStr.isEmpty()) {
+//                        i++
+//                        continue
+//                    }
+//
+//                    // 解析当前课程信息
+//                    val parts = courseStr.split("@")
+//                    val courseName = parts[0]
+//                    val location = if (parts.size > 1) parts[1] else ""
+//                    var startIndex = i
+//                    var endIndex = i
+//
+//                    // 检查后续连续时间段是否同一门课程
+//                    while (endIndex + 1 < courseArray.size &&
+//                        courseArray[endIndex + 1] == courseStr
+//                    ) {
+//                        endIndex++
+//                    }
+//
+//                    result.add(
+//                        hashMapOf(
+//                            "course_name" to courseName,
+//                            "location" to location,
+//                            "time" to getTimeRange(startIndex + 1, endIndex + 1)
+//                        )
+//                    )
+//
+//                    i = endIndex + 1
+//                }
+//            } catch (e: Exception) {
+//                e.printStackTrace()
+//            }
+//            return result
+//        }
 
     }
 }

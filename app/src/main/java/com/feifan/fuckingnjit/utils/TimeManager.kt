@@ -1,10 +1,7 @@
 package com.feifan.fuckingnjit.utils
 
+import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
 import java.text.SimpleDateFormat
-import java.time.LocalDate
-import java.time.LocalTime
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
@@ -18,28 +15,27 @@ class TimeManager private constructor() {
     }
 
     private val SDF by lazy { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
-    private val DATELIST by lazy {
-        val today = LocalDate.now() // 今天的日期
-        val timeFormatter = DateTimeFormatter.ofPattern("HH:mm") // 时间格式化器
-        arrayOf(
-            "07:00", "07:55", "09:10", "10:05", "12:40",
-            "13:35", "14:40", "15:35", "17:30", "18:25", "19:20"
-        ).mapNotNull { timeStr ->
-            val time = LocalTime.parse(timeStr, timeFormatter) // 解析时间
-            // 合并为今天的日期 + 指定时间
-            today.atTime(time)
-                .atZone(ZoneId.systemDefault())
-                .toInstant()
-                .let { Date.from(it) } // 转为旧版 Date（如需兼容旧代码）
-        }
-    }
+//    private val DATELIST by lazy {
+//        val today = LocalDate.now() // 今天的日期
+//        val timeFormatter = DateTimeFormatter.ofPattern("HH:mm") // 时间格式化器
+//        arrayOf(
+//            "07:00", "07:55", "09:10", "10:05", "12:40",
+//            "13:35", "14:40", "15:35", "17:30", "18:25", "19:20"
+//        ).mapNotNull { timeStr ->
+//            val time = LocalTime.parse(timeStr, timeFormatter) // 解析时间
+//            // 合并为今天的日期 + 指定时间
+//            today.atTime(time)
+//                .atZone(ZoneId.systemDefault())
+//                .toInstant()
+//                .let { Date.from(it) } // 转为旧版 Date（如需兼容旧代码）
+//        }
+//    }
 
     fun getSemesterStartDate(): String {
         val date = BaseDataBoxUtils.getSemesterStartDate()
         try {
             if (date != 0L) {
-                val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                return sdf.format(Date(date))
+                return SDF.format(Date(date))
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -53,9 +49,9 @@ class TimeManager private constructor() {
     }
 
 
-    fun getDateList(): List<Date> {
-        return DATELIST
-    }
+//    fun getDateList(): List<Date> {
+//        return DATELIST
+//    }
 
     fun calculateCurrentWeek(startDate: String, currentDate: String): Int {
 

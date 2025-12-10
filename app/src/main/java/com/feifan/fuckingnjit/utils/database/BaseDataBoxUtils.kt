@@ -1,4 +1,4 @@
-package com.feifan.fuckingnjit.utils
+package com.feifan.fuckingnjit.utils.database
 
 import com.feifan.fuckingnjit.model.Base
 import io.objectbox.Box
@@ -13,9 +13,6 @@ object BaseDataBoxUtils : BaseBoxUtils() {
         }
         box // 确保返回 Box<BaseData> 对象
     }
-
-    // 返回储存的 BoxStore 对象
-    fun getBoxStore(): Box<Base> = baseBox
 
     // 获取单个 BaseData 对象
     fun getBaseData(): Base {

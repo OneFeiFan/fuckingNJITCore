@@ -5,7 +5,7 @@ import com.alibaba.fastjson.JSONArray
 import com.alibaba.fastjson.JSONObject
 import com.feifan.fuckingnjit.model.Course
 import com.feifan.fuckingnjit.service.WebService
-import com.feifan.fuckingnjit.utils.BaseDataBoxUtils
+import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
 import com.feifan.fuckingnjit.utils.CourseManager
 import com.feifan.fuckingnjit.utils.CourseParser
 import com.feifan.fuckingnjit.utils.HttpMethod
@@ -331,14 +331,14 @@ class WebServiceImpl private constructor() : WebService {
         }
     }
 
-    override suspend fun getNoticeInformation(): String {
+    override suspend fun getNoticeInformation(): JSONObject {
         return try {
             val url = buildUrl("/sso/jziotlogin")
 
             val doc = HttpRequestHelper.getHtmlResponse(url)
 
             if (isShellDocument(doc)) {
-                return "暂无信息"
+                return NetworkStatus.NotFound.toJsonResult()
             }
             val content = doc.selectFirst(".col-md-12.col-sm-12")
             val ps = content?.select("p")
@@ -351,13 +351,12 @@ class WebServiceImpl private constructor() : WebService {
                     }
                 }
             }
-            text
+            NetworkStatus.Success.toJsonResult(text)
         } catch (e: Exception) {
             Manager.handleException(e, "获取通知信息失败")
-            "暂无信息"
+            NetworkStatus.UnknownError.toJsonResult(e.message)
         }
     }
-
     override suspend fun getAcademicProgress(): JSONObject {
         return try {
             //获取基础的3个参数
@@ -369,7 +368,7 @@ class WebServiceImpl private constructor() : WebService {
 
             val doc = HttpRequestHelper.getHtmlResponse(url)
             if (isShellDocument(doc)) {
-                return JSONObject()
+                return NetworkStatus.NotFound.toJsonResult()
             }
 
             val jg_id = doc.select("#jg_id option[selected]").attr("value") ?: ""
@@ -386,7 +385,7 @@ class WebServiceImpl private constructor() : WebService {
 
             var raw = HttpRequestHelper.getJsonResponse(url1, HttpMethod.POST)
             if (raw.isEmpty()) {
-                JSONArray().toJSONString()
+                NetworkStatus.NotFound.toJsonResult()
             }
             val results = JSONArray.parseArray(raw, JSONObject::class.java)
 
@@ -415,9 +414,10 @@ class WebServiceImpl private constructor() : WebService {
                 }
             }
             result
+            NetworkStatus.Success.toJsonResult(result)
         } catch (e: Exception) {
             Manager.handleException(e, "academicProgress:未知错误")
-            JSONObject()
+            NetworkStatus.UnknownError.toJsonResult()
         }
     }
 

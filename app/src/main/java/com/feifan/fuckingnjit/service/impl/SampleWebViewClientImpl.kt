@@ -3,7 +3,7 @@ package com.feifan.fuckingnjit.service.impl
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import com.feifan.fuckingnjit.utils.BaseDataBoxUtils
+import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
 import com.feifan.fuckingnjit.utils.Manager
 
 class SampleWebViewClientImpl() : WebViewClient() {

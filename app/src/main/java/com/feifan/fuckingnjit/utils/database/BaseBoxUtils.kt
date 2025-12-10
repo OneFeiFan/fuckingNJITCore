@@ -1,4 +1,4 @@
-package com.feifan.fuckingnjit.utils
+package com.feifan.fuckingnjit.utils.database
 
 import android.content.Context
 import com.feifan.fuckingnjit.model.MyObjectBox
@@ -26,6 +26,8 @@ abstract class BaseBoxUtils {
             }
         }
     }
+
+    fun getBoxStore() = boxStore
 
     // 获取安全的Box实例
     fun <T> getBox(clazz: Class<T>): Box<T> {

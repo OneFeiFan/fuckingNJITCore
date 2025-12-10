@@ -4,11 +4,12 @@ import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.JSONObject
 import com.feifan.fuckingnjit.model.User
 import com.feifan.fuckingnjit.service.UserManager
-import com.feifan.fuckingnjit.utils.BaseDataBoxUtils
+import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
 import com.feifan.fuckingnjit.utils.Manager
+import com.feifan.fuckingnjit.utils.NetworkStatus
 import com.feifan.fuckingnjit.utils.TimeManager
 import com.feifan.fuckingnjit.utils.Tools
-import com.feifan.fuckingnjit.utils.UserBoxUtils
+import com.feifan.fuckingnjit.utils.database.UserBoxUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
@@ -196,13 +197,13 @@ class UserManagerImpl private constructor() : UserManager {
         }
     }
 
-    suspend fun getAcademicProgress(refresh: Boolean): String {
+    suspend fun getAcademicProgress(refresh: Boolean): JSONObject {
         try {
             val userData = UserBoxUtils.getUserById(BaseDataBoxUtils.getCurrentUserId())
             if (userData == null) {
                 Manager.startLogin(true)
                 Manager.showToast("需要登录")
-                return "{}"
+                return NetworkStatus.Unauthorized.toJsonResult()
             }
             if (userData.academicProgress.isEmpty() || refresh) {
                 val tmp = Manager.getWebService().getAcademicProgress()
@@ -211,10 +212,10 @@ class UserManagerImpl private constructor() : UserManager {
                     UserBoxUtils.updateUser(userData)
                 }
             }
-            return userData.academicProgress.toJSONString()
+            return userData.academicProgress
         }catch (e: Exception) {
             Manager.handleException(e, "获取学业进度失败")
-            return "{}"
+            return NetworkStatus.UnknownError.toJsonResult()
         }
     }
 }

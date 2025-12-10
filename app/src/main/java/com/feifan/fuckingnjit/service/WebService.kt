@@ -21,6 +21,6 @@ interface WebService {
         courseName: String
     ): JSONObject
 
-    suspend fun getNoticeInformation(): String
+    suspend fun getNoticeInformation(): JSONObject
     suspend fun getAcademicProgress(): JSONObject
 }

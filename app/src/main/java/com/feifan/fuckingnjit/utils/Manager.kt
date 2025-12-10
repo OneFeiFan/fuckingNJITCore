@@ -18,12 +18,16 @@ import com.feifan.fuckingnjit.R
 import com.feifan.fuckingnjit.service.impl.SampleWebViewImpl
 import com.feifan.fuckingnjit.service.impl.UserManagerImpl
 import com.feifan.fuckingnjit.service.impl.WebServiceImpl
+import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
+import com.feifan.fuckingnjit.utils.database.DbClearHelper
+import com.feifan.fuckingnjit.utils.database.UserBoxUtils
 import com.feifan.fuckingnjit.widget.CurriculumsWidgetProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.internal.UTC
 import java.io.File
 import java.text.SimpleDateFormat
 import java.time.LocalDate
@@ -44,9 +48,11 @@ class Manager {
                 this.context = context
                 if (!UserBoxUtils.isInitialized()) {
                     UserBoxUtils.init(context)
+                    DbClearHelper.checkAndClear(context, UserBoxUtils.getBoxStore()!!, "user_1.2.5")
                 }
                 if (!BaseDataBoxUtils.isInitialized()) {
                     BaseDataBoxUtils.init(context)
+                    DbClearHelper.checkAndClear(context, BaseDataBoxUtils.getBoxStore()!!, "base_1.2.5")
                 }
                 coroutineScope.launch {
                     val week = withContext(Dispatchers.Default) {
@@ -231,9 +237,7 @@ class Manager {
         }
 
         fun setWifiAuthTupe(type: String) {
-            println("wifi类型:"+type)
             BaseDataBoxUtils.updateBaseData { it.wifiAuthTupe = type }
-            println(BaseDataBoxUtils.getWifiAuthTupe())
         }
 
         fun getWifiAuthTupe() : String {

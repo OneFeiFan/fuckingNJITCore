@@ -3,6 +3,7 @@ package com.feifan.fuckingnjit.utils
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
+import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
 import com.hjq.permissions.OnPermissionCallback
 import com.hjq.permissions.XXPermissions
 import com.hjq.permissions.permission.PermissionLists
@@ -21,12 +22,12 @@ class PermissionsManager private constructor(private val context: Context) {
         }
     }
 
-    fun checkOverlayWindowPermission(): Boolean {
-        return XXPermissions.isGrantedPermission(
-            context,
-            PermissionLists.getSystemAlertWindowPermission()
-        )
-    }
+//    fun checkOverlayWindowPermission(): Boolean {
+//        return XXPermissions.isGrantedPermission(
+//            context,
+//            PermissionLists.getSystemAlertWindowPermission()
+//        )
+//    }
 
     fun checkRequestInstallPackagePermission(): Boolean {
         return XXPermissions.isGrantedPermission(
@@ -35,26 +36,26 @@ class PermissionsManager private constructor(private val context: Context) {
         )
     }
 
-    fun requestOverlayWindowPermission(callback: (Boolean) -> Unit) {
-        XXPermissions.with(context)
-            .permission(PermissionLists.getSystemAlertWindowPermission())
-            .request(object : OnPermissionCallback {
-                override fun onResult(
-                    grantedList: MutableList<IPermission>,
-                    deniedList: MutableList<IPermission>
-                ) {
-                    val allGranted = deniedList.isEmpty()
-                    if (allGranted) {
-                        println("权限申请成功")
-                        // 在这里处理权限请求成功的逻辑
-                        callback(true)
-                    } else {
-                        println("权限申请被拒绝")
-                        callback(false)
-                    }
-                }
-            })
-    }
+//    fun requestOverlayWindowPermission(callback: (Boolean) -> Unit) {
+//        XXPermissions.with(context)
+//            .permission(PermissionLists.getSystemAlertWindowPermission())
+//            .request(object : OnPermissionCallback {
+//                override fun onResult(
+//                    grantedList: MutableList<IPermission>,
+//                    deniedList: MutableList<IPermission>
+//                ) {
+//                    val allGranted = deniedList.isEmpty()
+//                    if (allGranted) {
+//                        println("权限申请成功")
+//                        // 在这里处理权限请求成功的逻辑
+//                        callback(true)
+//                    } else {
+//                        println("权限申请被拒绝")
+//                        callback(false)
+//                    }
+//                }
+//            })
+//    }
 
     fun requestRequestInstallPackagePermission(callback: (Boolean) -> Unit) {
         XXPermissions.with(context)

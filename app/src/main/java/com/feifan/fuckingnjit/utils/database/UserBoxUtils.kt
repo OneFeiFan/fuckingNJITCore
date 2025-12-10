@@ -1,18 +1,14 @@
-package com.feifan.fuckingnjit.utils
+package com.feifan.fuckingnjit.utils.database
 
 import com.feifan.fuckingnjit.model.User
 import com.feifan.fuckingnjit.model.User_
 import io.objectbox.Box
-
 
 object UserBoxUtils : BaseBoxUtils() {
     override fun getDatabaseName() = "USER"
     private val UserBox: Box<User> by lazy {
         getBox(User::class.java)
     }
-
-    // 返回储存的 BoxStore 对象
-    fun getBoxStore(): Box<User> = UserBox
 
     // 插入/更新单个用户数据
     fun insertUser(User: User?) = User?.let {

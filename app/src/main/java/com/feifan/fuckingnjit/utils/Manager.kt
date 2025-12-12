@@ -1,6 +1,7 @@
 package com.feifan.fuckingnjit.utils
 
 import android.annotation.SuppressLint
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -10,30 +11,28 @@ import android.os.Looper
 import android.webkit.CookieManager
 import android.widget.Toast
 import androidx.core.content.FileProvider
-import com.alibaba.fastjson.JSONArray
 import com.alibaba.fastjson.JSONObject
 import com.example.loadinganimation.LoadingAnimationDialog
 import com.feifan.apkpatch.PatchUtils
 import com.feifan.fuckingnjit.R
+import com.feifan.fuckingnjit.model.YiBan
 import com.feifan.fuckingnjit.service.impl.SampleWebViewImpl
 import com.feifan.fuckingnjit.service.impl.UserManagerImpl
 import com.feifan.fuckingnjit.service.impl.WebServiceImpl
 import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
 import com.feifan.fuckingnjit.utils.database.DbClearHelper
 import com.feifan.fuckingnjit.utils.database.UserBoxUtils
+import com.feifan.fuckingnjit.utils.database.YiBanBoxUtils
 import com.feifan.fuckingnjit.widget.CurriculumsWidgetProvider
+import com.feifan.yiban.Apis.Task
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import okhttp3.internal.UTC
 import java.io.File
-import java.text.SimpleDateFormat
 import java.time.LocalDate
 import java.time.ZoneId
-import java.util.Date
-import java.util.Locale
 
 
 class Manager {
@@ -43,6 +42,8 @@ class Manager {
         private var dialog: LoadingAnimationDialog? = null
         private var inLogin = false
         private val coroutineScope = CoroutineScope(Dispatchers.IO + Job())
+        private val YiBanTask: Task by lazy { Task(context) }
+
         fun init(context: Context) {
             try {
                 this.context = context
@@ -80,6 +81,34 @@ class Manager {
 
         }
 
+        suspend fun initYiBan(mobile: String, password: String): JSONObject = withContext(Dispatchers.IO) {
+            return@withContext try {
+                println("initYiBan: $mobile, $password")
+                if(!YiBanBoxUtils.isInitialized()){
+                    YiBanBoxUtils.init(context)
+                }
+                var user = YiBanBoxUtils.getUserById(mobile) ?:YiBan(id=mobile, password=password)
+                println("user: $user")
+                val result = NetworkStatus.Success.toJsonResult(YiBanTask.init(user.id, user.password))
+                println("result: $result")
+                YiBanBoxUtils.insertUser(user)
+                user = YiBanBoxUtils.getUserById(mobile)!!
+                BaseDataBoxUtils.updateBaseData { it.currentYiBanId = user.uuid }
+                val packageManager = context.packageManager
+                val componentName = ComponentName(context, KillYiBan::class.java)
+
+                packageManager.setComponentEnabledSetting(
+                    componentName,
+                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                    PackageManager.DONT_KILL_APP
+                )
+                result
+            }catch (e: Exception){
+                handleException(e, "初始化易班失败")
+                NetworkStatus.UnknownError.toJsonResult(e.message)
+            }
+        }
+
 //        fun getSemesterStartDate(): String {
 //            return TimeManager.getInstance().getSemesterStartDate()
 //        }
@@ -92,29 +121,29 @@ class Manager {
             return PermissionsManager.getInstance(context)
         }
 
-        fun setLocalCurriculums(data: String) {
-            println(data)
-            val json = JSONObject.parseObject(data)
-            val userId = BaseDataBoxUtils.getCurrentUserId()
-            val user = UserBoxUtils.getUserById(userId)
-            var localCurriculums = user?.localCurriculums
-
-            if (localCurriculums == null) {
-                localCurriculums = JSONObject()
-            }
-
-
-
-                // 遍历 localCurriculums 的所有键
-                val keys = json.keys.iterator()
-                while (keys.hasNext()) {
-                    val key = keys.next()
-                    localCurriculums[key] = json[key] // 获取值
-                }
-                user?.localCurriculums = localCurriculums
-            user?.let { UserBoxUtils.updateUser(it) }
-
-        }
+//        fun setLocalCurriculums(data: String) {
+//            println(data)
+//            val json = JSONObject.parseObject(data)
+//            val userId = BaseDataBoxUtils.getCurrentUserId()
+//            val user = UserBoxUtils.getUserById(userId)
+//            var localCurriculums = user?.localCurriculums
+//
+//            if (localCurriculums == null) {
+//                localCurriculums = JSONObject()
+//            }
+//
+//
+//
+//                // 遍历 localCurriculums 的所有键
+//                val keys = json.keys.iterator()
+//                while (keys.hasNext()) {
+//                    val key = keys.next()
+//                    localCurriculums[key] = json[key] // 获取值
+//                }
+//                user?.localCurriculums = localCurriculums
+//            user?.let { UserBoxUtils.updateUser(it) }
+//
+//        }
 
 //        fun modifyLocalCurriculums(keys: String) {
 //            println(keys)

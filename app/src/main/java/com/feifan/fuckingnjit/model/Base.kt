@@ -14,4 +14,5 @@ data class Base(
     var currentWeek: Int = 1,
     var wifiAuthTupe: String? = "",
     var smartUpdate: Boolean? = true,
+    var currentYiBanId: Long = 0
 )

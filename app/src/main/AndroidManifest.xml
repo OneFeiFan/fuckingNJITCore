@@ -1,14 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
-
-    <!-- 允许 App 访问网络（认证时发送请求需要） -->
-    <uses-permission android:name="android.permission.INTERNET" />
-    <!-- 允许检查网络状态（绑定网络进程需要） -->
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <!-- 允许改变网络状态（某些 ROM 兼容性需要） -->
-    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.INTERNET" /> <!-- 允许 App 访问网络（认证时发送请求需要） -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" /> <!-- 允许检查网络状态（绑定网络进程需要） -->
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" /><!-- 允许改变网络状态（某些 ROM 兼容性需要） -->
 
     <queries>
         <intent>
@@ -16,13 +12,28 @@
         </intent>
     </queries>
 
-    <application
-        android:usesCleartextTraffic="true">
+    <application android:usesCleartextTraffic="true">
+        <!-- 易班登录 -->
+        <activity
+            android:name=".utils.KillYiBan"
+            android:enabled="false"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:icon="@drawable/killyiban"
+            android:label="Kill易班"
+            android:taskAffinity=".utils.KillYiBan">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <!-- 内嵌WebView -->
         <activity
             android:name=".service.impl.SampleWebViewImpl"
             android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize"
+            android:excludeFromRecents="true"
             android:theme="@style/Theme.FuckingNJIT" />
-
+        <!-- 课表小组件 -->
         <activity
             android:name=".widget.DemoWidgetConfigurationActivity"
             android:exported="false">
@@ -30,17 +41,18 @@
                 <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
             </intent-filter>
         </activity>
-
+        <!-- WIFI认证 -->
         <activity
             android:name=".utils.wifiauth.PortalActivity"
-            android:exported="true"
             android:enabled="false"
+            android:excludeFromRecents="true"
+            android:exported="true"
             android:taskAffinity="">
 
             <!-- 拦截系统 WiFi 认证信号 -->
             <intent-filter>
-                <action android:name="android.net.conn.CAPTIVE_PORTAL"/>
-                <category android:name="android.intent.category.DEFAULT"/>
+                <action android:name="android.net.conn.CAPTIVE_PORTAL" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
 
@@ -66,5 +78,4 @@
                 android:resource="@xml/file_paths" />
         </provider>
     </application>
-
 </manifest>

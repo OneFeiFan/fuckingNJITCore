@@ -36,6 +36,8 @@ object BaseDataBoxUtils : BaseBoxUtils() {
 
     fun getSmartUpdate(): Boolean = getBaseData().smartUpdate ?: true
 
+    fun getCurrentYiBanId(): Long = getBaseData().currentYiBanId
+
     // 更新 BaseData 对象
     fun updateBaseData(updater: (Base) -> Unit) {
         val data = getBaseData()

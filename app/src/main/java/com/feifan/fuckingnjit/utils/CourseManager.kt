@@ -3,8 +3,6 @@ package com.feifan.fuckingnjit.utils
 import com.alibaba.fastjson.JSONObject
 import com.feifan.fuckingnjit.model.Course
 import com.feifan.fuckingnjit.utils.database.UserBoxUtils
-
-import java.util.ArrayList
 import java.util.UUID
 
 class CourseManager {

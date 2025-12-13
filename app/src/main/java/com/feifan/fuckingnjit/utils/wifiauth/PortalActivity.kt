@@ -13,8 +13,8 @@ import android.os.Looper
 import android.os.Parcelable
 import android.util.Log
 import android.widget.Toast
-import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
 import com.feifan.fuckingnjit.utils.Manager
+import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
 import com.feifan.fuckingnjit.utils.database.UserBoxUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

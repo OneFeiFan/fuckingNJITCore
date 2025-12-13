@@ -5,15 +5,15 @@ import com.alibaba.fastjson.JSONArray
 import com.alibaba.fastjson.JSONObject
 import com.feifan.fuckingnjit.model.Course
 import com.feifan.fuckingnjit.service.WebService
-import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
 import com.feifan.fuckingnjit.utils.CourseManager
 import com.feifan.fuckingnjit.utils.CourseParser
 import com.feifan.fuckingnjit.utils.HttpMethod
 import com.feifan.fuckingnjit.utils.HttpRequestHelper
 import com.feifan.fuckingnjit.utils.Manager
+import com.feifan.fuckingnjit.utils.NetworkStatus
 import com.feifan.fuckingnjit.utils.TimeManager
 import com.feifan.fuckingnjit.utils.Tools
-import com.feifan.fuckingnjit.utils.NetworkStatus
+import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
 import org.jsoup.nodes.Document
 import org.jsoup.select.Elements
 import java.lang.Integer.parseInt

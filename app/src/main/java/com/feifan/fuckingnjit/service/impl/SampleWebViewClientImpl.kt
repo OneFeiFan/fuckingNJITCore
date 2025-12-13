@@ -3,8 +3,8 @@ package com.feifan.fuckingnjit.service.impl
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
 import com.feifan.fuckingnjit.utils.Manager
+import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
 
 class SampleWebViewClientImpl() : WebViewClient() {
     // 拦截 URL 加载

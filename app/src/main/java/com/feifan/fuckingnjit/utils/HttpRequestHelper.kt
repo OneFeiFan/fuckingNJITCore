@@ -6,13 +6,12 @@ import okhttp3.FormBody
 import okhttp3.Headers.Companion.toHeaders
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody
-import org.jsoup.Connection
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.io.File
 import java.io.IOException
 import java.net.ConnectException
+import java.net.HttpURLConnection
 import java.net.ProtocolException
 import java.net.SocketException
 import java.net.SocketTimeoutException
@@ -25,7 +24,7 @@ import kotlin.coroutines.suspendCoroutine
 class HttpRequestHelper {
     companion object {
         private var lastLoginCheckTime = 0L
-        private val LOGIN_CHECK_INTERVAL = 5 * 60 * 1000 // 30分钟检查一次
+        private val LOGIN_CHECK_INTERVAL = 60 * 1000 // 1分钟检查一次
         private val okHttpClient: OkHttpClient by lazy {
             OkHttpClient.Builder()
                 .connectTimeout(10, TimeUnit.SECONDS)
@@ -89,6 +88,23 @@ class HttpRequestHelper {
             return currentTime - lastLoginCheckTime >= LOGIN_CHECK_INTERVAL // 在有效期内，跳过检查
         }
 
+        // 网络异常统一处理
+        private fun handleNetworkException(e: IOException) {
+            when (e) {
+                is ConnectException, is UnknownHostException, is SocketException -> {
+                    Manager.handleException(e, "网络异常，请检查网络连接")
+                }
+
+                is SocketTimeoutException -> {
+                    Manager.handleException(e, "请求超时，请稍后再试")
+                }
+
+                else -> {
+                    Manager.handleException(e, "登录验证失败")
+                }
+            }
+        }
+
         private suspend fun makeRequest(
             url: String,
             method: HttpMethod = HttpMethod.GET,
@@ -102,64 +118,62 @@ class HttpRequestHelper {
             }
 
             if (checkLoginIfNeeded()) {
+                lastLoginCheckTime = System.currentTimeMillis()
                 try {
-                    // 创建一个Connection对象
-                    val connection: Connection =
-                        Jsoup.connect("$BASE_URL$WEBVPN_PATH/jwglxt/xtgl/index_initMenu.html")
-                    // 设置Cookie
-                    connection.cookies(getPersistentCookies(cookie))
-                    // 执行请求并获取Document对象
-                    val html: Document = connection.get()
-                    if (html.text().contains("登录页面")) {
-                        Manager.showToast("需要登录")
-                        Manager.startLogin(true)
-                        return ""
+                    val connection = Jsoup.connect("$BASE_URL$WEBVPN_PATH/jwglxt/xtgl/index_initMenu.html")
+                        .cookies(getPersistentCookies(cookie))
+                        .followRedirects(false)
+                        .timeout(2500) // 2.5秒超时
+
+                    val response = connection.execute()
+
+                    when (response.statusCode()) {
+                        HttpURLConnection.HTTP_OK -> {
+//                            println("登录成功")
+//                            println(response.body())
+                        }
+                        //直接重定向到登录页 -> 会话失效
+                        HttpURLConnection.HTTP_MOVED_TEMP -> {
+//                            println("重定向到登录页")
+//                            println(response.header("Location"))
+                            val location = response.header("Location")
+                            if (location?.contains("index_initMenu.html") == true || location?.contains("login_slogin") == true) {
+                                Manager.showToast("需要登录")
+                                Manager.startLogin(true)
+                                return ""
+                            }
+                        }
+                        // 其他状态码处理
+                        else -> {
+                            Manager.handleException(Exception("HTTP状态异常: ${response.statusCode()}"), "登录验证失败")
+                            return ""
+                        }
                     }
                 } catch (e: IOException) {
-                    when {
-                        // 网络异常
-                        e is ConnectException || e is UnknownHostException || e is SocketException -> {
-                            Manager.handleException(e, "网络异常，请检查网络连接")
-                        }
-
-                        e.message?.contains("Too many redirects") == true -> {
-                            Manager.showToast("需要登录")
-                            Manager.startLogin(true)
-                        }
-
-                        e is SocketTimeoutException -> {
-                            Manager.handleException(e, "请求超时，请稍后再试")
-                        }
-                        // 其他异常
-                        else -> {
-                            Manager.handleException(e, "登录验证失败")
-                        }
-                    }
+                    handleNetworkException(e) // 统一处理网络异常
                     return ""
                 }
             }
 
-            lastLoginCheckTime = System.currentTimeMillis()
-            var formBody: RequestBody = FormBody.Builder().build()
-            if (method == HttpMethod.POST) {
-                val builder = FormBody.Builder()
-                // 遍历 Map，将键值对添加到 FormBody
-                for ((key, value) in requestBody) {
-                    builder.add(key, value)
-                }
-                formBody = builder.build()
-            }
-            val builder = Request.Builder().url(url)
+            val request = Request.Builder()
+                .url(url)
                 .headers(COMMON_HEADERS.toHeaders())
                 .addHeader("Cookie", cookie)
-            if (method == HttpMethod.POST) {
-                builder.method("POST", formBody)
-            }
-            val request = builder.build()
+                .apply {
+                    if (method == HttpMethod.POST) {
+                        val formBody = FormBody.Builder().apply {
+                            requestBody.forEach { (key, value) -> add(key, value) }
+                        }.build()
+                        method("POST", formBody)
+                    }
+                }
+                .build()
             return suspendCoroutine { continuation ->
                 try {
                     val response = okHttpClient.newCall(request).execute()
-                    continuation.resume(response.body?.string() ?: "")
+                    val result = response.body?.string() ?: ""
+                    response.close()
+                    continuation.resume(result)
                 } catch (e: Exception) {
                     if (e is ProtocolException) {
                         if (e.message?.contains("Too many follow-up requests") == true) {
@@ -177,7 +191,6 @@ class HttpRequestHelper {
                     continuation.resume("")
                 }
             }
-
         }
         suspend fun getJsonResponse(
             url: String,

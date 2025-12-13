@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <!-- 使用 rectangle 形状，性能略好于 oval，且逻辑上更符合矩形边界 -->
+        <shape android:shape="rectangle">
+            <!-- 颜色设为全透明 -->
+            <solid android:color="#00FFFFFF" />
+            <size android:width="2000dp" android:height="1000dp" />
+        </shape>
+    </item>
+</layer-list>

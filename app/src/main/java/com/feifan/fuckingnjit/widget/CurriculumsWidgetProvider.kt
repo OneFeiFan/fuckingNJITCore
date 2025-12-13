@@ -1,27 +1,25 @@
-// 定义包名，表示该文件所在的包路径
 package com.feifan.fuckingnjit.widget
 
-// 导入所需的Android类库
 import android.annotation.SuppressLint
 import android.app.AlarmManager
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
-import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
+import android.os.Bundle
 import android.view.View
 import android.widget.RemoteViews
-import com.alibaba.fastjson.JSON
-import com.alibaba.fastjson.TypeReference
+import com.alibaba.fastjson.JSONArray
 import com.feifan.fuckingnjit.R
+import com.feifan.fuckingnjit.model.Course
 import com.feifan.fuckingnjit.model.User
-import com.feifan.fuckingnjit.utils.BaseDataBoxUtils
-import com.feifan.fuckingnjit.utils.Manager
+import com.feifan.fuckingnjit.utils.CourseTimeUtils
 import com.feifan.fuckingnjit.utils.TimeManager
-import com.feifan.fuckingnjit.utils.Tools
-import com.feifan.fuckingnjit.utils.UserBoxUtils
+import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
+import com.feifan.fuckingnjit.utils.database.UserBoxUtils
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -29,56 +27,47 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
-import java.util.Observable
 import java.util.Observer
 
 
-// 定义CurriculumsWidgetProvider类，继承自AppWidgetProvider
 class CurriculumsWidgetProvider : AppWidgetProvider() {
 
-    // 伴生对象，包含静态方法和属性
     companion object {
-        private val CHINA_DATE_FORMATTER =
-            DateTimeFormatter.ofPattern("M.d hh:mm a", Locale.CHINA) // 日期格式化器
-        private val CHINA_WEEK_FORMATTER = TextStyle.FULL to Locale.CHINA // 星期格式化器
-//        private val FILTER = IntentFilter(Intent.ACTION_TIME_TICK)
+        private val CHINA_DATE_FORMATTER = DateTimeFormatter.ofPattern("M.d hh:mm a", Locale.CHINA)
+        private val CHINA_WEEK_FORMATTER = TextStyle.FULL to Locale.CHINA
 
+        private val IDS_BLOCK = intArrayOf(R.id.course_block_1, R.id.course_block_2, R.id.course_block_3, R.id.course_block_4)
+        private val IDS_NAME = intArrayOf(R.id.course_id_1, R.id.course_id_2, R.id.course_id_3, R.id.course_id_4)
+        private val IDS_LOC = intArrayOf(R.id.location_id_1, R.id.location_id_2, R.id.location_id_3, R.id.location_id_4)
+        private val IDS_TIME = intArrayOf(R.id.time_id_1, R.id.time_id_2, R.id.time_id_3, R.id.time_id_4)
+
+        // --- 2. 缓存策略优化 ---
         private var cachedSemesterStartDate: Long? = null
         private var cachedCurrentWeek = -1
         private var lastUpdateDay: Int = -1
-        private var cachedCurriculumData: List<List<List<String>>>? = null
-        private var cachedWeekIndex: Int = -1
 
-        private val receiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent) {
-                println("Time ticked")
-                updateWidgets(context)
-            }
+        // 原始总数据（用于周数切换时重新计算）
+//        private var cachedAllCurriculumData: List<Course>? = null
+
+        // 这是一个可变列表，时间过了就移除，避免重复 filter
+        private var cachedTodayCourses: MutableList<Course>? = null
+
+        // 外部调用的 Observer
+        val observer: Observer = Observer { _, _ ->
+            // 收到数据变更通知，彻底清空，下次强制重新加载
+            clearCurriculumCache()
         }
 
-        val observer: Observer = object : Observer {
-            @Deprecated("Deprecated in Java")
-            override fun update(o: Observable?, arg: Any?) {
-                clearCurriculumCache()
-            }
-        }
-
-        // 更新所有小部件的方法
         fun updateWidgets(context: Context) {
             val appWidgetManager = AppWidgetManager.getInstance(context.applicationContext)
-            val widgetIds = appWidgetManager.getAppWidgetIds(
-                ComponentName(context.applicationContext, CurriculumsWidgetProvider::class.java)
-            )
+            val componentName = ComponentName(context.applicationContext, CurriculumsWidgetProvider::class.java)
+            val widgetIds = appWidgetManager.getAppWidgetIds(componentName)
 
             if (widgetIds.isNotEmpty()) {
-                val updateIntent =
-                    Intent(
-                        context.applicationContext,
-                        CurriculumsWidgetProvider::class.java
-                    ).apply {
-                        action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
-                        putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, widgetIds)
-                    }
+                val updateIntent = Intent(context.applicationContext, CurriculumsWidgetProvider::class.java).apply {
+                    action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
+                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, widgetIds)
+                }
                 context.applicationContext.sendBroadcast(updateIntent)
             }
         }
@@ -87,315 +76,267 @@ class CurriculumsWidgetProvider : AppWidgetProvider() {
             cachedSemesterStartDate = null
             cachedCurrentWeek = -1
             lastUpdateDay = -1
-            cachedCurriculumData = null
-            cachedWeekIndex = -1
+//            cachedAllCurriculumData = null
+            cachedTodayCourses = null
         }
 
-        private fun getCurriculumData(curriculums: String): List<List<List<String>>>? {
-            return try {
-                if (cachedCurriculumData == null) {
-                    cachedCurriculumData = JSON.parseObject<List<List<List<String>>>>(
-                        curriculums,
-                        object : TypeReference<List<List<List<String>>>>() {}.type
-                    )
-                }
-                cachedCurriculumData
-            } catch (e: Exception) {
-                println("解析课表失败")
-                println(e.message)
-                null
-            }
-        }
-
-        private fun getCourseList(
-            context: Context,
-            curriculums: String
-        ): List<HashMap<String, String>> {
-            val weekIndex = Manager.getTimeManager().todayWeekIndex()
-
-            // 如果周数和星期索引没变，直接返回缓存数据
-            if (weekIndex == cachedWeekIndex && cachedCurriculumData != null) {
-                return Tools.parseCourseSchedule(
-                    cachedCurriculumData!![cachedCurrentWeek][weekIndex]
-                )
-            }
-
-            // 否则重新解析并更新缓存
-            val curriculumsObject = getCurriculumData(curriculums) ?: return emptyList()
-            cachedWeekIndex = weekIndex
-
-            return Tools.parseCourseSchedule(
-                curriculumsObject[cachedCurrentWeek][weekIndex]
-            )
-        }
-//fun saveWidgetAsImage(context: Context, widgetView: RemoteViews): Boolean {
-//    try {
-//        // 1. 获取小部件布局的实际视图
-//        val widget = widgetView.apply(context, null)
-//
-//        // 2. 测量视图大小
-//        widget.measure(
-//            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
-//            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
-//        )
-//
-//        // 3. 布局视图
-//        widget.layout(0, 0, widget.measuredWidth, widget.measuredHeight)
-//
-//        // 4. 创建位图
-//        val bitmap = Bitmap.createBitmap(
-//            widget.measuredWidth,
-//            widget.measuredHeight,
-//            Bitmap.Config.ARGB_8888
-//        )
-//
-//        // 5. 将视图绘制到位图上
-//        val canvas = Canvas(bitmap)
-//        widget.draw(canvas)
-//
-//        // 6. 保存图片到应用目录
-//        val fileName = "widget_${System.currentTimeMillis()}.png"
-//        val outputDir = context.filesDir
-//        val outputFile = File(outputDir, fileName)
-//
-//        FileOutputStream(outputFile).use { out ->
-//            bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
-//            out.flush()
-//        }
-//
-//        return true
-//    } catch (e: Exception) {
-//        e.printStackTrace()
-//        return false
-//    }
-//}
-
-        // 获取RemoteViews对象的方法
         @SuppressLint("ServiceCast")
         fun getRemoteViews(context: Context, widgetId: Int): RemoteViews {
-            // 创建RemoteViews对象，指定布局文件
-            if (!UserBoxUtils.isInitialized()) {
-                println("UserBoxUtils not initialized")
-                UserBoxUtils.init(context)
-            }
-            if (!BaseDataBoxUtils.isInitialized()) {
-                println("BaseDataBoxUtils not initialized")
-                BaseDataBoxUtils.init(context)
-            }
-            // 带缓存的学期开始日期获取
-            if (cachedSemesterStartDate == null) {
-                cachedSemesterStartDate = LocalDate.parse(TimeManager.getInstance().getSemesterStartDate())
-                    .atStartOfDay(ZoneId.systemDefault())
-                    .toInstant()
-                    .toEpochMilli()
+            // 1. 防御性初始化
+            ensureInitialized(context)
+
+            // 2. Alarm 防杀与保活 (防御性注册)
+            ensureAlarmRegistered(context)
+
+            // 3. 计算周数与加载数据
+            prepareData(context)
+
+            // 4. 获取布局配置
+            val appWidgetManager = AppWidgetManager.getInstance(context)
+            val options = appWidgetManager.getAppWidgetOptions(widgetId)
+            val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0)
+            val isWideMode = minWidth > 200
+            val maxCount = if (isWideMode) 4 else 2
+
+            val layoutId = if (isWideMode) R.layout.curriculums_widget_wide else R.layout.curriculums_widget
+            val remoteViews = RemoteViews(context.packageName, layoutId)
+
+            // 5. 基础 UI 设置
+            setupBaseUI(context, remoteViews, widgetId, isWideMode)
+
+            // 6. 从队列中移除已过期的课程
+            val validList = getAndFilterTodayCourses()
+
+            if (validList.isEmpty()) {
+                showEmptyState(remoteViews)
+                return remoteViews
             }
 
-            // 带日级别缓存的周数计算
-            val todayDay = LocalDate.now().dayOfYear
-            if (lastUpdateDay != todayDay) {
-                cachedCurrentWeek =
-                    TimeManager.getInstance().calculateCurrentWeek(cachedSemesterStartDate!!)
-                lastUpdateDay = todayDay
-            }
+            // 7. 渲染课程列表
+            try {
+                // 取出要显示的条目 (最多 maxCount)
+                val showList = validList.take(maxCount)
+                for (i in showList.indices) {
+                    val course = showList[i]
+                    val timeColor = if (i > 0 && isConflict(course, showList[i - 1])) Color.RED else Color.WHITE
 
-            // 只在当前周数有效(非-1)且不超过19周时注册时间监听器
-            if (cachedCurrentWeek in 0..19) {
-                try {
-//                    if(!XiaomiUtilities.isFlyme) {
-//                        context.applicationContext.registerReceiver(receiver, FILTER)
-//                    }else {
-                    val appWidgetManager = AppWidgetManager.getInstance(context.applicationContext)
-                    val widgetIds = appWidgetManager.getAppWidgetIds(
-                        ComponentName(
-                            context.applicationContext,
-                            CurriculumsWidgetProvider::class.java
-                        )
-                    )
-                    widgetIds.forEach {
-                        println(it)
-                    }
-                    if (widgetIds.isNotEmpty()) {
-                        val updateIntent =
-                            Intent(
-                                context,
-                                CurriculumsWidgetProvider::class.java
-                            ).apply {
-                                action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
-                                putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, widgetIds)
-                            }
-                        val alarmManager =
-                            context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-
-                        // 直接使用 PendingIntent 调用 updateWidgets 函数
-                        val pendingIntent = PendingIntent.getBroadcast(
-                            context,
-                            0,
-                            updateIntent,
-                            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-                        )
-                        println("PendingIntent created")
-                        // 设置每分钟触发一次的闹钟
-                        alarmManager.setRepeating(
-                            AlarmManager.RTC,
-                            System.currentTimeMillis(),
-                            60 * 1000,
-                            pendingIntent
-                        )
-                    }
-//                    }
-
-                    println("Receiver registered")
-                } catch (e: IllegalArgumentException) {
-                    // 已经注册（可能由其他路径触发）
-                    println("Receiver already registered")
-                    println(e.message)
+                    fillCourseBlock(remoteViews, i, course, timeColor)
                 }
-            }
-            val remoteViews = RemoteViews(context.packageName, R.layout.curriculums_widget)
-            remoteViews.setViewVisibility(R.id.empty_view, View.GONE)
-            remoteViews.setViewVisibility(R.id.course_block_1, View.VISIBLE)
-            remoteViews.setViewVisibility(R.id.course_block_2, View.VISIBLE)
-            val onClick =
-                Intent().setClass(context, CurriculumsWidgetProvider::class.java)
-                    .setAction("CLICK_ACTION")
-                    .putExtra("WIDGET_ID", widgetId)
-            //为布局文件中的按钮设置点击监听
-            val pendingIntent =
-                PendingIntent.getBroadcast(
-                    context,
-                    0,
-                    onClick,
-                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-                )
-            remoteViews.setOnClickPendingIntent(R.id.small_widget, pendingIntent)
 
-
-            LocalDateTime.now().run {
-                remoteViews.apply {
-                    setTextViewText(R.id.month_id, format(CHINA_DATE_FORMATTER))//设置月份
-                    setTextViewText(
-                        R.id.week_id,
-                        dayOfWeek.getDisplayName(
-                            CHINA_WEEK_FORMATTER.first,
-                            CHINA_WEEK_FORMATTER.second
-                        )
-                    )
+                // 隐藏多余的 Block (防止复用导致的残留)
+                for (i in showList.size until 4) {
+                    if (i < IDS_BLOCK.size) {
+                        remoteViews.setViewVisibility(IDS_BLOCK[i], View.GONE)
+                    }
                 }
-            }
 
-            val user = try {
-                UserBoxUtils.getUserById(BaseDataBoxUtils.getCurrentUserId()) ?: User()
             } catch (e: Exception) {
                 e.printStackTrace()
-                return remoteViews
+                showEmptyState(remoteViews)
             }
 
-            val curriculums = user.curriculums.getString("validTimeCourses")
-            if (curriculums == null || curriculums == "") {
-                remoteViews.setViewVisibility(R.id.empty_view, View.VISIBLE)
-                remoteViews.setViewVisibility(R.id.course_block_1, View.GONE)
-                remoteViews.setViewVisibility(R.id.course_block_2, View.GONE)
-                println("没有课表")
-                return remoteViews
-            }
-
-            // 使用 fastjson 解析 JSON 数组字符串
-            val list: List<HashMap<String, String>> = getCourseList(context, curriculums)
-
-            // 过滤出还没结束的课程
-            val sortedList: List<HashMap<String, String>> = try {
-                val now = LocalTime.now()
-                list.filter {
-                    it["time"]?.split("-")?.get(1)?.let { end ->
-                        now.isBefore(LocalTime.parse(end))
-                    } ?: false
-                }.sortedBy {
-                    it["time"]?.split("-")?.get(0)?.let { start ->
-                        LocalTime.parse(start)
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                return remoteViews
-            }
-
-            if (sortedList.isEmpty()) {
-                remoteViews.setViewVisibility(R.id.empty_view, View.VISIBLE)
-                remoteViews.setViewVisibility(R.id.course_block_1, View.GONE)
-                remoteViews.setViewVisibility(R.id.course_block_2, View.GONE)
-                return remoteViews
-            }
-
-            val courseIds = arrayOf(R.id.course_id_1, R.id.course_id_2)
-            val timeIds = arrayOf(R.id.time_id_1, R.id.time_id_2)
-            val locationIds = arrayOf(R.id.location_id_1, R.id.location_id_2)
-            // 获取前2个课程
-            val coursesToShow = sortedList.take(2)
-
-            // 设置组件的文本
-            for (i in 0 until 2) {
-                val course = coursesToShow.getOrNull(i)
-                val courseName = course?.get("course_name") ?: ""
-                val time = course?.get("time") ?: ""
-                val location = course?.get("location") ?: ""
-                remoteViews.setTextViewText(courseIds[i], courseName)
-                remoteViews.setTextViewText(timeIds[i], time)
-                remoteViews.setTextViewText(locationIds[i], location)
-            }
-            // 返回配置好的RemoteViews
             return remoteViews
         }
 
+        private fun ensureInitialized(context: Context) {
+            if (!UserBoxUtils.isInitialized()) {
+                UserBoxUtils.init(context)
+            }
+            if (!BaseDataBoxUtils.isInitialized()) {
+                BaseDataBoxUtils.init(context)
+            }
+        }
 
-        // 更新小部件UI的方法
-        fun updateWidgetUI(
-            context: Context,
-            appWidgetManager: AppWidgetManager,
-            widgetId: Int
-        ) {
-            appWidgetManager.updateAppWidget(widgetId, getRemoteViews(context, widgetId))
+        private fun prepareData(context: Context) {
+            // 学期开始时间
+            if (cachedSemesterStartDate == null) {
+                cachedSemesterStartDate = LocalDate.parse(TimeManager.getInstance().getSemesterStartDate())
+                    .atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            }
+
+            val todayDay = LocalDate.now().dayOfYear
+
+            // 如果日期变更了，或者缓存是空的
+            if (lastUpdateDay != todayDay) {
+                cachedCurrentWeek = TimeManager.getInstance().calculateCurrentWeek(cachedSemesterStartDate!!)
+
+                // 重新解析 JSON
+                val user = UserBoxUtils.getUserById(BaseDataBoxUtils.getCurrentUserId()) ?: User()
+                val curriculumsStr = user.curriculums.getString("validTimeCourses")
+                val allCurriculumData = JSONArray.parseArray(curriculumsStr, Course::class.java) ?: emptyList()
+
+                // 筛选出 今天 + 当前周 的所有课，并按开始时间排序
+                val todayWeekIndex = TimeManager.getInstance().todayWeekIndex()
+                val targetDay = todayWeekIndex + 1
+
+                cachedTodayCourses = allCurriculumData.filter { course ->
+                    course.day == targetDay && course.weekList.contains(cachedCurrentWeek)
+                }.sortedWith(Comparator { c1, c2 ->
+                    if (c1.startNode != c2.startNode) c1.startNode - c2.startNode else c1.name.compareTo(c2.name)
+                }).toMutableList()
+
+                lastUpdateDay = todayDay
+            }
+        }
+
+        // 移除已结束的课程
+        private fun getAndFilterTodayCourses(): List<Course> {
+            val list = cachedTodayCourses ?: return emptyList()
+            if (list.isEmpty()) return emptyList()
+
+            val nowTime = LocalTime.now()
+
+            // 迭代器移除已结束的课程
+            val iterator = list.iterator()
+            while (iterator.hasNext()) {
+                val course = iterator.next()
+                val endTime = CourseTimeUtils.getCourseEndTime(course.startNode, course.step)
+                // 如果课程结束时间早于现在，说明已上完，移除
+                if (endTime.isBefore(nowTime)) {
+                    iterator.remove()
+                }
+            }
+            return list
+        }
+
+        private fun ensureAlarmRegistered(context: Context) {
+            // 只有在学期周数范围内才注册
+            if (cachedCurrentWeek !in 0..19) return
+
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val updateIntent = Intent(context, CurriculumsWidgetProvider::class.java).apply {
+                action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
+            }
+
+            val pendingIntent = PendingIntent.getBroadcast(
+                context,
+                0,
+                updateIntent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            println("PendingIntent created")
+            // 设置每分钟触发一次的闹钟
+            alarmManager.setRepeating(
+                AlarmManager.RTC,
+                System.currentTimeMillis(),
+                60 * 1000,
+                pendingIntent
+            )
+        }
+
+        private fun setupBaseUI(context: Context, rv: RemoteViews, widgetId: Int, isWideMode: Boolean) {
+            // 构造点击 Intent
+            val clickIntent = Intent(context, CurriculumsWidgetProvider::class.java).apply {
+                action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
+
+                //必须放入 ID 数组，否则 onUpdate 不会被调用
+                putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, intArrayOf(widgetId))
+
+                //添加自定义标记
+                putExtra("FORCE_REFRESH", true)
+            }
+
+            val pendingIntent = PendingIntent.getBroadcast(
+                context,
+                widgetId, // 使用 widgetId 作为 requestCode 区分
+                clickIntent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            val rootId = if (isWideMode) R.id.wide_widget else R.id.small_widget
+            rv.setOnClickPendingIntent(rootId, pendingIntent)
+
+            // 时间显示
+            LocalDateTime.now().run {
+                rv.setTextViewText(R.id.month_id, format(CHINA_DATE_FORMATTER))
+                rv.setTextViewText(R.id.week_id, dayOfWeek.getDisplayName(CHINA_WEEK_FORMATTER.first, CHINA_WEEK_FORMATTER.second))
+            }
+
+            // 重置容器可见性
+            rv.setViewVisibility(R.id.empty_view, View.GONE)
+            rv.setViewVisibility(R.id.courses_container, View.VISIBLE)
+        }
+
+        private fun isConflict(current: Course, prev: Course): Boolean {
+            println("Checking conflict: ${current.startNode}, ${prev.startNode}, ${current.startNode <= prev.startNode}")
+            return current.startNode <= prev.startNode
+        }
+
+        private fun fillCourseBlock(rv: RemoteViews, index: Int, course: Course, timeColor: Int) {
+            if (index >= IDS_BLOCK.size) return
+
+            rv.setViewVisibility(IDS_BLOCK[index], View.VISIBLE)
+            rv.setTextViewText(IDS_NAME[index], course.name)
+            rv.setTextViewText(IDS_LOC[index], course.classroom)
+
+            val timeStr = CourseTimeUtils.getDisplayTime(course.startNode, course.step)
+            rv.setTextViewText(IDS_TIME[index], timeStr)
+            rv.setTextColor(IDS_TIME[index], timeColor)
+        }
+
+        private fun showEmptyState(rv: RemoteViews) {
+            rv.setViewVisibility(R.id.empty_view, View.VISIBLE)
+            rv.setViewVisibility(R.id.courses_container, View.GONE)
         }
     }
 
+    override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
+        for (appWidgetId in appWidgetIds) {
+             println("Updating widget: $appWidgetId")
+            appWidgetManager.updateAppWidget(appWidgetId, getRemoteViews(context, appWidgetId))
+        }
+    }
+
+    override fun onAppWidgetOptionsChanged(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int, newOptions: Bundle?) {
+        super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
+
+        // 立即使用新尺寸重新生成视图
+        val remoteViews = getRemoteViews(context, appWidgetId)
+        appWidgetManager.updateAppWidget(appWidgetId, remoteViews)
+
+        println("Widget resized: Options changed for ID $appWidgetId")
+    }
+
     override fun onReceive(context: Context, intent: Intent) {
-        println("Received intent: ${intent.action}")
-        // 调用父类方法
-        if (intent.action.equals("CLICK_ACTION")) {
-            val widgetId = intent.getIntExtra("WIDGET_ID", AppWidgetManager.INVALID_APPWIDGET_ID)
-            if (widgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
+        val action = intent.action
+        println("Received intent: $action")
+
+        if (action == AppWidgetManager.ACTION_APPWIDGET_UPDATE) {
+            if (intent.getBooleanExtra("FORCE_REFRESH", false)) {
                 clearCurriculumCache()
-                println("Widget clicked")
-                AppWidgetManager.getInstance(context)
-                    .updateAppWidget(widgetId, getRemoteViews(context, widgetId))
             }
-        } else if (intent.action.equals(AppWidgetManager.ACTION_APPWIDGET_UPDATE)) {
-            // 获取所有需要更新的小部件ID
-            val appWidgetManager = AppWidgetManager.getInstance(context)
-            val widgetIds = appWidgetManager.getAppWidgetIds(
-                ComponentName(
-                    context,
-                    this::class.java
-                )
-            )
-            // 遍历所有需要更新的小部件ID
-            if (widgetIds != null) {
-                for (widgetId: Int in widgetIds) {
-                    // 更新每个小部件的UI
-                    println("Update widget $widgetId")
-                    AppWidgetManager.getInstance(context)
-                        .updateAppWidget(widgetId, getRemoteViews(context, widgetId))
-                }
+            val extrasIds = intent.getIntArrayExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS)
+
+            // 如果 Intent 里没有 ID (说明是 Alarm 触发的，或者是我们的 updateWidgets 广播漏了 ID)
+            if (extrasIds == null || extrasIds.isEmpty()) {
+                println("Update action detected without IDs. Fetching all widgets...")
+
+                // 手动获取当前所有活跃的小部件 ID
+                val appWidgetManager = AppWidgetManager.getInstance(context)
+                val componentName = ComponentName(context, CurriculumsWidgetProvider::class.java)
+                val allIds = appWidgetManager.getAppWidgetIds(componentName)
+
+                // 手动调用 onUpdate 进行全量更新
+                onUpdate(context, appWidgetManager, allIds)
             }
         }
+
+        super.onReceive(context, intent)
     }
 
     override fun onDisabled(context: Context) {
         super.onDisabled(context)
-        try {
-            context.applicationContext.unregisterReceiver(receiver)
-        } catch (e: IllegalArgumentException) {
-            println("Receiver not registered")
-            println(e.message)
+        // 取消 Alarm
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val updateIntent = Intent(context, CurriculumsWidgetProvider::class.java).apply {
+            action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context, 0, updateIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_NO_CREATE
+        )
+        if (pendingIntent != null) {
+            alarmManager.cancel(pendingIntent)
+            pendingIntent.cancel()
         }
     }
 }

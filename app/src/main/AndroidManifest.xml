@@ -35,7 +35,7 @@
             android:theme="@style/Theme.FuckingNJIT" />
         <!-- 课表小组件 -->
         <activity
-            android:name=".widget.DemoWidgetConfigurationActivity"
+            android:name=".widget.CurriculumsWidgetConfigActivity"
             android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />

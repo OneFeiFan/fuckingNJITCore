@@ -24,9 +24,10 @@ import kotlin.coroutines.suspendCoroutine
 class HttpRequestHelper {
     companion object {
         private var lastLoginCheckTime = 0L
-        private val LOGIN_CHECK_INTERVAL = 60 * 1000 // 1分钟检查一次
+        private const val LOGIN_CHECK_INTERVAL = 60 * 1000 // 1分钟检查一次
         private val okHttpClient: OkHttpClient by lazy {
             OkHttpClient.Builder()
+                .retryOnConnectionFailure(true)
                 .connectTimeout(10, TimeUnit.SECONDS)
                 .readTimeout(15, TimeUnit.SECONDS)
                 .writeTimeout(15, TimeUnit.SECONDS)
@@ -95,10 +96,6 @@ class HttpRequestHelper {
                     Manager.handleException(e, "网络异常，请检查网络连接")
                 }
 
-                is SocketTimeoutException -> {
-                    Manager.handleException(e, "请求超时，请稍后再试")
-                }
-
                 else -> {
                     Manager.handleException(e, "登录验证失败")
                 }
@@ -123,19 +120,14 @@ class HttpRequestHelper {
                     val connection = Jsoup.connect("$BASE_URL$WEBVPN_PATH/jwglxt/xtgl/index_initMenu.html")
                         .cookies(getPersistentCookies(cookie))
                         .followRedirects(false)
-                        .timeout(2500) // 2.5秒超时
+                        .timeout(10000) // 10秒超时
 
                     val response = connection.execute()
 
                     when (response.statusCode()) {
-                        HttpURLConnection.HTTP_OK -> {
-//                            println("登录成功")
-//                            println(response.body())
-                        }
+                        HttpURLConnection.HTTP_OK -> {}
                         //直接重定向到登录页 -> 会话失效
                         HttpURLConnection.HTTP_MOVED_TEMP -> {
-//                            println("重定向到登录页")
-//                            println(response.header("Location"))
                             val location = response.header("Location")
                             if (location?.contains("index_initMenu.html") == true || location?.contains("login_slogin") == true) {
                                 Manager.showToast("需要登录")
@@ -150,8 +142,14 @@ class HttpRequestHelper {
                         }
                     }
                 } catch (e: IOException) {
-                    handleNetworkException(e) // 统一处理网络异常
-                    return ""
+                    when (e) {
+                        is SocketTimeoutException -> {
+                            Manager.handleException(e, "请求超时，请稍后再试")
+                        }else -> {
+                            handleNetworkException(e) // 统一处理网络异常
+                            return ""
+                        }
+                    }
                 }
             }
 

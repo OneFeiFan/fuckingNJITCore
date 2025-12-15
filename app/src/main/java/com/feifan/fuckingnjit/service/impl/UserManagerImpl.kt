@@ -90,7 +90,6 @@ class UserManagerImpl private constructor() : UserManager {
                     }
                 } catch (e: Exception) {
                     Manager.handleException(e, "获取学期开始日期失败")
-                    null  // 返回null表示失败，但不会中断整个流程
                 }
             }).await()
             val userData = (async { Manager.getWebService().getUserData() }).await()

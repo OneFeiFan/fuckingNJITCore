@@ -184,6 +184,8 @@ private fun handleMyTargetNetwork() {
                 this@PortalActivity.mCaptivePortal?.ignoreNetwork()
                 Toast.makeText(this@PortalActivity, "认证失败", Toast.LENGTH_SHORT).show()
             }
+            val cm = getSystemService(ConnectivityManager::class.java)
+            cm.bindProcessToNetwork(null) // 解除绑定
             Manager.dismissDialog()
             finish()
         }
@@ -224,6 +226,8 @@ private fun handleMyTargetNetwork() {
             PortalManager.switchStatus(this, false)
             Toast.makeText(this, "处理失败，请手动登录", Toast.LENGTH_SHORT).show()
         }
+        val cm = getSystemService(ConnectivityManager::class.java)
+        cm.bindProcessToNetwork(null) // 解除绑定
         Manager.dismissDialog()
         finish()
     }

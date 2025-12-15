@@ -30,7 +30,14 @@ class KillYiBan : Activity() {
                 YiBanBoxUtils.init(this@KillYiBan)
             }
 
-            val user = YiBanBoxUtils.getUserByUuid(BaseDataBoxUtils.getCurrentYiBanId())
+            val uuid = BaseDataBoxUtils.getCurrentYiBanId()
+            if (uuid == 0L) {
+                withContext(Dispatchers.Main) { showToast(this@KillYiBan, "未找到易班账号信息") }
+                this@KillYiBan.finish()
+                return@launch
+            }
+
+            val user = YiBanBoxUtils.getUserByUuid(uuid)
             if (user != null) {
                 lateinit var task: Task
                 try {

@@ -43,6 +43,8 @@ dependencies {
     implementation libs.jsoup
     implementation libs.android.loading.animation
     implementation libs.smartupdatedemo
+    implementation libs.androidx.lifecycle.service
+
 
     // 设备兼容框架：https://github.com/getActivity/DeviceCompat
     implementation libs.devicecompat

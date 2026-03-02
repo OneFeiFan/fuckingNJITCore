@@ -152,7 +152,6 @@ class HttpRequestHelper {
                     }
                 }
             }
-
             val request = Request.Builder()
                 .url(url)
                 .headers(COMMON_HEADERS.toHeaders())

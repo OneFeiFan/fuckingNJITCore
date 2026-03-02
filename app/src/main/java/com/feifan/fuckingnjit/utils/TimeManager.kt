@@ -117,23 +117,40 @@ class TimeManager private constructor() {
 
     fun getCurrentSchoolYear(): String {
         val calendar = Calendar.getInstance()
-        val currentMonth = calendar[Calendar.MONTH] // 获取当前月份（0-11）
-        val currentYear = calendar[Calendar.YEAR] // 获取当前年份
+        // Calendar.MONTH: 0..11 (0=1月, 8=9月)
+        val month = calendar[Calendar.MONTH]
+        val year = calendar[Calendar.YEAR]
+        val day = calendar[Calendar.DAY_OF_MONTH]
 
         val schoolYearStart: Int
         val schoolYearEnd: Int
         val semester: Int
 
-        if (currentMonth >= Calendar.JULY) { // 如果当前月份大于或等于6月
-            schoolYearStart = currentYear
-            schoolYearEnd = currentYear + 1
-            semester = 3 // 秋季学期
-        } else { // 否则
-            schoolYearStart = currentYear - 1
-            schoolYearEnd = currentYear
-            semester = 12 // 春季学期
+        // 逻辑：9月及以后，进入新学年，属于第一学期 (3)
+        if (month >= Calendar.JULY) {
+            schoolYearStart = year
+            schoolYearEnd = year + 1
+            semester = 3
         }
-        // 教务系统采用的3表示第一学期，12表示第二学期，很有意思
+        // 逻辑：1月通常还在第一学期期末 (3)
+        else if (month == Calendar.JANUARY) {
+            if(day >= 15 ){
+                schoolYearStart = year - 1
+                schoolYearEnd = year
+                semester = 12
+            }else {
+                schoolYearStart = year - 1
+                schoolYearEnd = year
+                semester = 3
+            }
+        }
+        // 逻辑：2月到6月，属于上一学年的第二学期 (12)
+        else {
+            schoolYearStart = year - 1
+            schoolYearEnd = year
+            semester = 12
+        }
+
         return "$schoolYearStart-$schoolYearEnd-$semester"
     }
 

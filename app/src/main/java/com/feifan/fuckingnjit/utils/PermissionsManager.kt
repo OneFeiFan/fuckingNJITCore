@@ -1,7 +1,6 @@
 package com.feifan.fuckingnjit.utils
 
 import android.annotation.SuppressLint
-import android.app.Activity
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -9,7 +8,7 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.text.TextUtils
 import androidx.core.net.toUri
-import com.feifan.fuckingnjit.utils.PermissionsManager
+import com.feifan.fuckingnjit.service.CoreService
 import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
 import com.hjq.permissions.OnPermissionCallback
 import com.hjq.permissions.XXPermissions
@@ -74,6 +73,10 @@ class PermissionsManager private constructor(private val context: Context) {
             .request(object : OnPermissionCallback {
                 override fun onResult(grantedList: MutableList<IPermission>, deniedList: MutableList<IPermission>) {
                     val allGranted = deniedList.isEmpty()
+                    if(allGranted){
+                        val intent = Intent(context, CoreService::class.java)
+                        context.startForegroundService(intent)
+                    }
                     // 将 IPermission 转为 String 列表返回给前端，方便前端判断哪个被拒了
                     val deniedStrList = deniedList.map { it.toString() }
                     callback(allGranted, deniedStrList)
@@ -85,8 +88,8 @@ class PermissionsManager private constructor(private val context: Context) {
         return listOf(
             PermissionLists.getRecordAudioPermission(),
             PermissionLists.getNotificationServicePermission(),
-            PermissionLists.getWriteExternalStoragePermission(),
-            PermissionLists.getPackageUsageStatsPermission(),
+//            PermissionLists.getWriteExternalStoragePermission(),
+//            PermissionLists.getPackageUsageStatsPermission(),
             PermissionLists.getScheduleExactAlarmPermission()
         )
     }
@@ -108,6 +111,29 @@ class PermissionsManager private constructor(private val context: Context) {
 
     fun requestRequestInstallPackage(callback: (Boolean) -> Unit) =
         requestSinglePermission(PermissionLists.getRequestInstallPackagesPermission(), callback)
+
+    // 通知权限
+    fun checkNotification(): Boolean =
+        XXPermissions.isGrantedPermission(context, PermissionLists.getNotificationServicePermission())
+
+    fun requestNotificationServicePermission(callback: (Boolean) -> Unit) =
+        requestSinglePermission( PermissionLists.getNotificationServicePermission(), callback)
+
+//    // 应用使用状态
+//    fun checkPackageUsageStats(): Boolean =
+//        XXPermissions.isGrantedPermission(context, PermissionLists.getPackageUsageStatsPermission())
+//
+//    fun requesPackageUsageStats(callback: (Boolean) -> Unit) =
+//        requestSinglePermission( PermissionLists.getPackageUsageStatsPermission(), callback)
+
+    // 精确闹钟
+    fun checkScheduleExactAlarm(): Boolean =
+        XXPermissions.isGrantedPermission(context, PermissionLists.getScheduleExactAlarmPermission())
+
+    fun requestScheduleExactAlarm(callback: (Boolean) -> Unit) =
+        requestSinglePermission( PermissionLists.getScheduleExactAlarmPermission(), callback)
+
+
 
 
     // ==========================================
@@ -148,8 +174,7 @@ class PermissionsManager private constructor(private val context: Context) {
      */
     fun isAccessibilitySettingsOn(): Boolean {
         var accessibilityEnabled = 0
-        val service = "${context.packageName}/AppUsageManager"
-
+        val service = "${context.packageName}/com.feifan.fuckingnjit.monitor.AppUsageManager"
         try {
             accessibilityEnabled = Settings.Secure.getInt(
                 context.contentResolver,

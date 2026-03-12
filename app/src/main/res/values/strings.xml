@@ -1,3 +1,4 @@
 <resources>
-    <string name="app_name">fuckingNJIT</string>
+    <string name="app_name">你的门户</string>
+    <string name="accessibility_description">用于获取实时前台应用使用情况</string>
 </resources>

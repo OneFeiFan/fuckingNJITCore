@@ -153,6 +153,7 @@ class WebServiceImpl private constructor() : WebService {
 
     override suspend fun getSemesterStartDate(): String {
         return try {
+            return "2025-02-17"
             val schoolYearFull = TimeManager.getInstance().getCurrentSchoolYear()
             val schoolYear = schoolYearFull.split('-')[0]
             val semester = schoolYearFull.split('-')[2]

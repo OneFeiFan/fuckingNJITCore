@@ -32,6 +32,7 @@ class TimeManager private constructor() {
 //    }
 
     fun getSemesterStartDate(): String {
+        return "2025-02-17"
         val date = BaseDataBoxUtils.getSemesterStartDate()
         try {
             if (date != 0L) {
@@ -74,7 +75,7 @@ class TimeManager private constructor() {
             set(Calendar.MINUTE, 0)
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
-        }.timeInMillis
+        }.timeInMillis - 365L * 24 * 60 * 60 * 1000L;
 
         val diff = (today - start) / (24 * 60 * 60 * 1000) // 毫秒转换为天
 
@@ -146,8 +147,8 @@ class TimeManager private constructor() {
         }
         // 逻辑：2月到6月，属于上一学年的第二学期 (12)
         else {
-            schoolYearStart = year - 1
-            schoolYearEnd = year
+            schoolYearStart = year - 2
+            schoolYearEnd = year - 1
             semester = 12
         }
 

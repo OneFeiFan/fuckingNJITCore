@@ -13,15 +13,25 @@ import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.Looper
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.LifecycleService
+import androidx.lifecycle.lifecycleScope
 import com.feifan.fuckingnjit.monitor.AppUsageManager
 import com.feifan.fuckingnjit.monitor.AudioMonitorManager
 import com.feifan.fuckingnjit.monitor.SleepMotionDetector
 import com.feifan.fuckingnjit.utils.TimeStrategyManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.time.withTimeoutOrNull
+import kotlinx.coroutines.withTimeoutOrNull
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -33,7 +43,7 @@ class CoreService : LifecycleService() {
 
     // 统一心跳间隔: 5秒
     private val HEARTBEAT_INTERVAL = 5000L
-    private var tickCount = 0L
+//    private var tickCount = 0L
 
     // --- 管理器群 ---
 //    private lateinit var cameraManager: CameraPulseManager
@@ -50,7 +60,6 @@ class CoreService : LifecycleService() {
     //    private var audioTrack: AudioTrack? = null
     private var lastScreenState = "点亮 (ON)"
 
-    private val mainHandler = Handler(Looper.getMainLooper())
     private val dateFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 
     // 屏幕广播
@@ -59,15 +68,6 @@ class CoreService : LifecycleService() {
     private lateinit var appName: String
 
     private var lastNotifContent = ""
-
-    private val heartbeatTask = object : Runnable {
-        override fun run() {
-            if (!isRunning) return
-            onHeartbeat(tickCount)
-            tickCount++
-            mainHandler.postDelayed(this, HEARTBEAT_INTERVAL)
-        }
-    }
 
     override fun onCreate() {
         super.onCreate()
@@ -94,8 +94,13 @@ class CoreService : LifecycleService() {
         startForegroundServiceCompat(createNotification("监控服务启动中...", ""))
         if (!isRunning) {
             isRunning = true
-            tickCount = 0
-            mainHandler.post(heartbeatTask)
+//            tickCount = 0
+            lifecycleScope.launch(Dispatchers.Default) {
+                while (isActive && isRunning) {
+                    onHeartbeat()
+                    delay(HEARTBEAT_INTERVAL) // 挂起 5 秒，不占用任何 CPU 资源
+                }
+            }
         }
         return START_STICKY
     }
@@ -103,12 +108,38 @@ class CoreService : LifecycleService() {
     /**
      * 【核心】统一心跳回调 (每 5秒 一次)
      */
-    private fun onHeartbeat(tick: Long) {
+    private suspend fun onHeartbeat() {
         try {
             // 1. 获取上下文
             val pkgName = AppUsageManager.getForegroundPackage()
             val appName = AppUsageManager.getAppName(this, pkgName)
+            var motionScore = 0.0
+            var noiseDb = -1.0
+            coroutineScope {
+// 任务 A：音频检测并发 (跑在 IO 线程，专门应对底层硬件阻塞)
+                val audioDeferred = async(Dispatchers.IO) {
+                    // 【极度健壮的保护】：最多只给麦克风 500 毫秒的时间
+                    withTimeoutOrNull(500) {
+                        audioManager.detectNoise()
+                        // 录音结束后，直接返回内部的变量，解决线程可见性问题
+                        audioManager.lastNoiseDb
+                    }
+                }
+// 任务 B：运动检测并发 (跑在 Default 线程计算)
+                val motionDeferred = async(Dispatchers.Default) {
+                    // 此处调用你之前改成同步阻塞的触发方法
+                    motionDetector.triggerSampleSync()
+                }
 
+                // 终点汇合：等待双方结果
+                motionScore = motionDeferred.await()
+
+                // 如果音频任务超过 500ms 卡死，withTimeoutOrNull 会安全掐断并返回 null
+                noiseDb = audioDeferred.await() ?: run {
+                    Log.e(TAG, "⚠️ 麦克风底层死锁或超时，主动丢弃本次音频数据！")
+                    -1.0
+                }
+            }
             // 2. 环境准入 (Time & Screen & App)
 //            val isEnvOk = timeManager.isCurrentTimeAllowed() &&
 //                    !lastScreenState.contains("OFF") &&
@@ -117,8 +148,7 @@ class CoreService : LifecycleService() {
             // 3. 物理/行为阻断 (推断)
 
             // A. 动作推断
-            motionDetector.triggerSample() // 触发 300ms 采样
-            val motionScore = motionDetector.currentMotionScore
+//            val motionScore = motionDetector.triggerSampleSync() // 触发 300ms 采样
 //            val isMoving = motionScore > 1.5
 
             // B. 交互推断 (10秒内有操作)
@@ -149,10 +179,10 @@ class CoreService : LifecycleService() {
 //            }
 
             // 4. 音频检测
-            audioManager.detectNoise()
+//            audioManager.detectNoise()
 
             // 5. 记录数据
-            val noiseDb = audioManager.lastNoiseDb
+//            val noiseDb = audioManager.lastNoiseDb
 //            MotionLogger.saveDecibelRecord(this, motionScore)
 //            NoiseLogger.saveDecibelRecord(this, noiseDb)
             if (motionScore > 0) noiseDb / motionScore else 0.0
@@ -267,7 +297,6 @@ class CoreService : LifecycleService() {
 
     override fun onDestroy() {
         isRunning = false
-        mainHandler.removeCallbacksAndMessages(null)
 
 //        if (::cameraManager.isInitialized) cameraManager.destroy()
 //        if (::audioManager.isInitialized) audioManager.release()

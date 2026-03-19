@@ -8,6 +8,7 @@ import android.hardware.SensorManager
 import android.os.Handler
 import android.os.HandlerThread
 import android.util.Log
+import kotlinx.coroutines.delay
 import kotlin.math.sqrt
 
 class SleepMotionDetector(context: Context) : SensorEventListener {
@@ -39,7 +40,7 @@ class SleepMotionDetector(context: Context) : SensorEventListener {
      * 触发一次采样 (由 Service 调用)
      * 逻辑：开启 -> 延时1秒 -> 关闭并计算
      */
-    fun triggerSample() {
+    suspend fun triggerSampleSync(): Double {
         // 重置
         sumSquares = 0.0
         sampleCount = 0
@@ -47,13 +48,13 @@ class SleepMotionDetector(context: Context) : SensorEventListener {
         accelerometer?.let {
             try {
                 sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL, handler)
-                // 1秒后自动关闭
-                handler.postDelayed(stopTask, 300)
+                delay(300)//主心跳采用了后台进程，所以这里直接改为阻塞实现
             } catch (e: Exception) {
                 Log.e("SleepMotionDetector", "Register failed", e)
                 e.printStackTrace()
             }
         }
+        return currentMotionScore
     }
 
     private fun stopInternal() {

@@ -6,8 +6,8 @@ import android.content.Context
 import android.content.Intent
 import android.os.PowerManager
 import android.provider.Settings
-import android.text.TextUtils
 import androidx.core.net.toUri
+import com.feifan.fuckingnjit.monitor.AppUsageManager
 import com.feifan.fuckingnjit.service.CoreService
 import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
 import com.hjq.permissions.OnPermissionCallback
@@ -16,20 +16,23 @@ import com.hjq.permissions.permission.PermissionLists
 import com.hjq.permissions.permission.base.IPermission
 
 
-
 /**
  * 权限与业务状态管理器 (专为 uni-app 桥接设计)
  * 采用 object 声明，彻底杜绝 Context 内存泄漏
  */
-class PermissionsManager private constructor(private val context: Context) {
+class PermissionsManager private constructor(private var context: Context) {
     companion object {
         @SuppressLint("StaticFieldLeak")
         @Volatile
         private var instance: PermissionsManager? = null
 
         fun getInstance(context: Context): PermissionsManager {
-            return instance ?: synchronized(this) {
-                instance ?: PermissionsManager(context).also { instance = it }
+            return instance?.apply {
+                this.context = context
+            } ?: synchronized(this) {
+                instance?.apply {
+                    this.context = context
+                } ?: PermissionsManager(context).also { instance = it }
             }
         }
     }
@@ -71,9 +74,12 @@ class PermissionsManager private constructor(private val context: Context) {
         XXPermissions.with(context)
             .permissions(getKeepAlivePermissionList())
             .request(object : OnPermissionCallback {
-                override fun onResult(grantedList: MutableList<IPermission>, deniedList: MutableList<IPermission>) {
+                override fun onResult(
+                    grantedList: MutableList<IPermission>,
+                    deniedList: MutableList<IPermission>
+                ) {
                     val allGranted = deniedList.isEmpty()
-                    if(allGranted){
+                    if (allGranted) {
                         val intent = Intent(context, CoreService::class.java)
                         context.startForegroundService(intent)
                     }
@@ -103,21 +109,27 @@ class PermissionsManager private constructor(private val context: Context) {
         XXPermissions.isGrantedPermission(context, PermissionLists.getRecordAudioPermission())
 
     fun requestRecordAudio(callback: (Boolean) -> Unit) =
-        requestSinglePermission( PermissionLists.getRecordAudioPermission(), callback)
+        requestSinglePermission(PermissionLists.getRecordAudioPermission(), callback)
 
     // --- 安装未知应用权限 ---
     fun checkRequestInstallPackage(): Boolean =
-        XXPermissions.isGrantedPermission(context, PermissionLists.getRequestInstallPackagesPermission())
+        XXPermissions.isGrantedPermission(
+            context,
+            PermissionLists.getRequestInstallPackagesPermission()
+        )
 
     fun requestRequestInstallPackage(callback: (Boolean) -> Unit) =
         requestSinglePermission(PermissionLists.getRequestInstallPackagesPermission(), callback)
 
     // 通知权限
     fun checkNotification(): Boolean =
-        XXPermissions.isGrantedPermission(context, PermissionLists.getNotificationServicePermission())
+        XXPermissions.isGrantedPermission(
+            context,
+            PermissionLists.getNotificationServicePermission()
+        )
 
     fun requestNotificationServicePermission(callback: (Boolean) -> Unit) =
-        requestSinglePermission( PermissionLists.getNotificationServicePermission(), callback)
+        requestSinglePermission(PermissionLists.getNotificationServicePermission(), callback)
 
 //    // 应用使用状态
 //    fun checkPackageUsageStats(): Boolean =
@@ -128,12 +140,13 @@ class PermissionsManager private constructor(private val context: Context) {
 
     // 精确闹钟
     fun checkScheduleExactAlarm(): Boolean =
-        XXPermissions.isGrantedPermission(context, PermissionLists.getScheduleExactAlarmPermission())
+        XXPermissions.isGrantedPermission(
+            context,
+            PermissionLists.getScheduleExactAlarmPermission()
+        )
 
     fun requestScheduleExactAlarm(callback: (Boolean) -> Unit) =
-        requestSinglePermission( PermissionLists.getScheduleExactAlarmPermission(), callback)
-
-
+        requestSinglePermission(PermissionLists.getScheduleExactAlarmPermission(), callback)
 
 
     // ==========================================
@@ -155,15 +168,19 @@ class PermissionsManager private constructor(private val context: Context) {
     fun requestIgnoreBatteryOptimizations() {
         try {
             val intent = Intent().apply {
-                component = ComponentName("com.android.settings", "com.android.settings.fuelgauge.RequestIgnoreBatteryOptimizations")
+                component = ComponentName(
+                    "com.android.settings",
+                    "com.android.settings.fuelgauge.RequestIgnoreBatteryOptimizations"
+                )
                 data = "package:${context.packageName}".toUri()
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
         } catch (e: Exception) {
-            val fallbackIntent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
+            val fallbackIntent =
+                Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
             context.startActivity(fallbackIntent)
         }
     }
@@ -173,34 +190,36 @@ class PermissionsManager private constructor(private val context: Context) {
      * @param serviceClassName 你的无障碍服务完整类名，例如 "com.feifan.keepalive.AppUsageManager"
      */
     fun isAccessibilitySettingsOn(): Boolean {
-        var accessibilityEnabled = 0
-        val service = "${context.packageName}/com.feifan.fuckingnjit.monitor.AppUsageManager"
-        try {
-            accessibilityEnabled = Settings.Secure.getInt(
-                context.contentResolver,
-                Settings.Secure.ACCESSIBILITY_ENABLED
-            )
-        } catch (e: Settings.SettingNotFoundException) {
-            return false
-        }
-
-        if (accessibilityEnabled == 1) {
-            val settingValue = Settings.Secure.getString(
-                context.contentResolver,
-                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-            )
-            if (settingValue != null) {
-                val splitter = TextUtils.SimpleStringSplitter(':')
-                splitter.setString(settingValue)
-                while (splitter.hasNext()) {
-                    val accessibilityService = splitter.next()
-                    if (accessibilityService.equals(service, ignoreCase = true)) {
-                        return true
-                    }
-                }
-            }
-        }
-        return false
+        return !AppUsageManager.isServiceZombie(context)
+//        var accessibilityEnabled = 0
+//        val service = "${context.packageName}/${AppUsageManager::class.java.name}"
+//        println("无障碍名称：$service")
+//        try {
+//            accessibilityEnabled = Settings.Secure.getInt(
+//                context.contentResolver,
+//                Settings.Secure.ACCESSIBILITY_ENABLED
+//            )
+//        } catch (e: Settings.SettingNotFoundException) {
+//            return false
+//        }
+//
+//        if (accessibilityEnabled == 1) {
+//            val settingValue = Settings.Secure.getString(
+//                context.contentResolver,
+//                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+//            )
+//            if (settingValue != null) {
+//                val splitter = TextUtils.SimpleStringSplitter(':')
+//                splitter.setString(settingValue)
+//                while (splitter.hasNext()) {
+//                    val accessibilityService = splitter.next()
+//                    if (accessibilityService.equals(service, ignoreCase = true)) {
+//                        return true
+//                    }
+//                }
+//            }
+//        }
+//        return false
     }
 
     /**
@@ -221,7 +240,10 @@ class PermissionsManager private constructor(private val context: Context) {
         XXPermissions.with(context)
             .permission(permission)
             .request(object : OnPermissionCallback {
-                override fun onResult(grantedList: MutableList<IPermission>, deniedList: MutableList<IPermission>) {
+                override fun onResult(
+                    grantedList: MutableList<IPermission>,
+                    deniedList: MutableList<IPermission>
+                ) {
                     // 只要没有被拒绝的，就认为是成功
                     callback(deniedList.isEmpty())
                 }

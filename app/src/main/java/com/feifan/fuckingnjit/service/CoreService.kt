@@ -1,5 +1,6 @@
 package com.feifan.fuckingnjit.service
 
+//noinspection SuspiciousImport
 import android.R
 import android.app.Notification
 import android.app.NotificationChannel
@@ -22,7 +23,6 @@ import com.feifan.fuckingnjit.monitor.AudioMonitorManager
 import com.feifan.fuckingnjit.monitor.SleepMotionDetector
 import com.feifan.fuckingnjit.utils.TimeStrategyManager
 import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
 
 class CoreService : LifecycleService() {
@@ -42,11 +42,12 @@ class CoreService : LifecycleService() {
     private lateinit var timeManager: TimeStrategyManager // 【新增】
     private lateinit var motionDetector: SleepMotionDetector
 
-//    private lateinit var proximityManager: ProximityManager
+    //    private lateinit var proximityManager: ProximityManager
     // 基础状态
     private var isRunning = false
     private var wakeLock: PowerManager.WakeLock? = null
-//    private var audioTrack: AudioTrack? = null
+
+    //    private var audioTrack: AudioTrack? = null
     private var lastScreenState = "点亮 (ON)"
 
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -109,43 +110,43 @@ class CoreService : LifecycleService() {
             val appName = AppUsageManager.getAppName(this, pkgName)
 
             // 2. 环境准入 (Time & Screen & App)
-            val isEnvOk = timeManager.isCurrentTimeAllowed() &&
-                    !lastScreenState.contains("OFF") &&
-                    AppUsageManager.isTargetAppForCamera(this, pkgName)
+//            val isEnvOk = timeManager.isCurrentTimeAllowed() &&
+//                    !lastScreenState.contains("OFF") &&
+//                    AppUsageManager.isTargetAppForCamera(this, pkgName)
 
             // 3. 物理/行为阻断 (推断)
 
             // A. 动作推断
             motionDetector.triggerSample() // 触发 300ms 采样
             val motionScore = motionDetector.currentMotionScore
-            val isMoving = motionScore > 1.5
+//            val isMoving = motionScore > 1.5
 
             // B. 交互推断 (10秒内有操作)
-            val isInteracting = (System.currentTimeMillis() - AppUsageManager.lastInteractionTime) < 10000
+//            val isInteracting = (System.currentTimeMillis() - AppUsageManager.lastInteractionTime) < 10000
 
             // C. 遮挡推断
 //            val isCovered = proximityManager.isCovered
 
             // --- 决策 ---
 
-            if (isMoving || isInteracting) {
-                // 有人活动 -> 充值信任 -> 跳过相机
+//            if (isMoving || isInteracting) {
+            // 有人活动 -> 充值信任 -> 跳过相机
 //                cameraManager.refreshTrust()
 //                cameraManager.setExternalAllow(false) // 暂时不需要相机
-            } else {
-                // 静止状态 -> 检查是否允许相机
-                // 必须环境合适 + 没遮挡
+//            } else {
+            // 静止状态 -> 检查是否允许相机
+            // 必须环境合适 + 没遮挡
 //                val allowCamera = isEnvOk && !isCovered
 //                cameraManager.setExternalAllow(allowCamera)
 
-                // 触发检测 (根据 Trust 状态频率)
+            // 触发检测 (根据 Trust 状态频率)
 //                val requiredInterval = cameraManager.getRequiredInterval()
-                val currentSec = tick * (HEARTBEAT_INTERVAL / 1000)
+//                val currentSec = tick * (HEARTBEAT_INTERVAL / 1000)
 
 //                if (allowCamera && (currentSec % requiredInterval == 0L)) {
 //                    cameraManager.triggerCheck()
 //                }
-            }
+//            }
 
             // 4. 音频检测
             audioManager.detectNoise()
@@ -154,7 +155,7 @@ class CoreService : LifecycleService() {
             val noiseDb = audioManager.lastNoiseDb
 //            MotionLogger.saveDecibelRecord(this, motionScore)
 //            NoiseLogger.saveDecibelRecord(this, noiseDb)
-            val mixed = if (motionScore > 0) noiseDb/motionScore else 0.0
+            if (motionScore > 0) noiseDb / motionScore else 0.0
 //            mix.saveDecibelRecord(this, mixed)
 
             updateNotification(appName)
@@ -164,9 +165,11 @@ class CoreService : LifecycleService() {
     }
 
     private fun updateNotification(appName: String = "") {
-        val noiseText = if (audioManager.isMicrophoneOccupied) "⏸️ 避让" else "${String.format("%.1f", audioManager.lastNoiseDb)} dB"
+        val noiseText = if (audioManager.isMicrophoneOccupied) "⏸️ 避让" else "${
+            String.format("%.1f", audioManager.lastNoiseDb)
+        } dB"
         val content = """
-            📱 前台: ${if(appName.isEmpty()) "检测中..." else appName}
+            📱 前台: ${appName.ifEmpty { "检测中..." }}
             🔊 噪音: $noiseText
             🛌 动作: ${String.format("%.1f", motionDetector.currentMotionScore)}
             🖥️ 屏幕: $lastScreenState
@@ -174,7 +177,7 @@ class CoreService : LifecycleService() {
 
         if (content != lastNotifContent) {
             lastNotifContent = content
-            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
             manager.notify(NOTIFICATION_ID, createNotification("运行中", content))
         }
     }
@@ -182,7 +185,7 @@ class CoreService : LifecycleService() {
     // --- 辅助方法 ---
 
     private fun createNotification(title: String, content: String): Notification {
-        val packageName = "com.tencent.mm"
+        val packageName = this.packageName
         val intent: Intent? = this.packageManager.getLaunchIntentForPackage(packageName)
         val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
         val style = NotificationCompat.BigTextStyle().bigText(content).setSummaryText("监控服务")
@@ -242,6 +245,7 @@ class CoreService : LifecycleService() {
                         wakeLock?.acquire()
                         lastScreenState = "已锁屏 (OFF)"
                     }
+
                     Intent.ACTION_USER_PRESENT -> {
                         wakeLock?.release()
                         lastScreenState = "点亮 (ON)"
@@ -254,7 +258,8 @@ class CoreService : LifecycleService() {
     }
 
     private fun createNotificationChannel() {
-        val channel = NotificationChannel(CHANNEL_ID, "Monitor Service", NotificationManager.IMPORTANCE_LOW)
+        val channel =
+            NotificationChannel(CHANNEL_ID, "Monitor Service", NotificationManager.IMPORTANCE_LOW)
         channel.setShowBadge(false)
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(channel)
@@ -266,11 +271,17 @@ class CoreService : LifecycleService() {
 
 //        if (::cameraManager.isInitialized) cameraManager.destroy()
 //        if (::audioManager.isInitialized) audioManager.release()
-        if (::motionDetector.isInitialized) { motionDetector.stop(); motionDetector.release() }
+        if (::motionDetector.isInitialized) {
+            motionDetector.stop(); motionDetector.release()
+        }
 //        if (::proximityManager.isInitialized) proximityManager.stop()
 
         wakeLock?.release()
-        try { unregisterReceiver(screenReceiver) } catch (e: Exception) {}
+        try {
+            unregisterReceiver(screenReceiver)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
         super.onDestroy()
     }
 }

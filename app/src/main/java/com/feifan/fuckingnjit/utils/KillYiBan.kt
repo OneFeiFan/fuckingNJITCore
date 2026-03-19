@@ -14,12 +14,13 @@ import kotlinx.coroutines.withContext
 
 class KillYiBan : Activity() {
     private val coroutineScope = CoroutineScope(Dispatchers.IO + Job())
-    
+
     private fun showToast(context: Activity, msg: String) {
         runOnUiThread {
             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
         }
     }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         coroutineScope.launch {
@@ -67,7 +68,7 @@ class KillYiBan : Activity() {
                             this@KillYiBan
                         )
                     }
-                   val result = withContext(Dispatchers.IO) {
+                    val result = withContext(Dispatchers.IO) {
                         task.submitSignFeedback()
                     }
                     withContext(Dispatchers.Main) {

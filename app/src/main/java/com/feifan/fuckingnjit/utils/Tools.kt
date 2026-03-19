@@ -6,7 +6,7 @@ import com.alibaba.fastjson.JSONObject
 
 
 class Tools {
-//    data class TimeSlot(val index: Int, val name: String)
+    //    data class TimeSlot(val index: Int, val name: String)
     companion object {
 //        private val timeSlots = listOf(
 //            TimeSlot(1, "08:00-08:45"),

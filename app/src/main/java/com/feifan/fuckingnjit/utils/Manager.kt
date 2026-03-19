@@ -53,14 +53,19 @@ class Manager {
                 }
                 if (!BaseDataBoxUtils.isInitialized()) {
                     BaseDataBoxUtils.init(context)
-                    DbClearHelper.checkAndClear(context, BaseDataBoxUtils.getBoxStore()!!, "base_1.2.5")
+                    DbClearHelper.checkAndClear(
+                        context,
+                        BaseDataBoxUtils.getBoxStore()!!,
+                        "base_1.2.5"
+                    )
                 }
                 coroutineScope.launch {
                     val week = withContext(Dispatchers.Default) {
-                        val startTime = LocalDate.parse(TimeManager.getInstance().getSemesterStartDate())
-                            .atStartOfDay(ZoneId.systemDefault())
-                            .toInstant()
-                            .toEpochMilli()
+                        val startTime =
+                            LocalDate.parse(TimeManager.getInstance().getSemesterStartDate())
+                                .atStartOfDay(ZoneId.systemDefault())
+                                .toInstant()
+                                .toEpochMilli()
                         TimeManager.getInstance().calculateCurrentWeek(startTime)
                     }
 
@@ -81,33 +86,36 @@ class Manager {
 
         }
 
-        suspend fun initYiBan(mobile: String, password: String): JSONObject = withContext(Dispatchers.IO) {
-            return@withContext try {
-                println("initYiBan: $mobile, $password")
-                if(!YiBanBoxUtils.isInitialized()){
-                    YiBanBoxUtils.init(context)
-                }
-                var user = YiBanBoxUtils.getUserById(mobile) ?:YiBan(id=mobile, password=password)
-                println("user: $user")
-                val result = NetworkStatus.Success.toJsonResult(YiBanTask.init(user.id, user.password))
-                println("result: $result")
-                YiBanBoxUtils.insertUser(user)
-                user = YiBanBoxUtils.getUserById(mobile)!!
-                BaseDataBoxUtils.updateBaseData { it.currentYiBanId = user.uuid }
-                val packageManager = context.packageManager
-                val componentName = ComponentName(context, KillYiBan::class.java)
+        suspend fun initYiBan(mobile: String, password: String): JSONObject =
+            withContext(Dispatchers.IO) {
+                return@withContext try {
+                    println("initYiBan: $mobile, $password")
+                    if (!YiBanBoxUtils.isInitialized()) {
+                        YiBanBoxUtils.init(context)
+                    }
+                    var user =
+                        YiBanBoxUtils.getUserById(mobile) ?: YiBan(id = mobile, password = password)
+                    println("user: $user")
+                    val result =
+                        NetworkStatus.Success.toJsonResult(YiBanTask.init(user.id, user.password))
+                    println("result: $result")
+                    YiBanBoxUtils.insertUser(user)
+                    user = YiBanBoxUtils.getUserById(mobile)!!
+                    BaseDataBoxUtils.updateBaseData { it.currentYiBanId = user.uuid }
+                    val packageManager = context.packageManager
+                    val componentName = ComponentName(context, KillYiBan::class.java)
 
-                packageManager.setComponentEnabledSetting(
-                    componentName,
-                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                    PackageManager.DONT_KILL_APP
-                )
-                result
-            }catch (e: Exception){
-                handleException(e, "初始化易班失败")
-                NetworkStatus.UnknownError.toJsonResult(e.message)
+                    packageManager.setComponentEnabledSetting(
+                        componentName,
+                        PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                        PackageManager.DONT_KILL_APP
+                    )
+                    result
+                } catch (e: Exception) {
+                    handleException(e, "初始化易班失败")
+                    NetworkStatus.UnknownError.toJsonResult(e.message)
+                }
             }
-        }
 
 //        fun getSemesterStartDate(): String {
 //            return TimeManager.getInstance().getSemesterStartDate()
@@ -269,7 +277,7 @@ class Manager {
             BaseDataBoxUtils.updateBaseData { it.wifiAuthTupe = type }
         }
 
-        fun getWifiAuthTupe() : String {
+        fun getWifiAuthTupe(): String {
             return BaseDataBoxUtils.getWifiAuthTupe()
         }
 

@@ -25,7 +25,7 @@ object YiBanBoxUtils : BaseBoxUtils() {
 //        return UserBox.all
 //    }
 
-//    // 通过 UUID 查询
+    //    // 通过 UUID 查询
     fun getUserByUuid(uuid: Long): YiBan? {
         return UserBox.get(uuid)
     }

@@ -44,11 +44,7 @@ class UserManagerImpl private constructor() : UserManager {
             val temp = JSONObject()
             temp["name"] = userData.name
             temp["gpa"] = userData.gpa
-            if (userData.id == BaseDataBoxUtils.getCurrentUserId()) {
-                temp["current"] = true
-            } else {
-                temp["current"] = false
-            }
+            temp["current"] = userData.id == BaseDataBoxUtils.getCurrentUserId()
             resultList[userData.id] = temp
         }
         return try {
@@ -93,7 +89,7 @@ class UserManagerImpl private constructor() : UserManager {
                 }
             }).await()
             val userData = (async { Manager.getWebService().getUserData() }).await()
-            val scores = (async { Manager.getWebService().getAllSorces("","") }).await()
+            val scores = (async { Manager.getWebService().getAllSorces("", "") }).await()
 
             if (userData.isEmpty()) {
                 Manager.showToast("获取用户信息失败")
@@ -154,7 +150,7 @@ class UserManagerImpl private constructor() : UserManager {
         }
     }
 
-    suspend fun getUserScores(xnm:String,xqm:String,refresh: Boolean): String {
+    suspend fun getUserScores(xnm: String, xqm: String, refresh: Boolean): String {
         val userData = UserBoxUtils.getUserById(BaseDataBoxUtils.getCurrentUserId())
         if (userData == null) {
             Manager.startLogin(true)
@@ -163,7 +159,7 @@ class UserManagerImpl private constructor() : UserManager {
         }
 
         if (userData.scores.isEmpty() || refresh) {
-            val tmp = Manager.getWebService().getAllSorces(xnm,xqm)
+            val tmp = Manager.getWebService().getAllSorces(xnm, xqm)
             if (!tmp.isEmpty()) {
                 userData.scores = tmp.getJSONArray("data")
                 UserBoxUtils.updateUser(userData)
@@ -212,7 +208,7 @@ class UserManagerImpl private constructor() : UserManager {
                 }
             }
             return userData.academicProgress
-        }catch (e: Exception) {
+        } catch (e: Exception) {
             Manager.handleException(e, "获取学业进度失败")
             return NetworkStatus.UnknownError.toJsonResult()
         }

@@ -6,7 +6,7 @@ import io.objectbox.annotation.Entity
 import io.objectbox.annotation.Id
 
 @Entity
-data class YiBan (
+data class YiBan(
     @Id
     var uuid: Long = 0,
 //    @Convert(converter = RSAPasswordConverter::class, dbType = String::class)

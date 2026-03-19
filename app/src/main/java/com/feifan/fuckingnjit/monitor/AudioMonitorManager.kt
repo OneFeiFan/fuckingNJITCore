@@ -45,7 +45,8 @@ class AudioMonitorManager(private val context: Context) {
     fun detectNoise() {
         // 权限检查
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
-            != PackageManager.PERMISSION_GRANTED) {
+            != PackageManager.PERMISSION_GRANTED
+        ) {
             lastNoiseDb = -1.0
             return
         }
@@ -90,7 +91,8 @@ class AudioMonitorManager(private val context: Context) {
                 if (audioRecord?.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
                     audioRecord?.stop()
                 }
-            } catch (e: Exception) {}
+            } catch (e: Exception) {
+            }
 
             if (totalSamples > 0) {
                 val rms = sqrt(totalSquaredSum / totalSamples)
@@ -114,7 +116,14 @@ class AudioMonitorManager(private val context: Context) {
         if (audioRecord == null) {
             val sampleRate = 8000
             if (recordBufferSize == 0) {
-                recordBufferSize = maxOf(8192, AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT))
+                recordBufferSize = maxOf(
+                    8192,
+                    AudioRecord.getMinBufferSize(
+                        sampleRate,
+                        AudioFormat.CHANNEL_IN_MONO,
+                        AudioFormat.ENCODING_PCM_16BIT
+                    )
+                )
             }
             audioRecord = AudioRecord(
                 MediaRecorder.AudioSource.UNPROCESSED,
@@ -146,7 +155,8 @@ class AudioMonitorManager(private val context: Context) {
                         if (mySessionId == -1) {
                             isOtherRecording = true
                         } else {
-                            isOtherRecording = configs.any { it.clientAudioSessionId != mySessionId }
+                            isOtherRecording =
+                                configs.any { it.clientAudioSessionId != mySessionId }
                         }
                     }
 
@@ -156,7 +166,10 @@ class AudioMonitorManager(private val context: Context) {
 //                        Log.d(TAG, "Mic Occupied: $occupied")
                         if (isMicrophoneOccupied) {
                             // 被抢占，立即停止当前录音
-                            try { audioRecord?.stop() } catch (e: Exception) {}
+                            try {
+                                audioRecord?.stop()
+                            } catch (e: Exception) {
+                            }
                         }
                     }
                 }
@@ -168,13 +181,17 @@ class AudioMonitorManager(private val context: Context) {
     private fun forceRelease() {
         try {
             audioRecord?.release()
-        } catch (e: Exception) {}
+        } catch (e: Exception) {
+        }
         audioRecord = null
     }
 
     fun release() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && audioRecordingCallback != null) {
-            try { audioManager.unregisterAudioRecordingCallback(audioRecordingCallback!!) } catch (e: Exception) {}
+        if (audioRecordingCallback != null) {
+            try {
+                audioManager.unregisterAudioRecordingCallback(audioRecordingCallback!!)
+            } catch (e: Exception) {
+            }
         }
         forceRelease()
     }

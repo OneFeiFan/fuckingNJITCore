@@ -36,10 +36,22 @@ class CurriculumsWidgetProvider : AppWidgetProvider() {
         private val CHINA_DATE_FORMATTER = DateTimeFormatter.ofPattern("M.d hh:mm a", Locale.CHINA)
         private val CHINA_WEEK_FORMATTER = TextStyle.FULL to Locale.CHINA
 
-        private val IDS_BLOCK = intArrayOf(R.id.course_block_1, R.id.course_block_2, R.id.course_block_3, R.id.course_block_4)
-        private val IDS_NAME = intArrayOf(R.id.course_id_1, R.id.course_id_2, R.id.course_id_3, R.id.course_id_4)
-        private val IDS_LOC = intArrayOf(R.id.location_id_1, R.id.location_id_2, R.id.location_id_3, R.id.location_id_4)
-        private val IDS_TIME = intArrayOf(R.id.time_id_1, R.id.time_id_2, R.id.time_id_3, R.id.time_id_4)
+        private val IDS_BLOCK = intArrayOf(
+            R.id.course_block_1,
+            R.id.course_block_2,
+            R.id.course_block_3,
+            R.id.course_block_4
+        )
+        private val IDS_NAME =
+            intArrayOf(R.id.course_id_1, R.id.course_id_2, R.id.course_id_3, R.id.course_id_4)
+        private val IDS_LOC = intArrayOf(
+            R.id.location_id_1,
+            R.id.location_id_2,
+            R.id.location_id_3,
+            R.id.location_id_4
+        )
+        private val IDS_TIME =
+            intArrayOf(R.id.time_id_1, R.id.time_id_2, R.id.time_id_3, R.id.time_id_4)
 
         // --- 2. 缓存策略优化 ---
         private var cachedSemesterStartDate: Long? = null
@@ -60,11 +72,15 @@ class CurriculumsWidgetProvider : AppWidgetProvider() {
 
         fun updateWidgets(context: Context) {
             val appWidgetManager = AppWidgetManager.getInstance(context.applicationContext)
-            val componentName = ComponentName(context.applicationContext, CurriculumsWidgetProvider::class.java)
+            val componentName =
+                ComponentName(context.applicationContext, CurriculumsWidgetProvider::class.java)
             val widgetIds = appWidgetManager.getAppWidgetIds(componentName)
 
             if (widgetIds.isNotEmpty()) {
-                val updateIntent = Intent(context.applicationContext, CurriculumsWidgetProvider::class.java).apply {
+                val updateIntent = Intent(
+                    context.applicationContext,
+                    CurriculumsWidgetProvider::class.java
+                ).apply {
                     action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
                     putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, widgetIds)
                 }
@@ -98,7 +114,8 @@ class CurriculumsWidgetProvider : AppWidgetProvider() {
             val isWideMode = minWidth > 200
             val maxCount = if (isWideMode) 4 else 2
 
-            val layoutId = if (isWideMode) R.layout.curriculums_widget_wide else R.layout.curriculums_widget
+            val layoutId =
+                if (isWideMode) R.layout.curriculums_widget_wide else R.layout.curriculums_widget
             val remoteViews = RemoteViews(context.packageName, layoutId)
 
             // 5. 基础 UI 设置
@@ -118,7 +135,8 @@ class CurriculumsWidgetProvider : AppWidgetProvider() {
                 val showList = validList.take(maxCount)
                 for (i in showList.indices) {
                     val course = showList[i]
-                    val timeColor = if (i > 0 && isConflict(course, showList[i - 1])) Color.RED else Color.WHITE
+                    val timeColor =
+                        if (i > 0 && isConflict(course, showList[i - 1])) Color.RED else Color.WHITE
 
                     fillCourseBlock(remoteViews, i, course, timeColor)
                 }
@@ -150,20 +168,23 @@ class CurriculumsWidgetProvider : AppWidgetProvider() {
         private fun prepareData(context: Context) {
             // 学期开始时间
             if (cachedSemesterStartDate == null) {
-                cachedSemesterStartDate = LocalDate.parse(TimeManager.getInstance().getSemesterStartDate())
-                    .atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                cachedSemesterStartDate =
+                    LocalDate.parse(TimeManager.getInstance().getSemesterStartDate())
+                        .atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
             }
 
             val todayDay = LocalDate.now().dayOfYear
 
             // 如果日期变更了，或者缓存是空的
             if (lastUpdateDay != todayDay) {
-                cachedCurrentWeek = TimeManager.getInstance().calculateCurrentWeek(cachedSemesterStartDate!!)
+                cachedCurrentWeek =
+                    TimeManager.getInstance().calculateCurrentWeek(cachedSemesterStartDate!!)
 
                 // 重新解析 JSON
                 val user = UserBoxUtils.getUserById(BaseDataBoxUtils.getCurrentUserId()) ?: User()
                 val curriculumsStr = user.curriculums.getString("validTimeCourses")
-                val allCurriculumData = JSONArray.parseArray(curriculumsStr, Course::class.java) ?: emptyList()
+                val allCurriculumData =
+                    JSONArray.parseArray(curriculumsStr, Course::class.java) ?: emptyList()
 
                 // 筛选出 今天 + 当前周 的所有课，并按开始时间排序
                 val todayWeekIndex = TimeManager.getInstance().todayWeekIndex()
@@ -172,7 +193,9 @@ class CurriculumsWidgetProvider : AppWidgetProvider() {
                 cachedTodayCourses = allCurriculumData.filter { course ->
                     course.day == targetDay && course.weekList.contains(cachedCurrentWeek)
                 }.sortedWith(Comparator { c1, c2 ->
-                    if (c1.startNode != c2.startNode) c1.startNode - c2.startNode else c1.name.compareTo(c2.name)
+                    if (c1.startNode != c2.startNode) c1.startNode - c2.startNode else c1.name.compareTo(
+                        c2.name
+                    )
                 }).toMutableList()
 
                 lastUpdateDay = todayDay
@@ -224,7 +247,12 @@ class CurriculumsWidgetProvider : AppWidgetProvider() {
             )
         }
 
-        private fun setupBaseUI(context: Context, rv: RemoteViews, widgetId: Int, isWideMode: Boolean) {
+        private fun setupBaseUI(
+            context: Context,
+            rv: RemoteViews,
+            widgetId: Int,
+            isWideMode: Boolean
+        ) {
             // 构造点击 Intent
             val clickIntent = Intent(context, CurriculumsWidgetProvider::class.java).apply {
                 action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
@@ -248,7 +276,13 @@ class CurriculumsWidgetProvider : AppWidgetProvider() {
             // 时间显示
             LocalDateTime.now().run {
                 rv.setTextViewText(R.id.month_id, format(CHINA_DATE_FORMATTER))
-                rv.setTextViewText(R.id.week_id, dayOfWeek.getDisplayName(CHINA_WEEK_FORMATTER.first, CHINA_WEEK_FORMATTER.second))
+                rv.setTextViewText(
+                    R.id.week_id,
+                    dayOfWeek.getDisplayName(
+                        CHINA_WEEK_FORMATTER.first,
+                        CHINA_WEEK_FORMATTER.second
+                    )
+                )
             }
 
             // 重置容器可见性
@@ -279,14 +313,23 @@ class CurriculumsWidgetProvider : AppWidgetProvider() {
         }
     }
 
-    override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
+    override fun onUpdate(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetIds: IntArray
+    ) {
         for (appWidgetId in appWidgetIds) {
-             println("Updating widget: $appWidgetId")
+            println("Updating widget: $appWidgetId")
             appWidgetManager.updateAppWidget(appWidgetId, getRemoteViews(context, appWidgetId))
         }
     }
 
-    override fun onAppWidgetOptionsChanged(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int, newOptions: Bundle?) {
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: Bundle?
+    ) {
         super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
 
         // 立即使用新尺寸重新生成视图

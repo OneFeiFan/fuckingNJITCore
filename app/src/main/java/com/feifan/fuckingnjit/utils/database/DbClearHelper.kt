@@ -7,7 +7,7 @@ import java.io.IOException
 
 object DbClearHelper {
 
-    fun checkAndClear(context: Context, boxStore: BoxStore,fileName:String) {
+    fun checkAndClear(context: Context, boxStore: BoxStore, fileName: String) {
         // 1. 定位标记文件路径 (在 /data/user/0/包名/files/ 目录下)
         val markerFile = File(context.filesDir, fileName)
 

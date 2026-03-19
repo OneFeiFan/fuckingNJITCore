@@ -36,7 +36,7 @@ abstract class BaseWidgetConfigActivity : AppCompatActivity() {
                     it,
                     RemoteViews(this.packageName, R.layout.empty_widget)
                 )
-                appWidgetHost.deleteAppWidgetId(it);
+                appWidgetHost.deleteAppWidgetId(it)
             }
             println("widgetID: $it")
         }

@@ -124,7 +124,10 @@ class CourseManager {
             val courseMap = localData.getJSONObject("local_courses") ?: return list
 
             for (key in courseMap.keys) {
-                val obj = JSONObject.parseObject(courseMap.getJSONObject(key).toJSONString(), Course::class.java)
+                val obj = JSONObject.parseObject(
+                    courseMap.getJSONObject(key).toJSONString(),
+                    Course::class.java
+                )
                 if (obj != null) list.add(obj)
             }
             return list

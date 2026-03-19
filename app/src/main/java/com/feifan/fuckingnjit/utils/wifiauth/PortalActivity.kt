@@ -131,66 +131,67 @@ class PortalActivity : Activity() {
         }
     }
 
-private fun handleMyTargetNetwork() {
-    Log.i(TAG, "确认是目标网络，开始拦截处理")
+    private fun handleMyTargetNetwork() {
+        Log.i(TAG, "确认是目标网络，开始拦截处理")
 
-    // 1. 绑定进程到网络
+        // 1. 绑定进程到网络
 
         if (!BaseDataBoxUtils.isInitialized()) {
             println("BaseDataBoxUtils not initialized")
             BaseDataBoxUtils.init(this)
         }
-            if (!UserBoxUtils.isInitialized()) {
+        if (!UserBoxUtils.isInitialized()) {
             println("UserBoxUtils not initialized")
             UserBoxUtils.init(this)
         }
-    val userId = BaseDataBoxUtils.getCurrentUserId()
-    val type = BaseDataBoxUtils.getWifiAuthTupe()
-    val user = UserBoxUtils.getUserById(userId)
-    val url = "http://172.31.255.156:801/eportal/portal/login?login_method=1&user_account=${user?.id + type}&user_password=${user?.password}"
+        val userId = BaseDataBoxUtils.getCurrentUserId()
+        val type = BaseDataBoxUtils.getWifiAuthTupe()
+        val user = UserBoxUtils.getUserById(userId)
+        val url =
+            "http://172.31.255.156:801/eportal/portal/login?login_method=1&user_account=${user?.id + type}&user_password=${user?.password}"
 
-    // 使用协程处理网络请求
-    coroutineScope.launch {
-        var success = false
-        var retryCount = 0
+        // 使用协程处理网络请求
+        coroutineScope.launch {
+            var success = false
+            var retryCount = 0
 
-        while (retryCount < MAX_RETRY_COUNT && !success) {
-            success = try {
-                // 在IO线程执行网络请求
-                withContext(Dispatchers.IO) {
-                    val call = getHttpClient().newCall(Request.Builder().url(url).build())
-                    val response = call.execute()
-                    response.body?.string()?.let { body ->
-                        body.contains("认证成功") || body.contains("AC999")
-                    } ?: false
+            while (retryCount < MAX_RETRY_COUNT && !success) {
+                success = try {
+                    // 在IO线程执行网络请求
+                    withContext(Dispatchers.IO) {
+                        val call = getHttpClient().newCall(Request.Builder().url(url).build())
+                        val response = call.execute()
+                        response.body?.string()?.let { body ->
+                            body.contains("认证成功") || body.contains("AC999")
+                        } ?: false
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "网络请求失败: ${e.message}")
+                    false
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "网络请求失败: ${e.message}")
-                false
+
+                if (!success) {
+                    retryCount++
+                    delay(1000) // 重试延迟1秒
+                }
             }
 
-            if (!success) {
-                retryCount++
-                delay(1000) // 重试延迟1秒
+            // 在主线程更新UI
+            withContext(Dispatchers.Main) {
+                if (success) {
+                    this@PortalActivity.mCaptivePortal?.reportCaptivePortalDismissed()
+                    Toast.makeText(this@PortalActivity, "认证成功", Toast.LENGTH_SHORT).show()
+                } else {
+                    this@PortalActivity.mCaptivePortal?.ignoreNetwork()
+                    Toast.makeText(this@PortalActivity, "认证失败", Toast.LENGTH_SHORT).show()
+                }
+                val cm = getSystemService(ConnectivityManager::class.java)
+                cm.bindProcessToNetwork(null) // 解除绑定
+                Manager.dismissDialog()
+                finish()
             }
-        }
-
-        // 在主线程更新UI
-        withContext(Dispatchers.Main) {
-            if (success) {
-                this@PortalActivity.mCaptivePortal?.reportCaptivePortalDismissed()
-                Toast.makeText(this@PortalActivity, "认证成功", Toast.LENGTH_SHORT).show()
-            } else {
-                this@PortalActivity.mCaptivePortal?.ignoreNetwork()
-                Toast.makeText(this@PortalActivity, "认证失败", Toast.LENGTH_SHORT).show()
-            }
-            val cm = getSystemService(ConnectivityManager::class.java)
-            cm.bindProcessToNetwork(null) // 解除绑定
-            Manager.dismissDialog()
-            finish()
         }
     }
-}
 
 
     private fun forwardToSystemComponent() {

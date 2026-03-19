@@ -59,7 +59,8 @@ class SleepMotionDetector(context: Context) : SensorEventListener {
     private fun stopInternal() {
         try {
             sensorManager.unregisterListener(this)
-        } catch (e: Exception) {}
+        } catch (e: Exception) {
+        }
 
         currentMotionScore = calculateScore()
     }
@@ -97,12 +98,18 @@ class SleepMotionDetector(context: Context) : SensorEventListener {
 
     fun release() {
         handler.removeCallbacksAndMessages(null)
-        try { sensorManager.unregisterListener(this) } catch (e: Exception) {}
+        try {
+            sensorManager.unregisterListener(this)
+        } catch (e: Exception) {
+        }
         workerThread.quitSafely()
     }
 
     fun stop() {
         handler.removeCallbacks(stopTask)
-        try { sensorManager.unregisterListener(this) } catch (e: Exception) {}
+        try {
+            sensorManager.unregisterListener(this)
+        } catch (e: Exception) {
+        }
     }
 }

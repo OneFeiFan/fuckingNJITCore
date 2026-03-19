@@ -13,7 +13,7 @@ interface WebService {
         buildingId: String
     ): String
 
-    suspend fun getAllSorces(xnm:String,xqm:String): JSONObject
+    suspend fun getAllSorces(xnm: String, xqm: String): JSONObject
     suspend fun getSorcesDetail(
         classId: String,
         schoolYear: String,

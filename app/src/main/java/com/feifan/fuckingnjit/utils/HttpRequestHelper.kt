@@ -117,10 +117,11 @@ class HttpRequestHelper {
             if (checkLoginIfNeeded()) {
                 lastLoginCheckTime = System.currentTimeMillis()
                 try {
-                    val connection = Jsoup.connect("$BASE_URL$WEBVPN_PATH/jwglxt/xtgl/index_initMenu.html")
-                        .cookies(getPersistentCookies(cookie))
-                        .followRedirects(false)
-                        .timeout(10000) // 10秒超时
+                    val connection =
+                        Jsoup.connect("$BASE_URL$WEBVPN_PATH/jwglxt/xtgl/index_initMenu.html")
+                            .cookies(getPersistentCookies(cookie))
+                            .followRedirects(false)
+                            .timeout(10000) // 10秒超时
 
                     val response = connection.execute()
 
@@ -129,7 +130,10 @@ class HttpRequestHelper {
                         //直接重定向到登录页 -> 会话失效
                         HttpURLConnection.HTTP_MOVED_TEMP -> {
                             val location = response.header("Location")
-                            if (location?.contains("index_initMenu.html") == true || location?.contains("login_slogin") == true) {
+                            if (location?.contains("index_initMenu.html") == true || location?.contains(
+                                    "login_slogin"
+                                ) == true
+                            ) {
                                 Manager.showToast("需要登录")
                                 Manager.startLogin(true)
                                 return ""
@@ -137,7 +141,10 @@ class HttpRequestHelper {
                         }
                         // 其他状态码处理
                         else -> {
-                            Manager.handleException(Exception("HTTP状态异常: ${response.statusCode()}"), "登录验证失败")
+                            Manager.handleException(
+                                Exception("HTTP状态异常: ${response.statusCode()}"),
+                                "登录验证失败"
+                            )
                             return ""
                         }
                     }
@@ -145,7 +152,9 @@ class HttpRequestHelper {
                     when (e) {
                         is SocketTimeoutException -> {
                             Manager.handleException(e, "请求超时，请稍后再试")
-                        }else -> {
+                        }
+
+                        else -> {
                             handleNetworkException(e) // 统一处理网络异常
                             return ""
                         }
@@ -189,6 +198,7 @@ class HttpRequestHelper {
                 }
             }
         }
+
         suspend fun getJsonResponse(
             url: String,
             method: HttpMethod = HttpMethod.GET,

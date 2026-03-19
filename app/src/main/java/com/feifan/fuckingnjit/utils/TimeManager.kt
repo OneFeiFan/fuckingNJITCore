@@ -75,7 +75,7 @@ class TimeManager private constructor() {
             set(Calendar.MINUTE, 0)
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
-        }.timeInMillis - 365L * 24 * 60 * 60 * 1000L;
+        }.timeInMillis - 365L * 24 * 60 * 60 * 1000L
 
         val diff = (today - start) / (24 * 60 * 60 * 1000) // 毫秒转换为天
 
@@ -135,11 +135,11 @@ class TimeManager private constructor() {
         }
         // 逻辑：1月通常还在第一学期期末 (3)
         else if (month == Calendar.JANUARY) {
-            if(day >= 15 ){
+            if (day >= 15) {
                 schoolYearStart = year - 1
                 schoolYearEnd = year
                 semester = 12
-            }else {
+            } else {
                 schoolYearStart = year - 1
                 schoolYearEnd = year
                 semester = 3

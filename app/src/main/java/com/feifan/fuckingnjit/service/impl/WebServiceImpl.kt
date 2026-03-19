@@ -88,7 +88,7 @@ class WebServiceImpl private constructor() : WebService {
             val hiddenMap = CourseManager.getHiddenRules(studentId)
 
             // 3. 高效过滤
-            val (hiddenSystemCourses,validSystemCourses) = allCourses.partition { course ->
+            val (hiddenSystemCourses, validSystemCourses) = allCourses.partition { course ->
                 // 构造当前课程的 Key
                 val specificKey = "${course.id}@${course.day}@${course.startNode}"
                 hiddenMap.containsKey(specificKey)
@@ -237,7 +237,7 @@ class WebServiceImpl private constructor() : WebService {
                     "time" to "1"
                 )
                 val result =
-                    HttpRequestHelper.getJsonResponse(url, HttpMethod.POST,  formBody)
+                    HttpRequestHelper.getJsonResponse(url, HttpMethod.POST, formBody)
                 if (result.isEmpty()) {
                     return "{}"
                 }
@@ -250,7 +250,7 @@ class WebServiceImpl private constructor() : WebService {
         }
     }
 
-    override suspend fun getAllSorces(xnm:String,xqm:String): JSONObject {
+    override suspend fun getAllSorces(xnm: String, xqm: String): JSONObject {
         return try {
             val url = buildUrl(
                 "/jwglxt/cjcx/cjcx_cxXsgrcj.html",
@@ -358,6 +358,7 @@ class WebServiceImpl private constructor() : WebService {
             NetworkStatus.UnknownError.toJsonResult(e.message)
         }
     }
+
     override suspend fun getAcademicProgress(): JSONObject {
         return try {
             //获取基础的3个参数
@@ -422,7 +423,7 @@ class WebServiceImpl private constructor() : WebService {
         }
     }
 
-    fun getDate(): String{
+    fun getDate(): String {
         try {
             val startTime = System.nanoTime()
             val result = JSONObject()
@@ -440,12 +441,12 @@ class WebServiceImpl private constructor() : WebService {
             println("执行时间: $duration 秒")
             return result.toJSONString()
         } catch (e: Exception) {
-            Manager.handleException(e,"时间获取失败：getDate")
+            Manager.handleException(e, "时间获取失败：getDate")
             return "{}"
         }
     }
 
-    fun saveCourse(courseJson: String,hideRule: String?): JSONObject {
+    fun saveCourse(courseJson: String, hideRule: String?): JSONObject {
         try {
             val studentId = BaseDataBoxUtils.getCurrentUserId()
             // 1. 如果有 hideId (说明是修改系统课程)，先隐藏原课程
@@ -463,7 +464,7 @@ class WebServiceImpl private constructor() : WebService {
             // 2. 保存新课程
             val course = JSONObject.parseObject(courseJson, Course::class.java)
 
-            if(course.step == 0 || course.weekList.isEmpty()){
+            if (course.step == 0 || course.weekList.isEmpty()) {
                 return NetworkStatus.UnknownError.toJsonResult("课程数据结构异常")
             }
             val success = CourseManager.saveLocalCourse(studentId, course)
@@ -479,7 +480,7 @@ class WebServiceImpl private constructor() : WebService {
         }
     }
 
-    fun deleteCourse(courseId: String,isSystem: Boolean,day: Int?,start: Int?): JSONObject {
+    fun deleteCourse(courseId: String, isSystem: Boolean, day: Int?, start: Int?): JSONObject {
         try {
             val studentId = BaseDataBoxUtils.getCurrentUserId()
             if (courseId.isEmpty()) {
@@ -509,7 +510,7 @@ class WebServiceImpl private constructor() : WebService {
         }
     }
 
-    fun restoreCourse(courseId: String,day: Int,start: Int): JSONObject {
+    fun restoreCourse(courseId: String, day: Int, start: Int): JSONObject {
         try {
             val studentId = BaseDataBoxUtils.getCurrentUserId()
             val success = CourseManager.removeHiddenRule(studentId, courseId, day, start)

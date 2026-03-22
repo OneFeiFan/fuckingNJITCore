@@ -31,11 +31,6 @@ class SleepMotionDetector(context: Context) : SensorEventListener {
     private val workerThread = HandlerThread("MotionThread").apply { start() }
     private val handler = Handler(workerThread.looper)
 
-    // 内部停止任务 (1秒后自动停止)
-    private val stopTask = Runnable {
-        stopInternal()
-    }
-
     /**
      * 触发一次采样 (由 Service 调用)
      * 逻辑：开启 -> 延时1秒 -> 关闭并计算
@@ -49,6 +44,7 @@ class SleepMotionDetector(context: Context) : SensorEventListener {
             try {
                 sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL, handler)
                 delay(300)//主心跳采用了后台进程，所以这里直接改为阻塞实现
+                stopInternal()
             } catch (e: Exception) {
                 Log.e("SleepMotionDetector", "Register failed", e)
                 e.printStackTrace()
@@ -107,7 +103,6 @@ class SleepMotionDetector(context: Context) : SensorEventListener {
     }
 
     fun stop() {
-        handler.removeCallbacks(stopTask)
         try {
             sensorManager.unregisterListener(this)
         } catch (e: Exception) {

@@ -51,14 +51,14 @@ class AudioMonitorManager(private val context: Context) {
             return
         }
 
-        // 占用检查
-        if (isMicrophoneOccupied) {
-            lastNoiseDb = 0.0
-            return
-        }
-
         try {
             ensureAudioRecordInit()
+
+            // 占用检查
+            if (isMicrophoneOccupied) {
+                lastNoiseDb = 0.0
+                return
+            }
 
             if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
                 lastNoiseDb = -1.0
@@ -142,11 +142,16 @@ class AudioMonitorManager(private val context: Context) {
     private fun registerAudioPolicyCallback() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             audioRecordingCallback = object : AudioManager.AudioRecordingCallback() {
+                @RequiresPermission(Manifest.permission.RECORD_AUDIO)
                 override fun onRecordingConfigChanged(configs: List<AudioRecordingConfiguration>) {
                     super.onRecordingConfigChanged(configs)
                     val mode = audioManager.mode
                     val isInCall = mode == AudioManager.MODE_IN_CALL ||
                             mode == AudioManager.MODE_IN_COMMUNICATION
+
+                    if(audioRecord == null){
+                        ensureAudioRecordInit()
+                    }
 
                     val mySessionId = audioRecord?.audioSessionId ?: -1
                     var isOtherRecording = false

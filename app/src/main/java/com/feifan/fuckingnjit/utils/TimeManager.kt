@@ -15,6 +15,20 @@ class TimeManager private constructor() {
     }
 
     private val SDF by lazy { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
+
+    fun getSafeDeleteThreshold(daysToKeep: Int = 7): Long {
+        val calendar = Calendar.getInstance().apply {
+            // 往前推 N 天
+            add(Calendar.DAY_OF_YEAR, -daysToKeep)
+            // 强制将时间拨到中午 12:00:00.000
+            set(Calendar.HOUR_OF_DAY, 12)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        return calendar.timeInMillis
+    }
+
 //    private val DATELIST by lazy {
 //        val today = LocalDate.now() // 今天的日期
 //        val timeFormatter = DateTimeFormatter.ofPattern("HH:mm") // 时间格式化器

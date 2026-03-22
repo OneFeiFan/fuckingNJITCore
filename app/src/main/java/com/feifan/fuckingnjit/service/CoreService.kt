@@ -22,6 +22,7 @@ import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.feifan.fuckingnjit.monitor.AppUsageManager
 import com.feifan.fuckingnjit.monitor.AudioMonitorManager
+import com.feifan.fuckingnjit.monitor.SensorDataBufferManager
 import com.feifan.fuckingnjit.monitor.SleepMotionDetector
 import com.feifan.fuckingnjit.utils.TimeStrategyManager
 import kotlinx.coroutines.Dispatchers
@@ -185,9 +186,8 @@ class CoreService : LifecycleService() {
 //            val noiseDb = audioManager.lastNoiseDb
 //            MotionLogger.saveDecibelRecord(this, motionScore)
 //            NoiseLogger.saveDecibelRecord(this, noiseDb)
-            if (motionScore > 0) noiseDb / motionScore else 0.0
-//            mix.saveDecibelRecord(this, mixed)
-
+            val mixed = if (motionScore > 0) noiseDb / motionScore else 0.0
+            SensorDataBufferManager.addRecord(mixed)
             updateNotification(appName)
         } catch (e: Exception) {
             Log.e(TAG, "Heartbeat error", e)
@@ -311,6 +311,7 @@ class CoreService : LifecycleService() {
         } catch (e: Exception) {
             e.printStackTrace()
         }
+        SensorDataBufferManager.flushToDatabase()
         super.onDestroy()
     }
 }

@@ -1,5 +1,6 @@
 package com.feifan.fuckingnjit.utils
 
+import SleepUploadPayload
 import android.annotation.SuppressLint
 import android.content.ComponentName
 import android.content.Context
@@ -21,6 +22,7 @@ import com.feifan.fuckingnjit.service.impl.UserManagerImpl
 import com.feifan.fuckingnjit.service.impl.WebServiceImpl
 import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
 import com.feifan.fuckingnjit.utils.database.DbClearHelper
+import com.feifan.fuckingnjit.utils.database.SleepSensorBoxUtils
 import com.feifan.fuckingnjit.utils.database.UserBoxUtils
 import com.feifan.fuckingnjit.utils.database.YiBanBoxUtils
 import com.feifan.fuckingnjit.widget.CurriculumsWidgetProvider
@@ -58,6 +60,9 @@ class Manager {
                         BaseDataBoxUtils.getBoxStore()!!,
                         "base_1.2.5"
                     )
+                }
+                if(!SleepSensorBoxUtils.isInitialized()){
+                    SleepSensorBoxUtils.init(context)
                 }
                 coroutineScope.launch {
                     val week = withContext(Dispatchers.Default) {
@@ -117,71 +122,9 @@ class Manager {
                 }
             }
 
-//        fun getSemesterStartDate(): String {
-//            return TimeManager.getInstance().getSemesterStartDate()
-//        }
-
-//        fun getCurrentWeek(): Int {
-//            return BaseDataBoxUtils.getCurrentWeek()
-//        }
-
         fun getPermissionsManager(): PermissionsManager {
             return PermissionsManager.getInstance(context)
         }
-
-//        fun setLocalCurriculums(data: String) {
-//            println(data)
-//            val json = JSONObject.parseObject(data)
-//            val userId = BaseDataBoxUtils.getCurrentUserId()
-//            val user = UserBoxUtils.getUserById(userId)
-//            var localCurriculums = user?.localCurriculums
-//
-//            if (localCurriculums == null) {
-//                localCurriculums = JSONObject()
-//            }
-//
-//
-//
-//                // 遍历 localCurriculums 的所有键
-//                val keys = json.keys.iterator()
-//                while (keys.hasNext()) {
-//                    val key = keys.next()
-//                    localCurriculums[key] = json[key] // 获取值
-//                }
-//                user?.localCurriculums = localCurriculums
-//            user?.let { UserBoxUtils.updateUser(it) }
-//
-//        }
-
-//        fun modifyLocalCurriculums(keys: String) {
-//            println(keys)
-//            val array = JSONArray.parseArray(keys)
-//            val userId = BaseDataBoxUtils.getCurrentUserId()
-//            val user = UserBoxUtils.getUserById(userId)
-//            var localCurriculums = user?.localCurriculums
-//
-//            if (localCurriculums == null) {
-//                localCurriculums = JSONObject()
-//            }
-//
-//                println(localCurriculums.toJSONString())
-//                // 遍历 localCurriculums 的所有键
-//                for (key in array) {
-//                    if(localCurriculums.containsKey(key)){
-//                        localCurriculums.remove(key)
-//                    }
-//                }
-//                user?.localCurriculums = localCurriculums
-//            user?.let { UserBoxUtils.updateUser(it) }
-//
-//        }
-
-//        fun reSetLocalCurriculums() {
-//            val userId = BaseDataBoxUtils.getCurrentUserId()
-//            val user = UserBoxUtils.getUserById(userId)
-//            user?.localCurriculums = JSONObject()
-//            user?.let { UserBoxUtils.updateUser(it) }
-//        }
 
         fun getTimeManager(): TimeManager {
             return TimeManager.getInstance()
@@ -347,5 +290,43 @@ class Manager {
 
             context.startActivity(intent)
         }
+
+        suspend fun uploadAndClearData() = withContext(Dispatchers.IO) {
+            try {
+                val userId = getUserManager().getCurrentUser().id
+                // ==========================================
+                // 第一步：先斩后奏！上传前清空过期数据
+                // ==========================================
+                val splitTimeMs = getTimeManager().getLatestSessionSplitTimeMs()
+                // 复用了你写好的极速清理方法，干掉 12:00 前的历史数据
+                SleepSensorBoxUtils.deleteRecordsBefore(splitTimeMs)
+
+                // ==========================================
+                // 第二步：获取剩下的、绝对新鲜的活跃数据
+                // ==========================================
+                val uploadRecords = SleepSensorBoxUtils.getAll() // 获取全部剩下的
+                if (uploadRecords.isEmpty()) return@withContext
+
+                // 转换结构
+                val uploadPoints = uploadRecords.map { UploadSensorPoint.fromLocalRecord(it) }
+                val payload = SleepUploadPayload(userId = userId, data = uploadPoints)
+
+                // 发送请求
+                val requestBody = JSONObject.toJSONString(payload)
+                val responseString = HttpRequestHelper.executeBaseRequest(
+                    url = "https://unplacid-davian-unatoned.ngrok-free.dev/api/sleep/upload",
+                    method = HttpMethod.POST,
+                    jsonStr = requestBody
+                    // headers 和 cookie 这里睡眠服务器不需要，所以不用传，用默认的即可
+                )
+
+                // 如果代码执行到这里没有抛出异常，说明 response.isSuccessful 必定为 true
+                println("睡眠数据边缘计算上传成功: $responseString")
+            } catch (e: Exception) {
+                e.printStackTrace()
+                println("睡眠数据上传异常: ${e.message}")
+            }
+        }
+
     }
 }

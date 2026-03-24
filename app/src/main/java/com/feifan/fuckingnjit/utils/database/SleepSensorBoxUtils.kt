@@ -5,9 +5,8 @@ import com.feifan.fuckingnjit.model.SleepSensorRecord_
 import io.objectbox.Box
 
 object SleepSensorBoxUtils : BaseBoxUtils(){
+    override fun getDatabaseName() = "SLEEP_SENSOR"
 
-    // 假设你有一个全局的 ObjectBox store 管理类，比如 ObjectBox.store
-    // 请替换为你实际获取 BoxStore 的方式
     private val box: Box<SleepSensorRecord> by lazy {
         getBox(SleepSensorRecord::class.java)
     }
@@ -43,5 +42,7 @@ object SleepSensorBoxUtils : BaseBoxUtils(){
         }
     }
 
-    override fun getDatabaseName() = "SLEEP_SENSOR"
+    fun getAll(): List<SleepSensorRecord> {
+        return box.all
+    }
 }

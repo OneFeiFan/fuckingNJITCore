@@ -2,10 +2,15 @@ package com.feifan.fuckingnjit.utils
 
 import android.content.Context
 import android.webkit.CookieManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.FormBody
+import okhttp3.Headers
 import okhttp3.Headers.Companion.toHeaders
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.io.File
@@ -102,11 +107,68 @@ class HttpRequestHelper {
             }
         }
 
+        /**
+         * 基础网络请求方法
+         */
+        suspend fun executeBaseRequest(
+            url: String,
+            method: HttpMethod = HttpMethod.GET,
+            formParams: Map<String, String>? = null, // 用于传统表单请求 (如教务系统)
+            jsonStr: String? = null,                 // 用于 JSON 请求 (如我们的睡眠算法)
+            headers: Headers? = null,
+            cookie: String? = null
+        ): String = withContext(Dispatchers.IO) {
+
+            val requestBuilder = Request.Builder().url(url)
+
+            if (headers != null) {
+                requestBuilder.headers(headers)
+            } else {
+                requestBuilder.headers(COMMON_HEADERS.toHeaders())
+            }
+
+            if (!cookie.isNullOrBlank()) {
+                requestBuilder.addHeader("Cookie", cookie)
+            }
+
+            if (method == HttpMethod.POST) {
+                // 根据传入的参数决定 Body 类型
+                val body = when {
+                    jsonStr != null -> {
+                        // 发现 JSON 字符串，按 application/json 发送
+                        jsonStr.toRequestBody("application/json; charset=utf-8".toMediaType())
+                    }
+                    formParams != null -> {
+                        // 发现 Map，按传统表单发送
+                        FormBody.Builder().apply {
+                            formParams.forEach { (key, value) -> add(key, value) }
+                        }.build()
+                    }
+                    else -> {
+                        FormBody.Builder().build() // 空 POST
+                    }
+                }
+                requestBuilder.post(body)
+            } else {
+                requestBuilder.get()
+            }
+
+            val request = requestBuilder.build()
+
+            okHttpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw IOException("Unexpected code $response")
+                }
+                response.body?.string() ?: ""
+            }
+        }
+
         private suspend fun makeRequest(
             url: String,
             method: HttpMethod = HttpMethod.GET,
             requestBody: Map<String, String> = emptyMap()
         ): String {
+            // 1. 获取并校验 Cookie
             val cookie = cookieManager.getCookie(BASE_URL)
             if (cookie.isNullOrBlank()) {
                 Manager.showToast("需要登录")
@@ -114,6 +176,7 @@ class HttpRequestHelper {
                 return ""
             }
 
+            // 2. 会话状态/VPN状态校验
             if (checkLoginIfNeeded()) {
                 lastLoginCheckTime = System.currentTimeMillis()
                 try {
@@ -127,12 +190,11 @@ class HttpRequestHelper {
 
                     when (response.statusCode()) {
                         HttpURLConnection.HTTP_OK -> {}
-                        //直接重定向到登录页 -> 会话失效
+                        // 直接重定向到登录页 -> 会话失效
                         HttpURLConnection.HTTP_MOVED_TEMP -> {
                             val location = response.header("Location")
-                            if (location?.contains("index_initMenu.html") == true || location?.contains(
-                                    "login_slogin"
-                                ) == true
+                            if (location?.contains("index_initMenu.html") == true ||
+                                location?.contains("login_slogin") == true
                             ) {
                                 Manager.showToast("需要登录")
                                 Manager.startLogin(true)
@@ -161,41 +223,34 @@ class HttpRequestHelper {
                     }
                 }
             }
-            val request = Request.Builder()
-                .url(url)
-                .headers(COMMON_HEADERS.toHeaders())
-                .addHeader("Cookie", cookie)
-                .apply {
-                    if (method == HttpMethod.POST) {
-                        val formBody = FormBody.Builder().apply {
-                            requestBody.forEach { (key, value) -> add(key, value) }
-                        }.build()
-                        method("POST", formBody)
-                    }
-                }
-                .build()
-            return suspendCoroutine { continuation ->
-                try {
-                    val response = okHttpClient.newCall(request).execute()
-                    val result = response.body?.string() ?: ""
-                    response.close()
-                    continuation.resume(result)
-                } catch (e: Exception) {
-                    if (e is ProtocolException) {
-                        if (e.message?.contains("Too many follow-up requests") == true) {
-                            Manager.handleException(e, "重试次数过多，cookie可能失效,请重新登录")
-                            Manager.startLogin(true)
-                        } else {
-                            Manager.handleException(e, "捕获到其他IO异常")
-                        }
+
+            // 3. 执行基础网络请求，并捕获业务特定的异常
+            return try {
+                // 调用我们刚刚抽离出来的纯净网络请求方法
+                executeBaseRequest(
+                    url = url,
+                    method = method,
+                    formParams = requestBody,
+                    headers = COMMON_HEADERS.toHeaders(),
+                    cookie = cookie
+                )
+            } catch (e: Exception) {
+                // 将原先在 suspendCoroutine 里的 catch 逻辑移到这里
+                if (e is ProtocolException) {
+                    if (e.message?.contains("Too many follow-up requests") == true) {
+                        Manager.handleException(e, "重试次数过多，cookie可能失效,请重新登录")
+                        Manager.startLogin(true)
                     } else {
-                        if (e.message?.contains("onnect") == true) {
-                            Manager.handleException(e, "网络异常，请检查网络连接")
-                        }
-                        Manager.handleException(e, "捕获到非ProtocolException异常")
+                        Manager.handleException(e, "捕获到其他IO异常")
                     }
-                    continuation.resume("")
+                } else {
+                    // 保留原代码中的 "onnect" 匹配逻辑 (匹配 connect / Connect)
+                    if (e.message?.contains("onnect") == true) {
+                        Manager.handleException(e, "网络异常，请检查网络连接")
+                    }
+                    Manager.handleException(e, "捕获到非ProtocolException异常")
                 }
+                "" // 发生异常时返回空字符串，与原逻辑保持一致
             }
         }
 

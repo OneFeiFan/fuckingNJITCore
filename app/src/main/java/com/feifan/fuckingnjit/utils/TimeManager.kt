@@ -16,16 +16,21 @@ class TimeManager private constructor() {
 
     private val SDF by lazy { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
 
-    fun getSafeDeleteThreshold(daysToKeep: Int = 7): Long {
-        val calendar = Calendar.getInstance().apply {
-            // 往前推 N 天
-            add(Calendar.DAY_OF_YEAR, -daysToKeep)
-            // 强制将时间拨到中午 12:00:00.000
-            set(Calendar.HOUR_OF_DAY, 12)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
+    fun getLatestSessionSplitTimeMs(): Long {
+        val calendar = Calendar.getInstance()
+        val currentHour = calendar.get(Calendar.HOUR_OF_DAY)
+
+        // 如果当前时间还没到今天的中午 12 点，那么最近的结束点是“昨天中午 12 点”
+        if (currentHour < 12) {
+            calendar.add(Calendar.DAY_OF_YEAR, -1)
         }
+
+        // 定位到当天的 12:00:00.000
+        calendar.set(Calendar.HOUR_OF_DAY, 12)
+        calendar.set(Calendar.MINUTE, 0)
+        calendar.set(Calendar.SECOND, 0)
+        calendar.set(Calendar.MILLISECOND, 0)
+
         return calendar.timeInMillis
     }
 

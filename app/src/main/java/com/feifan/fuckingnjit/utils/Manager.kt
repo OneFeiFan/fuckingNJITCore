@@ -12,16 +12,19 @@ import android.os.Looper
 import android.webkit.CookieManager
 import android.widget.Toast
 import androidx.core.content.FileProvider
+import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.JSONObject
 import com.example.loadinganimation.LoadingAnimationDialog
 import com.feifan.apkpatch.PatchUtils
 import com.feifan.fuckingnjit.R
+import com.feifan.fuckingnjit.model.SleepRecord
 import com.feifan.fuckingnjit.model.YiBan
 import com.feifan.fuckingnjit.service.impl.SampleWebViewImpl
 import com.feifan.fuckingnjit.service.impl.UserManagerImpl
 import com.feifan.fuckingnjit.service.impl.WebServiceImpl
 import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
 import com.feifan.fuckingnjit.utils.database.DbClearHelper
+import com.feifan.fuckingnjit.utils.database.SleepRecordBoxUtils
 import com.feifan.fuckingnjit.utils.database.SleepSensorBoxUtils
 import com.feifan.fuckingnjit.utils.database.UserBoxUtils
 import com.feifan.fuckingnjit.utils.database.YiBanBoxUtils
@@ -32,6 +35,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.Headers
 import java.io.File
 import java.time.LocalDate
 import java.time.ZoneId
@@ -294,6 +298,8 @@ class Manager {
         suspend fun uploadAndClearData() = withContext(Dispatchers.IO) {
             try {
                 val userId = getUserManager().getCurrentUser().id
+
+                val deviceModel = android.os.Build.MODEL.replace(" ", "_")
                 // ==========================================
                 // 第一步：先斩后奏！上传前清空过期数据
                 // ==========================================
@@ -309,19 +315,63 @@ class Manager {
 
                 // 转换结构
                 val uploadPoints = uploadRecords.map { UploadSensorPoint.fromLocalRecord(it) }
-                val payload = SleepUploadPayload(userId = userId, data = uploadPoints)
+                val payload = SleepUploadPayload(userId = userId+deviceModel, data = uploadPoints)
 
                 // 发送请求
                 val requestBody = JSONObject.toJSONString(payload)
+                val customHeaders = Headers.Builder().apply {
+                    // [核心新增] 添加 ngrok 专属头
+                    add("ngrok-skip-browser-warning", "true")
+                }.build()
                 val responseString = HttpRequestHelper.executeBaseRequest(
                     url = "https://unplacid-davian-unatoned.ngrok-free.dev/api/sleep/upload",
                     method = HttpMethod.POST,
-                    jsonStr = requestBody
+                    jsonStr = requestBody,
+                    headers = customHeaders
                     // headers 和 cookie 这里睡眠服务器不需要，所以不用传，用默认的即可
                 )
 
-                // 如果代码执行到这里没有抛出异常，说明 response.isSuccessful 必定为 true
-                println("睡眠数据边缘计算上传成功: $responseString")
+                val responseObj = JSON.parseObject(responseString)
+
+                if (responseObj != null && responseObj.getInteger("code") == 200) {
+                    val dataObj = responseObj.getJSONObject("data")
+
+                    if (dataObj != null && dataObj.isNotEmpty()) {
+                        // 遍历返回的每一天数据 (解决可能存在的断网多天补发情况)
+                        val targetDate = LocalDate.now().toString()
+
+                            val sleepHours = dataObj.getDoubleValue("sleepHours")
+                            val startTimeMs = dataObj.getLongValue("sleepStartTimeMs")
+                            val wakeUpTimeMs = dataObj.getLongValue("wakeUpTimeMs")
+
+                            if (sleepHours > 0) {
+                                val totalMinutes = (sleepHours * 60).toInt()
+
+                                // 从 ObjectBox 查询今天是否已经有记录了
+                                // 假设你在 SleepRecordBoxUtils 中写了 getByDate(date: String) 方法
+                                val existingRecord = SleepRecordBoxUtils.getByDate(targetDate)
+
+                                if (existingRecord != null) {
+                                    // 更新已有记录
+                                    existingRecord.totalSleepMinutes = totalMinutes
+                                    existingRecord.sleepStartTimeMs = startTimeMs
+                                    existingRecord.wakeUpTimeMs = wakeUpTimeMs
+                                    SleepRecordBoxUtils.insertOrUpdate(existingRecord)
+                                } else {
+                                    // 创建全新记录
+                                    val newRecord = SleepRecord(
+                                        targetDate = targetDate,
+                                        totalSleepMinutes = totalMinutes,
+                                        sleepStartTimeMs = startTimeMs,
+                                        wakeUpTimeMs = wakeUpTimeMs
+                                    )
+                                    SleepRecordBoxUtils.insertOrUpdate(newRecord)
+                                }
+
+                                println("🎉 [$targetDate] 的睡眠数据已完美落盘: 睡了 $totalMinutes 分钟，起止时间均已保存！")
+                            }
+                        }
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
                 println("睡眠数据上传异常: ${e.message}")

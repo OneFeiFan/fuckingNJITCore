@@ -12,10 +12,12 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityWindowInfo
 import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.TypeReference
+import com.feifan.fuckingnjit.utils.TodayScheduleManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 
 /**
  * 二合一组件：无障碍服务 + 应用策略工具
@@ -36,26 +38,23 @@ class AppUsageManager : AccessibilityService() {
         @Volatile
         private var isServiceConnected = false
 
-//        @Volatile
-//        var lastInteractionTime: Long = 0L // 交互时间戳
-
-//        private val launcherPackages = mutableSetOf<String>()
-
-        // 本地包名分类数据库
         private val appCategoryMap = HashMap<String, String>()
 
         @Volatile
         private var isMapLoaded = false
 
-        // 白名单：需要开启相机的分类
-//        private val TARGET_CATEGORIES = setOf(
-//            "影音娱乐",
-//            "社交通讯",
-//            "游戏",
-//            "考试学习"
-//        )
         private val windowIdCache = LruCache<Int, String>(20)
         private val serviceScope = CoroutineScope(Dispatchers.IO + Job())
+
+        @Volatile
+        private var lastPackageName: String = ""
+        @Volatile
+        private var lastSwitchTime: Long = System.currentTimeMillis()
+
+        /**
+         * 【新增】：违规应用类别名单 (在这个名单里的应用，上课玩算作摸鱼)
+         */
+        private val ILLEGAL_CATEGORIES = setOf("游戏", "影音娱乐", "社交网络", "购物", "资讯")
         // --- 静态对外接口 ---
 
         fun getForegroundPackage(): String {
@@ -78,14 +77,6 @@ class AppUsageManager : AccessibilityService() {
             val category = appCategoryMap[pkg]
             return if (category != null) "$label [$category]" else label
         }
-
-//        fun isTargetAppForCamera(context: Context, pkg: String): Boolean {
-//            if (pkg.isEmpty()) return false
-//            if (isSystemLauncher(context, pkg)) return false
-//            return isTargetCategory(context, pkg)
-//        }
-
-        // --- 状态检测方法 (解决假死问题) ---
 
         /**
          * 检测无障碍服务是否“假死”
@@ -132,27 +123,6 @@ class AppUsageManager : AccessibilityService() {
             return false
         }
 
-        // --- 内部辅助方法 ---
-
-//        private fun isTargetCategory(context: Context, pkg: String): Boolean {
-//            ensureMapLoaded(context)
-//
-//            // 1. 查表
-//            val category = appCategoryMap[pkg]
-//            if (category != null) {
-//                return TARGET_CATEGORIES.contains(category)
-//            }
-//
-//            // 2. 兜底策略 (针对未在数据库中的应用)
-//            val lowerPkg = pkg.lowercase()
-//            if (lowerPkg.contains("game") || lowerPkg.contains("video") || lowerPkg.contains("music")) {
-//                return true
-//            }
-//
-//            // 默认允许
-//            return true
-//        }
-
         /**
          * 使用 Fastjson 加载数据
          */
@@ -190,28 +160,6 @@ class AppUsageManager : AccessibilityService() {
                 }
             }
         }
-
-//        private fun isSystemLauncher(context: Context, pkg: String): Boolean {
-//            if (launcherPackages.isEmpty()) {
-//                refreshLauncherPackages(context)
-//            }
-//            return launcherPackages.contains(pkg)
-//        }
-//
-//        private fun refreshLauncherPackages(context: Context) {
-//            try {
-//                val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
-//                val resolveInfoList = context.packageManager.queryIntentActivities(
-//                    intent,
-//                    PackageManager.MATCH_DEFAULT_ONLY
-//                )
-//                for (info in resolveInfoList) {
-//                    launcherPackages.add(info.activityInfo.packageName)
-//                }
-//            } catch (e: Exception) {
-//                e.printStackTrace()
-//            }
-//        }
     }
 
     // --- Service 监听部分 ---
@@ -264,50 +212,6 @@ class AppUsageManager : AccessibilityService() {
         }
     }
 
-//    private fun debugPrintWindowList(windowList: List<AccessibilityWindowInfo>?) {
-//        if (windowList == null || windowList.isEmpty()) {
-//            Log.e("AppMonitor", "🚨 警告: windowList 完全为空或为 null！请检查 XML 配置。")
-//            return
-//        }
-//
-//        Log.d("AppMonitor", "========== 开始打印所有窗口 (总数: ${windowList.size}) ==========")
-//        for ((index, window) in windowList.withIndex()) {
-//            // 将窗口的 int 类型的 type 转换为人类可读的字符串
-//            val typeStr = when (window.type) {
-//                AccessibilityWindowInfo.TYPE_APPLICATION -> "TYPE_APPLICATION (普通应用)"
-//                AccessibilityWindowInfo.TYPE_INPUT_METHOD -> "TYPE_INPUT_METHOD (输入法)"
-//                AccessibilityWindowInfo.TYPE_SYSTEM -> "TYPE_SYSTEM (系统窗口/状态栏/导航栏)"
-//                AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY -> "TYPE_ACCESSIBILITY_OVERLAY (无障碍悬浮窗)"
-//                AccessibilityWindowInfo.TYPE_SPLIT_SCREEN_DIVIDER -> "TYPE_SPLIT_SCREEN_DIVIDER (分屏线)"
-////                AccessibilityWindowInfo.TYPE_PICTURE_IN_PICTURE -> "TYPE_PICTURE_IN_PICTURE (画中画)"
-//                else -> "未知类型 (${window.type})"
-//            }
-//
-//            // 获取窗口在屏幕上的坐标和大小
-//            val bounds = Rect()
-//            window.getBoundsInScreen(bounds)
-//
-//            // 尝试获取包名（注意：这里仅用于调试，遍历获取 root 可能会卡顿）
-//            val pkgName = try {
-//                window.root?.packageName?.toString() ?: "无法获取(可能无焦点或跨域)"
-//            } catch (e: Exception) {
-//                "获取异常"
-//            }
-//
-//            Log.d(
-//                "AppMonitor", """
-//                ▶ 窗口 [$index]:
-//                  - ID: ${window.id}
-//                  - 类型: $typeStr
-//                  - 坐标/大小: $bounds (宽:${bounds.width()}, 高:${bounds.height()})
-//                  - 状态: Focused=${window.isFocused}, Active=${window.isActive}
-//                  - 包名: $pkgName
-//            """.trimIndent()
-//            )
-//        }
-//        Log.d("AppMonitor", "========== 窗口打印结束 ==========")
-//    }
-
     private fun analyzeForegroundWindow() {
         val windowList = windows ?: return
 //        debugPrintWindowList(windowList)
@@ -346,10 +250,62 @@ class AppUsageManager : AccessibilityService() {
                     // 过滤掉系统 UI 和桌面，避免统计干扰
                     if (packageName != "com.android.systemui") {
                         currentForegroundPkg = packageName
+                        settleLastAppDuration(packageName)
                         Log.d("AppMonitor", "当前切换至前台的应用: $currentForegroundPkg")
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * 【核心新增】：上课摸鱼结算器
+     * 计算上一个应用存活了多久，如果是上课时间且玩了违规应用，则记录。
+     */
+    private fun settleLastAppDuration(newPackageName: String) {
+        val now = System.currentTimeMillis()
+        val durationMs = now - lastSwitchTime
+
+        // 1. 如果上一个包不为空，且停留时间超过 10 秒（防止瞬间闪过的闪屏页）
+        if (lastPackageName.isNotEmpty() && durationMs > 10000) {
+
+            // 2. 查一下：刚才这段时间是在上课吗？
+            if (TodayScheduleManager.isCurrentlyInClass()) {
+
+                // 3. 查字典：上个应用是什么分类？
+                val category = appCategoryMap[lastPackageName] ?: "未知"
+
+                // 4. 判定违规并累加
+                if (ILLEGAL_CATEGORIES.contains(category)) {
+                    val durationMins = (durationMs / (1000 * 60)).toInt()
+                    if (durationMins > 0) {
+                        Log.w(TAG, "🔴 摸鱼警告！上课玩 [$lastPackageName] 达 $durationMins 分钟！")
+                        saveDistractionTime(durationMins)
+                    }
+                }
+            }
+        }
+
+        // 5. 状态机推进：无论是否违规，更新时间和包名为新应用，开启下一轮计时
+        lastPackageName = newPackageName
+        lastSwitchTime = now
+    }
+
+    /**
+     * 【核心新增】：将摸鱼时长安全地持久化到 SharedPreferences
+     * 按照每天一个 Key 来存，例如 "distraction_2026-04-05"
+     */
+    private fun saveDistractionTime(addedMins: Int) {
+        try {
+            val prefs = applicationContext.getSharedPreferences("app_usage_stats", Context.MODE_PRIVATE)
+            val todayKey = "distraction_${LocalDate.now()}"
+
+            val currentTotal = prefs.getInt(todayKey, 0)
+            prefs.edit().putInt(todayKey, currentTotal + addedMins).apply()
+
+            Log.d(TAG, "💾 今日累计摸鱼已达: ${currentTotal + addedMins} 分钟")
+        } catch (e: Exception) {
+            Log.e(TAG, "保存摸鱼时长失败", e)
         }
     }
 

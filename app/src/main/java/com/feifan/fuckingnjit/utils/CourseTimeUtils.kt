@@ -45,4 +45,17 @@ object CourseTimeUtils {
             LocalTime.MAX
         }
     }
+
+    /**
+     * 获取课程开始的 LocalTime 对象，用于 AppUsageManager 判断是否处于上课时间
+     */
+    fun getCourseStartTime(startNode: Int): LocalTime {
+        val timeStr = startTimes[startNode] ?: "00:00"
+        val formatted = if (timeStr.length == 4) "0$timeStr" else timeStr
+        return try {
+            LocalTime.parse(formatted)
+        } catch (e: Exception) {
+            LocalTime.MIN
+        }
+    }
 }

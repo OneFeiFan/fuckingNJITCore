@@ -13,10 +13,14 @@ import android.webkit.CookieManager
 import android.widget.Toast
 import androidx.core.content.FileProvider
 import com.alibaba.fastjson.JSON
+import com.alibaba.fastjson.JSONArray
 import com.alibaba.fastjson.JSONObject
 import com.example.loadinganimation.LoadingAnimationDialog
 import com.feifan.apkpatch.PatchUtils
 import com.feifan.fuckingnjit.R
+import com.feifan.fuckingnjit.decision.DecisionEngine
+import com.feifan.fuckingnjit.model.AppMode
+import com.feifan.fuckingnjit.model.Course
 import com.feifan.fuckingnjit.model.SleepRecord
 import com.feifan.fuckingnjit.model.YiBan
 import com.feifan.fuckingnjit.service.impl.SampleWebViewImpl
@@ -39,6 +43,7 @@ import okhttp3.Headers
 import java.io.File
 import java.time.LocalDate
 import java.time.ZoneId
+import androidx.core.content.edit
 
 
 class Manager {
@@ -64,6 +69,9 @@ class Manager {
                         BaseDataBoxUtils.getBoxStore()!!,
                         "base_1.2.5"
                     )
+                }
+                if(!SleepRecordBoxUtils.isInitialized()){
+                    SleepRecordBoxUtils.init(context)
                 }
                 if(!SleepSensorBoxUtils.isInitialized()){
                     SleepSensorBoxUtils.init(context)
@@ -376,6 +384,124 @@ class Manager {
                 e.printStackTrace()
                 println("睡眠数据上传异常: ${e.message}")
             }
+        }
+
+        // ==========================================
+        // 智能决策看板 API (直连前端)
+        // ==========================================
+
+        fun switchAppMode(mode: String): String {
+            // 利用 SharedPreferences 保存，避免修改现有的数据库实体结构
+            val prefs = context.getSharedPreferences("app_decision", Context.MODE_PRIVATE)
+            prefs.edit { putString("current_mode", mode) }
+
+            val result = JSONObject()
+            result["code"] = 200
+            result["msg"] = "切换成功"
+            return result.toJSONString()
+        }
+
+        /**
+         * 前端 Tab 页面 onShow 时调用：获取底层的综合干预看板数据
+         */
+        suspend fun getDashboardInsight(): String = withContext(Dispatchers.IO) {
+            val result = JSONObject()
+            if (!this@Companion::context.isInitialized) return@withContext "{}"
+
+            try {
+                // 1. 获取当前策略模式
+                val prefs = context.getSharedPreferences("app_decision", Context.MODE_PRIVATE)
+                val currentModeStr = prefs.getString("current_mode", "BALANCE_MODE") ?: "BALANCE_MODE"
+
+                println("策略模式:$currentModeStr")
+
+                val mode = when (currentModeStr) {
+                    "SCHOLAR_MODE" -> AppMode.SCHOLAR_MODE
+                    "HEALTH_MODE" -> AppMode.HEALTH_MODE
+                    else -> AppMode.BALANCE_MODE
+                }
+
+                // ==========================================
+                // 2. 极简提取：复用底层已封装的完美课表数据
+                // ==========================================
+                // getUserManager().getCurriculum(false) 返回的是包含了三种分类的 JSON 字符串
+                val curriculumsJsonStr = getUserManager().getCurriculum(false)
+                val curriculumsObj = JSON.parseObject(curriculumsJsonStr)
+
+                // 底层已经做好了合并与屏蔽过滤，我们只关心有时间安排的 "validTimeCourses"
+                val validCoursesArray = curriculumsObj?.getJSONArray("validTimeCourses") ?: JSONArray()
+                println("课表："+validCoursesArray.toJSONString())
+
+                // 直接反序列化为 Course 实体列表
+                val allValidCourses = JSON.parseArray(validCoursesArray.toJSONString(), Course::class.java) ?: mutableListOf()
+
+                // ==========================================
+                // 3. 只需按“明天”和“当前周”进行最终筛选
+                // ==========================================
+                val currentWeek = BaseDataBoxUtils.getBaseData().currentWeek
+                val tomorrow = LocalDate.now().plusDays(1)
+                val targetDay = tomorrow.dayOfWeek.value // 1-7
+
+                val tomorrowCourses = allValidCourses.filter { course ->
+                    course.day == targetDay && course.weekList.contains(currentWeek)
+                }.sortedWith(Comparator { c1, c2 ->
+                    // 确保按上课节次早晚排序
+                    if (c1.startNode != c2.startNode) c1.startNode - c2.startNode else c1.name.compareTo(c2.name)
+                })
+
+                // ==========================================
+                // 4. 抓取近期睡眠历史记录 (倒序取7天再正序返回)
+                // ==========================================
+                val recentSleepRecords = SleepRecordBoxUtils.getAllRecordsForUI().take(7).reversed()
+
+                // ==========================================
+                // 5. 传感器预留坑位
+                // ==========================================
+                val todaySteps = 4500
+                val usagePrefs = context.getSharedPreferences("app_usage_stats", Context.MODE_PRIVATE)
+                val todayKey = "distraction_${LocalDate.now()}"
+                val distractionMins = usagePrefs.getInt(todayKey, 0)
+
+// 5.2 算出今天实际有多少分钟的课 (用于计算专注率)
+                val todayDayOfWeek = LocalDate.now().dayOfWeek.value
+                val todayCourses = allValidCourses.filter { course ->
+                    course.day == todayDayOfWeek && course.weekList.contains(currentWeek)
+                }
+// 假设每节课(step)标准时长为 45 分钟，算出今天理论上课总时长
+                val totalClassMins = todayCourses.sumOf { it.step * 45 }
+
+// 5.3 结算专注率 (0-100)
+                val focusRatePercent = if (totalClassMins > 0) {
+                    // 专注时间 = 总时间 - 摸鱼时间 (最少为0)
+                    val focusMins = kotlin.math.max(0, totalClassMins - distractionMins)
+                    (focusMins * 100 / totalClassMins)
+                } else {
+                    100 // 今天没课，没有诱惑，默认 100% 专注
+                }
+
+                // ==========================================
+                // 6. 引擎融合计算
+                // ==========================================
+                val engine = DecisionEngine()
+                val dashboardJson = engine.generateDashboardJson(
+                    mode = mode,
+                    tomorrowCourses = tomorrowCourses,
+                    recentSleepRecords = recentSleepRecords,
+                    todaySteps = todaySteps,
+                    focusRatePercent = focusRatePercent,
+                    distractionMins = distractionMins
+                )
+                println("结果："+dashboardJson.toJSONString())
+
+                result["code"] = 200
+                result["data"] = dashboardJson
+                result["msg"] = "获取成功"
+            } catch (e: Exception) {
+                e.printStackTrace()
+                result["code"] = 500
+                result["msg"] = "推演异常: " + e.message
+            }
+            return@withContext result.toJSONString()
         }
 
     }

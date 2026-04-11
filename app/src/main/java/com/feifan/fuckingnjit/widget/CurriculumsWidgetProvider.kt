@@ -12,18 +12,12 @@ import android.graphics.Color
 import android.os.Bundle
 import android.view.View
 import android.widget.RemoteViews
-import com.alibaba.fastjson.JSONArray
 import com.feifan.fuckingnjit.R
-import com.feifan.fuckingnjit.model.Course
-import com.feifan.fuckingnjit.model.User
 import com.feifan.fuckingnjit.utils.CourseTimeUtils
-import com.feifan.fuckingnjit.utils.TimeManager
+import com.feifan.fuckingnjit.utils.TodayScheduleManager
 import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
 import com.feifan.fuckingnjit.utils.database.UserBoxUtils
-import java.time.LocalDate
 import java.time.LocalDateTime
-import java.time.LocalTime
-import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
@@ -54,20 +48,14 @@ class CurriculumsWidgetProvider : AppWidgetProvider() {
             intArrayOf(R.id.time_id_1, R.id.time_id_2, R.id.time_id_3, R.id.time_id_4)
 
         // --- 2. 缓存策略优化 ---
-        private var cachedSemesterStartDate: Long? = null
-        private var cachedCurrentWeek = -1
-        private var lastUpdateDay: Int = -1
-
         // 原始总数据（用于周数切换时重新计算）
 //        private var cachedAllCurriculumData: List<Course>? = null
 
-        // 这是一个可变列表，时间过了就移除，避免重复 filter
-        private var cachedTodayCourses: MutableList<Course>? = null
 
         // 外部调用的 Observer
         val observer: Observer = Observer { _, _ ->
             // 收到数据变更通知，彻底清空，下次强制重新加载
-            clearCurriculumCache()
+            TodayScheduleManager.clearCache()
         }
 
         fun updateWidgets(context: Context) {
@@ -88,14 +76,6 @@ class CurriculumsWidgetProvider : AppWidgetProvider() {
             }
         }
 
-        private fun clearCurriculumCache() {
-            cachedSemesterStartDate = null
-            cachedCurrentWeek = -1
-            lastUpdateDay = -1
-//            cachedAllCurriculumData = null
-            cachedTodayCourses = null
-        }
-
         @SuppressLint("ServiceCast")
         fun getRemoteViews(context: Context, widgetId: Int): RemoteViews {
             // 1. 防御性初始化
@@ -103,9 +83,6 @@ class CurriculumsWidgetProvider : AppWidgetProvider() {
 
             // 2. Alarm 防杀与保活 (防御性注册)
             ensureAlarmRegistered(context)
-
-            // 3. 计算周数与加载数据
-            prepareData(context)
 
             // 4. 获取布局配置
             val appWidgetManager = AppWidgetManager.getInstance(context)
@@ -122,7 +99,7 @@ class CurriculumsWidgetProvider : AppWidgetProvider() {
             setupBaseUI(context, remoteViews, widgetId, isWideMode)
 
             // 6. 从队列中移除已过期的课程
-            val validList = getAndFilterTodayCourses()
+            val validList = TodayScheduleManager.getRemainingCoursesForWidget()
 
             if (validList.isEmpty()) {
                 showEmptyState(remoteViews)
@@ -165,66 +142,10 @@ class CurriculumsWidgetProvider : AppWidgetProvider() {
             }
         }
 
-        private fun prepareData(context: Context) {
-            // 学期开始时间
-            if (cachedSemesterStartDate == null) {
-                cachedSemesterStartDate =
-                    LocalDate.parse(TimeManager.getInstance().getSemesterStartDate())
-                        .atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-            }
-
-            val todayDay = LocalDate.now().dayOfYear
-
-            // 如果日期变更了，或者缓存是空的
-            if (lastUpdateDay != todayDay) {
-                cachedCurrentWeek =
-                    TimeManager.getInstance().calculateCurrentWeek(cachedSemesterStartDate!!)
-
-                // 重新解析 JSON
-                val user = UserBoxUtils.getUserById(BaseDataBoxUtils.getCurrentUserId()) ?: User()
-                val curriculumsStr = user.curriculums.getString("validTimeCourses")
-                val allCurriculumData =
-                    JSONArray.parseArray(curriculumsStr, Course::class.java) ?: emptyList()
-
-                // 筛选出 今天 + 当前周 的所有课，并按开始时间排序
-                val todayWeekIndex = TimeManager.getInstance().todayWeekIndex()
-                val targetDay = todayWeekIndex + 1
-
-                cachedTodayCourses = allCurriculumData.filter { course ->
-                    course.day == targetDay && course.weekList.contains(cachedCurrentWeek)
-                }.sortedWith(Comparator { c1, c2 ->
-                    if (c1.startNode != c2.startNode) c1.startNode - c2.startNode else c1.name.compareTo(
-                        c2.name
-                    )
-                }).toMutableList()
-
-                lastUpdateDay = todayDay
-            }
-        }
-
-        // 移除已结束的课程
-        private fun getAndFilterTodayCourses(): List<Course> {
-            val list = cachedTodayCourses ?: return emptyList()
-            if (list.isEmpty()) return emptyList()
-
-            val nowTime = LocalTime.now()
-
-            // 迭代器移除已结束的课程
-            val iterator = list.iterator()
-            while (iterator.hasNext()) {
-                val course = iterator.next()
-                val endTime = CourseTimeUtils.getCourseEndTime(course.startNode, course.step)
-                // 如果课程结束时间早于现在，说明已上完，移除
-                if (endTime.isBefore(nowTime)) {
-                    iterator.remove()
-                }
-            }
-            return list
-        }
-
         private fun ensureAlarmRegistered(context: Context) {
+            val currentWeek = TodayScheduleManager.getCurrentWeek()
             // 只有在学期周数范围内才注册
-            if (cachedCurrentWeek !in 0..19) return
+            if (currentWeek !in 0..19) return
 
             val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
             val updateIntent = Intent(context, CurriculumsWidgetProvider::class.java).apply {
@@ -290,19 +211,28 @@ class CurriculumsWidgetProvider : AppWidgetProvider() {
             rv.setViewVisibility(R.id.courses_container, View.VISIBLE)
         }
 
-        private fun isConflict(current: Course, prev: Course): Boolean {
-            println("Checking conflict: ${current.startNode}, ${prev.startNode}, ${current.startNode <= prev.startNode}")
+        private fun isConflict(
+            current: TodayScheduleManager.DailyCourseSlot,
+            prev: TodayScheduleManager.DailyCourseSlot
+        ): Boolean {
             return current.startNode <= prev.startNode
         }
 
-        private fun fillCourseBlock(rv: RemoteViews, index: Int, course: Course, timeColor: Int) {
+        private fun fillCourseBlock(
+            rv: RemoteViews,
+            index: Int,
+            slot: TodayScheduleManager.DailyCourseSlot,
+            timeColor: Int
+        ) {
             if (index >= IDS_BLOCK.size) return
 
             rv.setViewVisibility(IDS_BLOCK[index], View.VISIBLE)
-            rv.setTextViewText(IDS_NAME[index], course.name)
-            rv.setTextViewText(IDS_LOC[index], course.classroom)
+            // 属性名根据 Slot 定义做细微调整
+            rv.setTextViewText(IDS_NAME[index], slot.courseName)
+            rv.setTextViewText(IDS_LOC[index], slot.classroom)
 
-            val timeStr = CourseTimeUtils.getDisplayTime(course.startNode, course.step)
+            // 依然可以完美复用 CourseTimeUtils 的展示逻辑
+            val timeStr = CourseTimeUtils.getDisplayTime(slot.startNode, slot.step)
             rv.setTextViewText(IDS_TIME[index], timeStr)
             rv.setTextColor(IDS_TIME[index], timeColor)
         }
@@ -345,7 +275,7 @@ class CurriculumsWidgetProvider : AppWidgetProvider() {
 
         if (action == AppWidgetManager.ACTION_APPWIDGET_UPDATE) {
             if (intent.getBooleanExtra("FORCE_REFRESH", false)) {
-                clearCurriculumCache()
+                TodayScheduleManager.clearCache()
             }
             val extrasIds = intent.getIntArrayExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS)
 

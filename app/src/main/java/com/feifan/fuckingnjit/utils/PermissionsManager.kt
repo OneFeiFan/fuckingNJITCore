@@ -96,7 +96,8 @@ class PermissionsManager private constructor(private var context: Context) {
             PermissionLists.getNotificationServicePermission(),
 //            PermissionLists.getWriteExternalStoragePermission(),
 //            PermissionLists.getPackageUsageStatsPermission(),
-            PermissionLists.getScheduleExactAlarmPermission()
+            PermissionLists.getScheduleExactAlarmPermission(),
+            PermissionLists.getActivityRecognitionPermission()
         )
     }
 
@@ -144,6 +145,15 @@ class PermissionsManager private constructor(private var context: Context) {
             context,
             PermissionLists.getScheduleExactAlarmPermission()
         )
+
+    // --- 运动与健身权限 (计步器) ---
+    fun checkActivityRecognition(): Boolean {
+        // XXPermissions 原生常量为 Permission.ACTIVITY_RECOGNITION
+        return XXPermissions.isGrantedPermission(context, PermissionLists.getActivityRecognitionPermission())
+    }
+
+    fun requestActivityRecognition(callback: (Boolean) -> Unit) =
+        requestSinglePermission(PermissionLists.getActivityRecognitionPermission(), callback)
 
     fun requestScheduleExactAlarm(callback: (Boolean) -> Unit) =
         requestSinglePermission(PermissionLists.getScheduleExactAlarmPermission(), callback)

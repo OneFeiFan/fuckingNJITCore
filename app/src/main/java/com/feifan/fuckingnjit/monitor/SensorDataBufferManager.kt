@@ -1,6 +1,7 @@
 package com.feifan.fuckingnjit.monitor
 
 import com.feifan.fuckingnjit.model.SleepSensorRecord
+import com.feifan.fuckingnjit.utils.DbDiagnosticTool
 import com.feifan.fuckingnjit.utils.Manager
 import com.feifan.fuckingnjit.utils.database.SleepSensorBoxUtils
 import kotlinx.coroutines.CoroutineScope
@@ -24,6 +25,7 @@ object SensorDataBufferManager {
         )
         buffer.add(record)
         checkAndTriggerAutoUpload()
+        println("buffer大小：${buffer.size}")
         if (buffer.size >= BATCH_SIZE) {
             flushToDatabase()
         }
@@ -40,12 +42,17 @@ object SensorDataBufferManager {
         val recordsToSave = buffer.toList()
         buffer.clear()
 
+        println("buffer:$recordsToSave")
         // 在 IO 线程池中执行数据库写入，绝不阻塞当前业务
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                println("开写")
                 SleepSensorBoxUtils.insertBatch(recordsToSave)
+                println("结束")
+                DbDiagnosticTool.analyzeAndDumpDb(Manager.getContext())
             } catch (e: Exception) {
                 e.printStackTrace()
+                println("异常：${e.message}")
             }
         }
     }

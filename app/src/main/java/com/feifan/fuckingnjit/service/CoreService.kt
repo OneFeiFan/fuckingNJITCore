@@ -24,6 +24,7 @@ import com.feifan.fuckingnjit.monitor.AppUsageManager
 import com.feifan.fuckingnjit.monitor.AudioMonitorManager
 import com.feifan.fuckingnjit.monitor.SensorDataBufferManager
 import com.feifan.fuckingnjit.monitor.SleepMotionDetector
+import com.feifan.fuckingnjit.monitor.StepMonitorManager
 import com.feifan.fuckingnjit.utils.TimeStrategyManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -79,6 +80,7 @@ class CoreService : LifecycleService() {
 
         audioManager = AudioMonitorManager(this); audioManager.init()
         motionDetector = SleepMotionDetector(this)
+        StepMonitorManager.init(this)
 //        proximityManager = ProximityManager(this); proximityManager.start()
 //        cameraManager = CameraPulseManager(this, this); cameraManager.init()
 //
@@ -303,6 +305,8 @@ class CoreService : LifecycleService() {
         if (::motionDetector.isInitialized) {
             motionDetector.stop(); motionDetector.release()
         }
+
+        StepMonitorManager.release()
 //        if (::proximityManager.isInitialized) proximityManager.stop()
 
         wakeLock?.release()

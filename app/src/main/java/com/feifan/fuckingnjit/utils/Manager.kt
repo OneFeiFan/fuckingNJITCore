@@ -44,6 +44,7 @@ import java.io.File
 import java.time.LocalDate
 import java.time.ZoneId
 import androidx.core.content.edit
+import com.feifan.fuckingnjit.monitor.StepMonitorManager
 
 
 class Manager {
@@ -96,11 +97,16 @@ class Manager {
                         CurriculumsWidgetProvider.updateWidgets(context)
 //                        WifiUtils.initialize(context)
                     }
+
                 }
             } catch (e: Exception) {
                 println("init error: ${e.message}")
             }
 
+        }
+
+        fun getContext(): Context{
+            return context;
         }
 
         suspend fun initYiBan(mobile: String, password: String): JSONObject =
@@ -319,6 +325,7 @@ class Manager {
                 // 第二步：获取剩下的、绝对新鲜的活跃数据
                 // ==========================================
                 val uploadRecords = SleepSensorBoxUtils.getAll() // 获取全部剩下的
+                println("全部数据：$uploadRecords")
                 if (uploadRecords.isEmpty()) return@withContext
 
                 // 转换结构
@@ -457,7 +464,7 @@ class Manager {
                 // ==========================================
                 // 5. 传感器预留坑位
                 // ==========================================
-                val todaySteps = 4500
+                val todaySteps = StepMonitorManager.currentSessionSteps
                 val usagePrefs = context.getSharedPreferences("app_usage_stats", Context.MODE_PRIVATE)
                 val todayKey = "distraction_${LocalDate.now()}"
                 val distractionMins = usagePrefs.getInt(todayKey, 0)

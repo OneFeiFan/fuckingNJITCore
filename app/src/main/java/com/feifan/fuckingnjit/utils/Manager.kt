@@ -312,84 +312,78 @@ class Manager {
         suspend fun uploadAndClearData() = withContext(Dispatchers.IO) {
             try {
                 val userId = getUserManager().getCurrentUser().id
-
                 val deviceModel = android.os.Build.MODEL.replace(" ", "_")
-                // ==========================================
-                // 第一步：先斩后奏！上传前清空过期数据
-                // ==========================================
-                val splitTimeMs = getTimeManager().getLatestSessionSplitTimeMs()
-                // 复用了你写好的极速清理方法，干掉 12:00 前的历史数据
-                SleepSensorBoxUtils.deleteRecordsBefore(splitTimeMs)
+
+                // 1. 获取绝对安全的滑动窗口结界
+                val window = getTimeManager().getTargetSleepWindow()
+                val startTimeMs = window.first  // 昨天 12:00
+                val endTimeMs = window.second   // 今天 12:00
 
                 // ==========================================
-                // 第二步：获取剩下的、绝对新鲜的活跃数据
+                // 2. 垃圾回收 (清理过期废弃数据)
+                // 核心逻辑：只杀 startTimeMs 之前的历史残渣，绝对不碰当前滑动窗口内的数据
                 // ==========================================
-                val uploadRecords = SleepSensorBoxUtils.getAll() // 获取全部剩下的
-                println("全部数据：$uploadRecords")
+                SleepSensorBoxUtils.deleteRecordsBefore(startTimeMs)
+
+                // ==========================================
+                // 3. 提取这一天区间内的精华数据
+                // ==========================================
+                val uploadRecords = SleepSensorBoxUtils.getRecordsBetween(startTimeMs, endTimeMs)
                 if (uploadRecords.isEmpty()) return@withContext
 
-                // 转换结构
+                // 转换结构并准备发送
                 val uploadPoints = uploadRecords.map { UploadSensorPoint.fromLocalRecord(it) }
-                val payload = SleepUploadPayload(userId = userId+deviceModel, data = uploadPoints)
-
-                // 发送请求
+                val payload = SleepUploadPayload(userId = userId + deviceModel, data = uploadPoints)
                 val requestBody = JSONObject.toJSONString(payload)
+
                 val customHeaders = Headers.Builder().apply {
-                    // [核心新增] 添加 ngrok 专属头
                     add("ngrok-skip-browser-warning", "true")
                 }.build()
+
                 val responseString = HttpRequestHelper.executeBaseRequest(
                     url = "https://unplacid-davian-unatoned.ngrok-free.dev/api/sleep/upload",
                     method = HttpMethod.POST,
                     jsonStr = requestBody,
                     headers = customHeaders
-                    // headers 和 cookie 这里睡眠服务器不需要，所以不用传，用默认的即可
                 )
 
                 val responseObj = JSON.parseObject(responseString)
 
                 if (responseObj != null && responseObj.getInteger("code") == 200) {
                     val dataObj = responseObj.getJSONObject("data")
-
                     if (dataObj != null && dataObj.isNotEmpty()) {
-                        // 遍历返回的每一天数据 (解决可能存在的断网多天补发情况)
                         val targetDate = LocalDate.now().toString()
+                        val sleepHours = dataObj.getDoubleValue("sleepHours")
+                        val sleepStartTimeMs = dataObj.getLongValue("sleepStartTimeMs")
+                        val wakeUpTimeMs = dataObj.getLongValue("wakeUpTimeMs")
 
-                            val sleepHours = dataObj.getDoubleValue("sleepHours")
-                            val startTimeMs = dataObj.getLongValue("sleepStartTimeMs")
-                            val wakeUpTimeMs = dataObj.getLongValue("wakeUpTimeMs")
+                        if (sleepHours > 0) {
+                            val totalMinutes = (sleepHours * 60).toInt()
+                            val existingRecord = SleepRecordBoxUtils.getByDate(targetDate)
 
-                            if (sleepHours > 0) {
-                                val totalMinutes = (sleepHours * 60).toInt()
-
-                                // 从 ObjectBox 查询今天是否已经有记录了
-                                // 假设你在 SleepRecordBoxUtils 中写了 getByDate(date: String) 方法
-                                val existingRecord = SleepRecordBoxUtils.getByDate(targetDate)
-
-                                if (existingRecord != null) {
-                                    // 更新已有记录
-                                    existingRecord.totalSleepMinutes = totalMinutes
-                                    existingRecord.sleepStartTimeMs = startTimeMs
-                                    existingRecord.wakeUpTimeMs = wakeUpTimeMs
-                                    SleepRecordBoxUtils.insertOrUpdate(existingRecord)
-                                } else {
-                                    // 创建全新记录
-                                    val newRecord = SleepRecord(
-                                        targetDate = targetDate,
-                                        totalSleepMinutes = totalMinutes,
-                                        sleepStartTimeMs = startTimeMs,
-                                        wakeUpTimeMs = wakeUpTimeMs
-                                    )
-                                    SleepRecordBoxUtils.insertOrUpdate(newRecord)
-                                }
-
-                                println("🎉 [$targetDate] 的睡眠数据已完美落盘: 睡了 $totalMinutes 分钟，起止时间均已保存！")
+                            if (existingRecord != null) {
+                                existingRecord.totalSleepMinutes = totalMinutes
+                                existingRecord.sleepStartTimeMs = sleepStartTimeMs
+                                existingRecord.wakeUpTimeMs = wakeUpTimeMs
+                                SleepRecordBoxUtils.insertOrUpdate(existingRecord)
+                            } else {
+                                val newRecord = SleepRecord(
+                                    targetDate = targetDate,
+                                    totalSleepMinutes = totalMinutes,
+                                    sleepStartTimeMs = sleepStartTimeMs,
+                                    wakeUpTimeMs = wakeUpTimeMs
+                                )
+                                SleepRecordBoxUtils.insertOrUpdate(newRecord)
                             }
+                            println("🎉 睡眠数据上传成功！(本次窗口 $startTimeMs 到 $endTimeMs 内的原始数据保留至明日清理)")
                         }
+                    }
+                } else {
+                    println("⚠️ 服务器响应异常，保留有效数据等待重传。")
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                println("睡眠数据上传异常: ${e.message}")
+                println("⚠️ 断网/异常，睡眠数据上传中断: ${e.message}。")
             }
         }
 

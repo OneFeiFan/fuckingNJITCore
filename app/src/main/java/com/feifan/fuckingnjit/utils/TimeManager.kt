@@ -16,22 +16,21 @@ class TimeManager private constructor() {
 
     private val SDF by lazy { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
 
-    fun getLatestSessionSplitTimeMs(): Long {
+    fun getTargetSleepWindow(): Pair<Long, Long> {
         val calendar = Calendar.getInstance()
-        val currentHour = calendar.get(Calendar.HOUR_OF_DAY)
 
-        // 如果当前时间还没到今天的中午 12 点，那么最近的结束点是“昨天中午 12 点”
-        if (currentHour < 12) {
-            calendar.add(Calendar.DAY_OF_YEAR, -1)
-        }
-
-        // 定位到当天的 12:00:00.000
+        // 锚点一：强行对齐到【今天】的 12:00:00.000
         calendar.set(Calendar.HOUR_OF_DAY, 12)
         calendar.set(Calendar.MINUTE, 0)
         calendar.set(Calendar.SECOND, 0)
         calendar.set(Calendar.MILLISECOND, 0)
+        val endTimeMs = calendar.timeInMillis
 
-        return calendar.timeInMillis
+        // 锚点二：往前推 24 小时，对齐到【昨天】的 12:00:00.000
+        calendar.add(Calendar.DAY_OF_YEAR, -1)
+        val startTimeMs = calendar.timeInMillis
+
+        return Pair(startTimeMs, endTimeMs)
     }
 
 //    private val DATELIST by lazy {

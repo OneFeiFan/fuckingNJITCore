@@ -54,7 +54,7 @@ class AppUsageManager : AccessibilityService() {
         /**
          * 【新增】：违规应用类别名单 (在这个名单里的应用，上课玩算作摸鱼)
          */
-        private val ILLEGAL_CATEGORIES = setOf("游戏", "影音娱乐", "社交网络", "购物", "资讯")
+        private val ILLEGAL_CATEGORIES = setOf("游戏", "影音娱乐", "社交通讯", "购物消费", "办公资讯")
         // --- 静态对外接口 ---
 
         fun getForegroundPackage(): String {

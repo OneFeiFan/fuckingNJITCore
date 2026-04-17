@@ -6,6 +6,7 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.util.Log
+import kotlin.math.abs
 
 class SleepMotionDetector(context: Context) : SensorEventListener {
 
@@ -16,6 +17,13 @@ class SleepMotionDetector(context: Context) : SensorEventListener {
     // 记录最近 3 次 FIFO 硬件刷新的间隔(ms)
     private val flushIntervals = ArrayDeque<Long>(3)
     private var lastFlushWallClockTime = System.currentTimeMillis()
+
+    private val gravity = floatArrayOf(0f, 0f, 0f)
+    private val alpha = 0.8f
+
+    // 在线计算变量
+    private var sumSquares: Double = 0.0
+    private var sampleCount: Int = 0
 
     // 提供给后端计算公式的兼容性分数
     var currentMotionScore = 0.0
@@ -31,19 +39,45 @@ class SleepMotionDetector(context: Context) : SensorEventListener {
 
     override fun onSensorChanged(event: SensorEvent?) {
         val now = System.currentTimeMillis()
-
-        // 批处理上报时，瞬间会涌入多条 event，只计算批与批之间的宏观间隔
         val delta = now - lastFlushWallClockTime
+
+        event?.let {
+            val x = it.values[0]
+            val y = it.values[1]
+            val z = it.values[2]
+
+            // 【你最原始的滤波核心逻辑：一行未改】
+            gravity[0] = alpha * gravity[0] + (1 - alpha) * x
+            gravity[1] = alpha * gravity[1] + (1 - alpha) * y
+            gravity[2] = alpha * gravity[2] + (1 - alpha) * z
+
+            val vx = x - gravity[0]
+            val vy = y - gravity[1]
+            val vz = z - gravity[2]
+
+            val magnitudeSq = (vx * vx + vy * vy + vz * vz).toDouble()
+
+            // 在线累加能量
+            sumSquares += magnitudeSq
+            sampleCount++
+        }
+
+        // 当底层硬件吐出一批数据，且批次间隔大于2秒时结算
         if (delta > 2000) {
+            // 维护间隔队列
             if (flushIntervals.size >= 3) {
                 flushIntervals.removeFirst()
             }
             flushIntervals.addLast(delta)
             lastFlushWallClockTime = now
 
-            // 维持后端的波形判定基数
-            event?.let {
-                currentMotionScore = Math.abs(it.values[0].toDouble()) + Math.abs(it.values[1].toDouble()) + Math.abs(it.values[2].toDouble())
+            // 计算这一批次数据的平均运动能量，并更新给后端
+            if (sampleCount > 0) {
+                // 使用均方值作为最终分数（也可以根据你后端的需要加上 Math.sqrt）
+                currentMotionScore = sumSquares / sampleCount
+                // 结算后清零，等待下一批次
+                sumSquares = 0.0
+                sampleCount = 0
             }
 
             Log.d(TAG, "硬件 FIFO 刷新. 间隔: ${delta}ms. 队列: $flushIntervals")
@@ -53,15 +87,11 @@ class SleepMotionDetector(context: Context) : SensorEventListener {
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 
     /**
-     * 分析上传频率，判断用户是否处于活跃（清醒/运动）状态
+     * 判定活跃状态：平均间隔 < 45秒 为活跃
      */
     fun isUserActive(): Boolean {
-        // 数据不足时保守判定为活跃
         if (flushIntervals.size < 3) return true
-
-        val avgInterval = flushIntervals.average()
-        // 理想延迟是 60秒。如果平均刷新间隔 < 45秒，说明 FIFO 被运动数据提前塞满了。
-        return avgInterval < 45_000
+        return flushIntervals.average() < 45_000
     }
 
     fun stop() {

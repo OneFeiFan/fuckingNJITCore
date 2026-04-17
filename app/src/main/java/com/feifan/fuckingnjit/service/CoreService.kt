@@ -22,9 +22,11 @@ import com.feifan.fuckingnjit.monitor.AudioMonitorManager
 import com.feifan.fuckingnjit.monitor.SensorDataBufferManager
 import com.feifan.fuckingnjit.monitor.SleepMotionDetector
 import com.feifan.fuckingnjit.monitor.StepMonitorManager
-import com.feifan.fuckingnjit.utils.TimeStrategyManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class CoreService : LifecycleService() {
 
@@ -38,7 +40,6 @@ class CoreService : LifecycleService() {
     private val HEARTBEAT_EXTENDED = (5.0 * 60 * 1000).toLong() // 5.0 分钟 (活动期退火)
 
     private lateinit var audioManager: AudioMonitorManager
-    private lateinit var timeManager: TimeStrategyManager
     private lateinit var motionDetector: SleepMotionDetector
     private lateinit var alarmManager: AlarmManager
 
@@ -51,12 +52,13 @@ class CoreService : LifecycleService() {
     override fun onCreate() {
         super.onCreate()
 
-        timeManager = TimeStrategyManager()
-        timeManager.addRange(8, 0, 22, 0)
-        alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
+        alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
-        audioManager = AudioMonitorManager(this); audioManager.init()
-        motionDetector = SleepMotionDetector(this); motionDetector.start()
+        // 初始化监控模块
+        audioManager = AudioMonitorManager(this)
+        audioManager.init()
+        motionDetector = SleepMotionDetector(this)
+        motionDetector.start()
         StepMonitorManager.init(this)
 
         createNotificationChannel()
@@ -72,7 +74,7 @@ class CoreService : LifecycleService() {
         if (intent?.action == ACTION_HEARTBEAT) {
             // 被精准闹钟唤醒，执行心跳管线
             lifecycleScope.launch(Dispatchers.Default) {
-                executeHeartbeatPipeline()
+                executeHeartbeat()
             }
         } else if (!isRunning) {
             isRunning = true
@@ -86,48 +88,42 @@ class CoreService : LifecycleService() {
     /**
      * 【核心管线】定时触发的传感器融合决策
      */
-    private suspend fun executeHeartbeatPipeline() {
-        wakeLock?.acquire(10_000L) // 获取 WakeLock 保证 CPU 不休眠，兜底 10 秒后自动释放
+    private suspend fun executeHeartbeat() {
+        // 获取 WakeLock 保证 CPU 不休眠，兜底 10 秒后自动释放
+        wakeLock?.acquire(10_000L)
 
         try {
+            // 1. 获取前台应用状态 (保留你原有的无障碍探针)
             val pkgName = AppUsageManager.getForegroundPackage()
             val appName = AppUsageManager.getAppName(this, pkgName)
 
-            // 1. 获取硬件批处理决策数据
+            // 2. 获取基于 FIFO 间隔算法的运动状态和原始分数
             val isMoving = motionDetector.isUserActive()
             val motionScore = motionDetector.currentMotionScore
 
-            var noiseDb = 0.0
-            var nextAlarmInterval = HEARTBEAT_BASE
+            // 3. 严格执行环境音快照 (绝不免测)
+            val noiseDb = audioManager.captureSnapshot(250L)
 
-            // 2. 传感器融合决策树
-            if (isMoving) {
-                // 状态：活动期
-                // 动作：跳过麦克风，录入安全边界值 -1.0。并拉长下一次唤醒间隔。
-                noiseDb = -1.0
-                nextAlarmInterval = HEARTBEAT_EXTENDED
-                Log.d(TAG, "状态: 高频运动. 影子补偿: -1.0, 间隔拉长至 5 分钟.")
+            // 4. 动态调度：判断下一次心跳的间隔
+            val nextInterval = if (isMoving) {
+                HEARTBEAT_EXTENDED // 积极运动状态 -> 退火至 5 分钟
             } else {
-                // 状态：静止期
-                // 动作：抓取 250ms 快照，恢复高频监测。
-                noiseDb = audioManager.captureSnapshot(250L)
-                nextAlarmInterval = HEARTBEAT_BASE
-                Log.d(TAG, "状态: 疑似静止. 抓取录音快照: $noiseDb dBFS.")
+                HEARTBEAT_BASE     // 静止状态 -> 恢复 2.5 分钟高频
             }
 
-            // 3. 后端波形兼容合成
+            // 5. 后端波形兼容合成与落盘
             val mixed = if (motionScore > 0) noiseDb / motionScore else 0.0
             SensorDataBufferManager.addRecord(mixed)
 
-            // 4. UI 状态刷新
-            updateNotification(appName, noiseDb, motionScore)
+            // 6. UI 状态刷新
+            updateNotification(appName, noiseDb, motionScore, nextInterval)
 
-            // 5. 安排下一次穿透心跳
-            scheduleNextAlarm(nextAlarmInterval)
+            // 7. 安排下一次穿透心跳
+            scheduleNextAlarm(nextInterval)
 
         } catch (e: Exception) {
             Log.e(TAG, "Heartbeat Pipeline Error", e)
-            scheduleNextAlarm(HEARTBEAT_BASE) // 发生异常时保底调度
+            scheduleNextAlarm(HEARTBEAT_BASE) // 发生异常时保底恢复高频调度
         } finally {
             if (wakeLock?.isHeld == true) wakeLock?.release()
         }
@@ -135,35 +131,18 @@ class CoreService : LifecycleService() {
 
     private fun scheduleNextAlarm(intervalMs: Long) {
         val intent = Intent(this, CoreService::class.java).apply { action = ACTION_HEARTBEAT }
-        val pendingIntent = PendingIntent.getService(
-            this,
-            0,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        val pendingIntent = PendingIntent.getService(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val triggerTime = System.currentTimeMillis() + intervalMs
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            alarmManager.setExactAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP,
-                triggerTime,
-                pendingIntent
-            )
+            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
         } else {
             alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
         }
     }
 
-    private fun updateNotification(
-        appName: String = "",
-        currentNoise: Double = 0.0,
-        currentMotion: Double = 0.0
-    ) {
-        val noiseText = when {
-            audioManager.isMicrophoneOccupied -> "⏸️ 避让"
-            currentNoise == -1.0 -> "💤 免测"
-            else -> "${String.format("%.1f", currentNoise)} dBFS"
-        }
+    private fun updateNotification(appName: String, currentNoise: Double, currentMotion: Double, currentInterval: Long) {
+        val noiseText = if (audioManager.isMicrophoneOccupied) "⏸️ 避让" else "${String.format("%.1f", currentNoise)} dBFS"
 
         val content = """
             📱 前台: ${appName.ifEmpty { "检测中..." }}
@@ -198,8 +177,7 @@ class CoreService : LifecycleService() {
 
     private fun startForegroundServiceCompat(notification: Notification) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val type =
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            val type = ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
             startForeground(NOTIFICATION_ID, notification, type)
         } else {
             startForeground(NOTIFICATION_ID, notification)
@@ -217,7 +195,9 @@ class CoreService : LifecycleService() {
                     Intent.ACTION_SCREEN_OFF -> lastScreenState = "已锁屏 (OFF)"
                     Intent.ACTION_USER_PRESENT -> lastScreenState = "点亮 (ON)"
                 }
-                updateNotification()
+                // 屏幕状态改变时强制刷新一下UI
+                val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+                manager.notify(NOTIFICATION_ID, createNotification("运行中", lastNotifContent))
             }
         }
         registerReceiver(screenReceiver, filter)
@@ -225,11 +205,7 @@ class CoreService : LifecycleService() {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Monitor Service",
-                NotificationManager.IMPORTANCE_LOW
-            )
+            val channel = NotificationChannel(CHANNEL_ID, "Monitor Service", NotificationManager.IMPORTANCE_LOW)
             channel.setShowBadge(false)
             val manager = getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(channel)
@@ -239,23 +215,21 @@ class CoreService : LifecycleService() {
     override fun onDestroy() {
         isRunning = false
 
-        // 撤销 AlarmManager，防止服务死亡后无限诈尸拉起
+        // 撤销 AlarmManager，防止服务死亡后无限拉起
         val intent = Intent(this, CoreService::class.java).apply { action = ACTION_HEARTBEAT }
         val pendingIntent = PendingIntent.getService(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
         alarmManager.cancel(pendingIntent)
 
         if (::audioManager.isInitialized) audioManager.release()
         if (::motionDetector.isInitialized) {
-            motionDetector.stop(); motionDetector.release()
+            motionDetector.stop()
+            motionDetector.release()
         }
         StepMonitorManager.release()
 
         wakeLock?.let { if (it.isHeld) it.release() }
 
-        try {
-            unregisterReceiver(screenReceiver)
-        } catch (e: Exception) {
-        }
+        try { unregisterReceiver(screenReceiver) } catch (e: Exception) {}
 
         SensorDataBufferManager.flushToDatabase()
         super.onDestroy()

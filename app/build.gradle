@@ -51,4 +51,6 @@ dependencies {
     // 权限请求框架：https://github.com/getActivity/XXPermissions
     implementation libs.xxpermissions
     implementation libs.fyiban
+
+    implementation "androidx.startup:startup-runtime:1.2.0"
 }

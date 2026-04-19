@@ -1,31 +1,24 @@
 package com.feifan.fuckingnjit.service.impl
 
 import android.annotation.SuppressLint
-import android.app.Activity
 import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebSettings
 import android.webkit.WebView
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import com.feifan.fuckingnjit.model.User
 import com.feifan.fuckingnjit.utils.J2J
 import com.feifan.fuckingnjit.utils.Manager
 import com.feifan.fuckingnjit.utils.TodayScheduleManager
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import java.util.Observable
 import java.util.Observer
 
 
-//import leakcanary.AppWatcher
-
-
-class SampleWebViewImpl : Activity(), Observer {
+class SampleWebViewImpl : AppCompatActivity(), Observer {
     private var webView: WebView? = null
-    private val coroutineScope = CoroutineScope(Dispatchers.Main + Job())
 
     @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -57,7 +50,6 @@ class SampleWebViewImpl : Activity(), Observer {
 //        J2J.getInstance().deleteObserver(CurriculumsWidgetProvider.observer)
         releaseWebView()
         Manager.endLogin()
-        coroutineScope.cancel() // 避免内存泄漏
         super.onDestroy()
     }
 
@@ -81,7 +73,7 @@ class SampleWebViewImpl : Activity(), Observer {
 
     @Deprecated("Deprecated in Java")
     override fun update(o: Observable?, arg: Any?) {
-        coroutineScope.launch {
+        lifecycleScope.launch {
             try {
                 Manager.getUserManager().addUser(arg as User)
                 finish() // 确保在主线程执行

@@ -3,17 +3,16 @@ package com.feifan.fuckingnjit.utils
 import android.app.Activity
 import android.os.Bundle
 import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
 import com.feifan.fuckingnjit.utils.database.YiBanBoxUtils
 import com.feifan.yiban.Apis.Task
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class KillYiBan : Activity() {
-    private val coroutineScope = CoroutineScope(Dispatchers.IO + Job())
+class KillYiBan : AppCompatActivity() {
 
     private fun showToast(context: Activity, msg: String) {
         runOnUiThread {
@@ -23,7 +22,7 @@ class KillYiBan : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        coroutineScope.launch {
+        lifecycleScope.launch {
             if (!BaseDataBoxUtils.isInitialized()) {
                 BaseDataBoxUtils.init(this@KillYiBan)
             }

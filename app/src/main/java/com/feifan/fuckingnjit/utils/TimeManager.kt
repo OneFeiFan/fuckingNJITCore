@@ -1,10 +1,12 @@
 package com.feifan.fuckingnjit.utils
 
 import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
-import java.util.Locale
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 
 class TimeManager private constructor() {
 
@@ -12,74 +14,70 @@ class TimeManager private constructor() {
         private val instance_: TimeManager by lazy { TimeManager() }
 
         fun getInstance(): TimeManager = instance_
+
+        private val FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd")
     }
 
-    private val SDF by lazy { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
-
     fun getTargetSleepWindow(): Pair<Long, Long> {
-        val calendar = Calendar.getInstance()
+        // 锚点一：获取今天的 12:00:00
+        val todayNoon = LocalDate.now().atTime(12, 0)
+        // 锚点二：获取昨天的 12:00:00
+        val yesterdayNoon = todayNoon.minusDays(1)
 
-        // 锚点一：强行对齐到【今天】的 12:00:00.000
-        calendar.set(Calendar.HOUR_OF_DAY, 12)
-        calendar.set(Calendar.MINUTE, 0)
-        calendar.set(Calendar.SECOND, 0)
-        calendar.set(Calendar.MILLISECOND, 0)
-        val endTimeMs = calendar.timeInMillis
-
-        // 锚点二：往前推 24 小时，对齐到【昨天】的 12:00:00.000
-        calendar.add(Calendar.DAY_OF_YEAR, -1)
-        val startTimeMs = calendar.timeInMillis
-
-        return Pair(startTimeMs, endTimeMs)
+        val zoneId = ZoneId.systemDefault()
+        return Pair(
+            yesterdayNoon.atZone(zoneId).toInstant().toEpochMilli(),
+            todayNoon.atZone(zoneId).toInstant().toEpochMilli()
+        )
     }
 
     fun getSemesterStartDate(): String {
         return "2025-02-17"
-        val date = BaseDataBoxUtils.getSemesterStartDate()
-        try {
-            if (date != 0L) {
-                return SDF.format(Date(date))
+        val dateMs = BaseDataBoxUtils.getSemesterStartDate()
+        return try {
+            if (dateMs != 0L) {
+                Instant.ofEpochMilli(dateMs)
+                    .atZone(ZoneId.systemDefault())
+                    .toLocalDate()
+                    .format(FORMATTER)
+            } else {
+                "2025-02-17"
             }
         } catch (e: Exception) {
             e.printStackTrace()
+            "2025-02-17"
         }
-        return "2025-02-17"
     }
 
     fun isInLateNightPeriod(): Boolean {
-        val currentHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        val currentHour = LocalTime.now().hour
         return currentHour >= 20 || currentHour < 5
     }
 
     fun calculateCurrentWeek(startDate: String, currentDate: String): Int {
+        val start = LocalDate.parse(startDate, FORMATTER)
+        val today = LocalDate.parse(currentDate, FORMATTER)
 
-        val start = SDF.parse(startDate)?.time as Long
-        val today = SDF.parse(currentDate)?.time as Long
+        val diffDays = ChronoUnit.DAYS.between(start, today)
 
-        val diff = (today - start) / (24 * 60 * 60 * 1000) // 毫秒转换为天
-
-        return if (diff < 0) {
+        return if (diffDays < 0) {
             1
         } else {
-            (diff / 7).toInt() + 1
+            (diffDays / 7).toInt() + 1
         }
     }
 
-    fun calculateCurrentWeek(start: Long): Int {
-        // 获取当前日期
-        val today = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }.timeInMillis - 365L * 24 * 60 * 60 * 1000L
+    fun calculateCurrentWeek(startMs: Long): Int {
+        val start = Instant.ofEpochMilli(startMs).atZone(ZoneId.systemDefault()).toLocalDate()
+        // 保留你原有的减去365天的业务逻辑
+        val today = LocalDate.now().minusDays(365)
 
-        val diff = (today - start) / (24 * 60 * 60 * 1000) // 毫秒转换为天
+        val diffDays = ChronoUnit.DAYS.between(start, today)
 
-        return if (diff < 0) {
+        return if (diffDays < 0) {
             1
         } else {
-            (diff / 7).toInt() + 1
+            (diffDays / 7).toInt() + 1
         }
     }
 
@@ -87,51 +85,43 @@ class TimeManager private constructor() {
         dateRange: Pair<String, String>,
         semesterStartDate: String
     ): Map<String, List<String>> {
-        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        val startDate = sdf.parse(dateRange.first)
-        val endDate = sdf.parse(dateRange.second)
-
-        val calendar = Calendar.getInstance()
-        if (startDate != null) {
-            calendar.time = startDate
-        }
+        val startDate = LocalDate.parse(dateRange.first, FORMATTER)
+        val endDate = LocalDate.parse(dateRange.second, FORMATTER)
 
         val weekAndDay = mutableMapOf<String, MutableList<String>>()
 
-        while (calendar.time <= endDate) {
-            val currentDateStr = sdf.format(calendar.time)
+        var currentDate = startDate
+        while (!currentDate.isAfter(endDate)) {
+            val currentDateStr = currentDate.format(FORMATTER)
             val week = calculateCurrentWeek(semesterStartDate, currentDateStr)
-            val dayOfWeek = calendar.get(Calendar.DAY_OF_WEEK) // 1 (Sunday) to 7 (Saturday)
 
-            // 调整为1-7对应周一到周日
-            val adjustedDay = if (dayOfWeek == 1) 7 else dayOfWeek - 1
+            val adjustedDay = currentDate.dayOfWeek.value
 
             weekAndDay.getOrPut(week.toString()) { mutableListOf() }.add(adjustedDay.toString())
-            calendar.add(Calendar.DAY_OF_MONTH, 1)
+            currentDate = currentDate.plusDays(1) // 原 calendar.add 的现代化写法
         }
 
         return weekAndDay
     }
 
     fun getCurrentSchoolYear(): String {
-        val calendar = Calendar.getInstance()
-        // Calendar.MONTH: 0..11 (0=1月, 8=9月)
-        val month = calendar[Calendar.MONTH]
-        val year = calendar[Calendar.YEAR]
-        val day = calendar[Calendar.DAY_OF_MONTH]
+        val today = LocalDate.now()
+        val month = today.monthValue // 直接获取 1..12
+        val year = today.year
+        val day = today.dayOfMonth
 
         val schoolYearStart: Int
         val schoolYearEnd: Int
         val semester: Int
 
-        // 逻辑：9月及以后，进入新学年，属于第一学期 (3)
-        if (month >= Calendar.JULY) {
+        // 逻辑：7月(原代码是JULY, 但值为6, java.time 中是7)及以后，进入新学年，属于第一学期 (3)
+        if (month >= 7) {
             schoolYearStart = year
             schoolYearEnd = year + 1
             semester = 3
         }
         // 逻辑：1月通常还在第一学期期末 (3)
-        else if (month == Calendar.JANUARY) {
+        else if (month == 1) {
             if (day >= 15) {
                 schoolYearStart = year - 1
                 schoolYearEnd = year
@@ -153,8 +143,7 @@ class TimeManager private constructor() {
     }
 
     fun todayWeekIndex(): Int {
-        val weekIndex = Calendar.getInstance().get(Calendar.DAY_OF_WEEK) - 2
-        return if (weekIndex < 0) 6 else weekIndex
+        return LocalDate.now().dayOfWeek.value - 1
     }
 
 }

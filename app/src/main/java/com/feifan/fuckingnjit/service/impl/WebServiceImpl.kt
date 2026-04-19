@@ -17,9 +17,8 @@ import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
 import org.jsoup.nodes.Document
 import org.jsoup.select.Elements
 import java.lang.Integer.parseInt
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import java.time.Instant
+import java.time.format.DateTimeFormatter
 import kotlin.math.pow
 
 
@@ -425,20 +424,18 @@ class WebServiceImpl private constructor() : WebService {
 
     fun getDate(): String {
         try {
-            val startTime = System.nanoTime()
             val result = JSONObject()
-            val date = BaseDataBoxUtils.getSemesterStartDate()
-            if (date != 0L) {
-                val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                result["startDate"] = sdf.format(Date(date))
+            val dateMs = BaseDataBoxUtils.getSemesterStartDate()
+            if (dateMs != 0L) {
+                val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+                result["startDate"] = Instant.ofEpochMilli(dateMs)
+                    .atZone(java.time.ZoneId.systemDefault())
+                    .toLocalDate()
+                    .format(formatter)
             } else {
                 result["startDate"] = "2025-02-17"
             }
             result["currentWeek"] = BaseDataBoxUtils.getCurrentWeek()
-            val endTime = System.nanoTime()
-            val duration = (endTime - startTime).toDouble() / 1_000_000_000  // 计算耗时并转换为秒
-
-            println("执行时间: $duration 秒")
             return result.toJSONString()
         } catch (e: Exception) {
             Manager.handleException(e, "时间获取失败：getDate")

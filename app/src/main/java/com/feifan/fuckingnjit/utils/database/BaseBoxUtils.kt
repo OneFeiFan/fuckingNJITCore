@@ -15,6 +15,9 @@ abstract class BaseBoxUtils {
 
     // 线程安全的惰性初始化
     fun init(context: Context) {
+        if (isInitialized()) {
+            return
+        }
         if (boxStore == null) {
             synchronized(this) {
                 if (boxStore == null) {

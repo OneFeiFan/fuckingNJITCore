@@ -149,7 +149,10 @@ class PermissionsManager private constructor(private var context: Context) {
     // --- 运动与健身权限 (计步器) ---
     fun checkActivityRecognition(): Boolean {
         // XXPermissions 原生常量为 Permission.ACTIVITY_RECOGNITION
-        return XXPermissions.isGrantedPermission(context, PermissionLists.getActivityRecognitionPermission())
+        return XXPermissions.isGrantedPermission(
+            context,
+            PermissionLists.getActivityRecognitionPermission()
+        )
     }
 
     fun requestActivityRecognition(callback: (Boolean) -> Unit) =

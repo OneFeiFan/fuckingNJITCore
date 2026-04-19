@@ -12,8 +12,9 @@ import java.util.Calendar
 object SensorDataBufferManager {
 
     private val buffer = mutableListOf<SleepSensorRecord>()
-    // 5秒一次心跳，60次 = 300秒 = 5分钟写入一次数据库
-    private const val BATCH_SIZE = 60
+
+    // 一分钟一次心跳，5分钟写入一次数据库
+    private const val BATCH_SIZE = 5
 
     private var lastAutoUploadDayOfYear = -1
 

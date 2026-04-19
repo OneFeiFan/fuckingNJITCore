@@ -10,22 +10,15 @@ import android.util.Log
 import android.util.LruCache
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityWindowInfo
-import com.alibaba.fastjson.JSON
-import com.alibaba.fastjson.TypeReference
 import com.feifan.fuckingnjit.utils.TodayScheduleManager
+import com.feifan.fuckingnjit.utils.database.AppCategoryRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.util.concurrent.ConcurrentHashMap
 
-/**
- * 二合一组件：无障碍服务 + 应用策略工具
- * 功能：
- * 1. 监听前台应用（防 SystemUI 遮挡）
- * 2. 使用 Fastjson 高速加载本地分类数据库
- * 3. 提供服务状态检测（防假死）
- */
 class AppUsageManager : AccessibilityService() {
 
     companion object {
@@ -38,44 +31,46 @@ class AppUsageManager : AccessibilityService() {
         @Volatile
         private var isServiceConnected = false
 
-        private val appCategoryMap = HashMap<String, String>()
-
-        @Volatile
-        private var isMapLoaded = false
-
         private val windowIdCache = LruCache<Int, String>(20)
         private val serviceScope = CoroutineScope(Dispatchers.IO + Job())
 
         @Volatile
         private var lastPackageName: String = ""
+
         @Volatile
         private var lastSwitchTime: Long = System.currentTimeMillis()
 
         /**
          * 【新增】：违规应用类别名单 (在这个名单里的应用，上课玩算作摸鱼)
          */
-        private val ILLEGAL_CATEGORIES = setOf("游戏", "影音娱乐", "社交通讯", "购物消费", "办公资讯")
+        private val ILLEGAL_CATEGORIES =
+            setOf("游戏", "影音娱乐", "社交通讯", "购物消费", "办公资讯")
         // --- 静态对外接口 ---
+
+        // 缓存包名对应的应用名称，例如 "com.tencent.mm" -> "微信"
+        private val appLabelCache = ConcurrentHashMap<String, String>()
 
         fun getForegroundPackage(): String {
             return currentForegroundPkg
         }
 
-        fun getAppName(context: Context, pkg: String): String {
+        suspend fun getAppName(context: Context, pkg: String): String {
             if (pkg.isEmpty()) return "等待检测..."
 
-            ensureMapLoaded(context)
-            val label = try {
-                val pm = context.packageManager
-                val appInfo = pm.getApplicationInfo(pkg, 0)
-                appInfo.loadLabel(pm).toString()
-            } catch (e: Exception) {
-                e.printStackTrace()
-                if (pkg.contains(".")) pkg.substringAfterLast(".") else pkg
+            val label = appLabelCache.getOrPut(pkg) {
+                try {
+                    val pm = context.packageManager
+                    val appInfo = pm.getApplicationInfo(pkg, 0)
+                    appInfo.loadLabel(pm).toString()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    if (pkg.contains(".")) pkg.substringAfterLast(".") else pkg
+                }
             }
 
-            val category = appCategoryMap[pkg]
-            return if (category != null) "$label [$category]" else label
+            val category = AppCategoryRepository.getCategory(context, pkg) ?: "未知"
+
+            return "$label [$category]"
         }
 
         /**
@@ -122,44 +117,6 @@ class AppUsageManager : AccessibilityService() {
             }
             return false
         }
-
-        /**
-         * 使用 Fastjson 加载数据
-         */
-        private fun ensureMapLoaded(context: Context) {
-            if (isMapLoaded) return
-
-            synchronized(this) {
-                if (isMapLoaded) return
-                try {
-                    Log.d(TAG, "正在加载应用分类数据库 (Fastjson)...")
-                    val startTime = System.currentTimeMillis()
-
-                    val jsonString = context.assets.open("app_mapping.json").bufferedReader().use {
-                        it.readText()
-                    }
-
-                    val map = JSON.parseObject(
-                        jsonString,
-                        object : TypeReference<Map<String, String>>() {}
-                    )
-
-                    if (map != null) {
-                        appCategoryMap.putAll(map)
-                    }
-
-                    isMapLoaded = true
-                    Log.d(
-                        TAG,
-                        "数据库加载完成，共 ${appCategoryMap.size} 条，耗时: ${System.currentTimeMillis() - startTime}ms"
-                    )
-
-                } catch (e: Exception) {
-                    Log.e(TAG, "加载数据库失败", e)
-                    isMapLoaded = true
-                }
-            }
-        }
     }
 
     // --- Service 监听部分 ---
@@ -169,10 +126,6 @@ class AppUsageManager : AccessibilityService() {
         Log.i(TAG, "无障碍服务已连接 (Active)")
         // 【关键】标记为已连接
         isServiceConnected = true
-
-//        refreshLauncherPackages(this)
-        // 预加载数据库
-        Thread { ensureMapLoaded(this) }.start()
 
         try {
             val rootNode = rootInActiveWindow
@@ -262,7 +215,7 @@ class AppUsageManager : AccessibilityService() {
      * 【核心新增】：上课摸鱼结算器
      * 计算上一个应用存活了多久，如果是上课时间且玩了违规应用，则记录。
      */
-    private fun settleLastAppDuration(newPackageName: String) {
+    private suspend fun settleLastAppDuration(newPackageName: String) {
         val now = System.currentTimeMillis()
         val durationMs = now - lastSwitchTime
 
@@ -273,7 +226,8 @@ class AppUsageManager : AccessibilityService() {
             if (TodayScheduleManager.isCurrentlyInClass()) {
 
                 // 3. 查字典：上个应用是什么分类？
-                val category = appCategoryMap[lastPackageName] ?: "未知"
+                val category =
+                    AppCategoryRepository.getCategory(applicationContext, lastPackageName) ?: "未知"
 
                 // 4. 判定违规并累加
                 if (ILLEGAL_CATEGORIES.contains(category)) {
@@ -297,7 +251,8 @@ class AppUsageManager : AccessibilityService() {
      */
     private fun saveDistractionTime(addedMins: Int) {
         try {
-            val prefs = applicationContext.getSharedPreferences("app_usage_stats", Context.MODE_PRIVATE)
+            val prefs =
+                applicationContext.getSharedPreferences("app_usage_stats", Context.MODE_PRIVATE)
             val todayKey = "distraction_${LocalDate.now()}"
 
             val currentTotal = prefs.getInt(todayKey, 0)

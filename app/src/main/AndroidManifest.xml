@@ -14,23 +14,24 @@
 
     <!-- 硬件访问权限 -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
-<!--    <uses-permission android:name="android.permission.CAMERA" />-->
-<!--    <uses-feature android:name="android.hardware.camera" android:required="true"/>-->
-<!--    <uses-feature android:name="android.hardware.camera.front" android:required="true" />-->
+    <!--    <uses-permission android:name="android.permission.CAMERA" />-->
+    <!--    <uses-feature android:name="android.hardware.camera" android:required="true"/>-->
+    <!--    <uses-feature android:name="android.hardware.camera.front" android:required="true" />-->
 
     <!-- 系统状态监测 -->
-<!--    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />-->
+    <!--    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />-->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" /> <!-- Android 13+ -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <!-- Android 14 (API 34) 必须声明具体的前台服务类型权限 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
-<!--    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />-->
+    <!--    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />-->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
 
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
 
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
@@ -87,11 +88,11 @@
 
         <receiver
             android:name=".widget.CurriculumsWidgetProvider"
-            android:exported="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.feifan.fuckingnjit.ACTION_GLOBAL_TICK" />
             </intent-filter>
-
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/curriculums_widget_provider" />
@@ -107,6 +108,17 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <!-- 注册你的初始化器 -->
+            <meta-data
+                android:name="com.feifan.fuckingnjit.utils.database.CoreInitProvider"
+                android:value="androidx.startup" />
+        </provider>
+
 
         <!-- 核心服务：必须声明 foregroundServiceType -->
         <service
@@ -116,9 +128,9 @@
             android:foregroundServiceType="mediaPlayback|microphone" />
         <service
             android:name=".monitor.AppUsageManager"
+            android:exported="true"
             android:label="@string/app_name"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
-            android:exported="true">
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
             </intent-filter>

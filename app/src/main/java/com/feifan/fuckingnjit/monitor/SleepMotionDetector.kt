@@ -6,101 +6,106 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.util.Log
-import kotlin.math.abs
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlin.math.sqrt
 
 class SleepMotionDetector(context: Context) : SensorEventListener {
 
     private val TAG = "SleepMotionDetector"
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-    private val sensor: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+    private val accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
 
-    // 记录最近 3 次 FIFO 硬件刷新的间隔(ms)
-    private val flushIntervals = ArrayDeque<Long>(3)
-    private var lastFlushWallClockTime = System.currentTimeMillis()
-
-    private val gravity = floatArrayOf(0f, 0f, 0f)
+    // 滤波参数
     private val alpha = 0.8f
+    private val gravity = floatArrayOf(0f, 0f, 0f)
 
-    // 在线计算变量
+    // 计算变量（增加 Mutex 保证多线程采样安全）
+    private val calculationLock = Mutex()
     private var sumSquares: Double = 0.0
     private var sampleCount: Int = 0
 
-    // 提供给后端计算公式的兼容性分数
-    var currentMotionScore = 0.0
-        private set
+    @Volatile
+    private var isSampling = false
 
-    fun start() {
-        sensor?.let {
-            // 设置 60 秒的底层硬件 FIFO 延迟 (60,000,000 微秒)
-            val maxLatencyUs = 60_000_000
-            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL, maxLatencyUs)
+    /**
+     * 核心方法：单次采样触发
+     * @param durationMs 采样窗口长度（如 300ms 或 1000ms）
+     * @return 该时段内的运动能量分数
+     */
+    suspend fun captureEnergyScore(durationMs: Long): Double = calculationLock.withLock {
+        if (accelerometer == null) return 1.0
+
+        resetInternalState()
+
+        try {
+            isSampling = true
+            sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_UI)
+
+            // 2. 等待采样窗口结束
+            delay(durationMs)
+
+        } catch (e: Exception) {
+            Log.e(TAG, "采样过程中出现异常", e)
+        } finally {
+            // 3. 无论如何，一定要关闭监听以省电
+            stopInternal()
         }
+
+        // 4. 计算并返回结果
+        return calculateRmsScore()
+    }
+
+    private fun resetInternalState() {
+        sumSquares = 0.0
+        sampleCount = 0
+    }
+
+    private fun stopInternal() {
+        isSampling = false
+        sensorManager.unregisterListener(this)
     }
 
     override fun onSensorChanged(event: SensorEvent?) {
-        val now = System.currentTimeMillis()
-        val delta = now - lastFlushWallClockTime
+        // 如果不在采样周期内，即便有残留回调也直接丢弃
+        if (!isSampling || event == null) return
 
-        event?.let {
-            val x = it.values[0]
-            val y = it.values[1]
-            val z = it.values[2]
+        val x = event.values[0]
+        val y = event.values[1]
+        val z = event.values[2]
 
-            // 【你最原始的滤波核心逻辑：一行未改】
-            gravity[0] = alpha * gravity[0] + (1 - alpha) * x
-            gravity[1] = alpha * gravity[1] + (1 - alpha) * y
-            gravity[2] = alpha * gravity[2] + (1 - alpha) * z
+        // 经典高通滤波：分离重力
+        gravity[0] = alpha * gravity[0] + (1 - alpha) * x
+        gravity[1] = alpha * gravity[1] + (1 - alpha) * y
+        gravity[2] = alpha * gravity[2] + (1 - alpha) * z
 
-            val vx = x - gravity[0]
-            val vy = y - gravity[1]
-            val vz = z - gravity[2]
+        // 提取动态分量
+        val vx = x - gravity[0]
+        val vy = y - gravity[1]
+        val vz = z - gravity[2]
 
-            val magnitudeSq = (vx * vx + vy * vy + vz * vz).toDouble()
-
-            // 在线累加能量
-            sumSquares += magnitudeSq
-            sampleCount++
-        }
-
-        // 当底层硬件吐出一批数据，且批次间隔大于2秒时结算
-        if (delta > 2000) {
-            // 维护间隔队列
-            if (flushIntervals.size >= 3) {
-                flushIntervals.removeFirst()
-            }
-            flushIntervals.addLast(delta)
-            lastFlushWallClockTime = now
-
-            // 计算这一批次数据的平均运动能量，并更新给后端
-            if (sampleCount > 0) {
-                // 使用均方值作为最终分数（也可以根据你后端的需要加上 Math.sqrt）
-                currentMotionScore = sumSquares / sampleCount
-                // 结算后清零，等待下一批次
-                sumSquares = 0.0
-                sampleCount = 0
-            }
-
-            Log.d(TAG, "硬件 FIFO 刷新. 间隔: ${delta}ms. 队列: $flushIntervals")
-        }
+        // 累加平方和（这里不分频率，进来多少算多少）
+        sumSquares += (vx * vx + vy * vy + vz * vz).toDouble()
+        sampleCount++
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 
-    /**
-     * 判定活跃状态：平均间隔 < 45秒 为活跃
-     */
-    fun isUserActive(): Boolean {
-        if (flushIntervals.size < 3) return true
-        return flushIntervals.average() < 45_000
-    }
+    private fun calculateRmsScore(): Double {
+        if (sampleCount == 0) {
+            Log.w(TAG, "采样周期内未接收到任何数据")
+            return 1.0
+        }
 
-    fun stop() {
-        sensorManager.unregisterListener(this)
-        flushIntervals.clear()
-        currentMotionScore = 0.0
+        val meanSquare = sumSquares / sampleCount
+        val score = sqrt(meanSquare) + 1.0
+
+        Log.d(TAG, "采样结束: 样本数=$sampleCount, 能量分数=$score")
+        return score
     }
 
     fun release() {
-        stop()
+        stopInternal()
     }
 }

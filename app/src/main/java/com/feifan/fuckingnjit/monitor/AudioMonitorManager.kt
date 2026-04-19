@@ -8,7 +8,6 @@ import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.AudioRecordingConfiguration
 import android.media.MediaRecorder
-import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresPermission
 import androidx.core.content.ContextCompat
@@ -34,6 +33,18 @@ class AudioMonitorManager(private val context: Context) {
 
     fun init() {
         registerAudioPolicyCallback()
+        // 【优化】尝试在服务启动时就提前预热 AudioRecord 实例，建立长连接
+        if (ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.RECORD_AUDIO
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
+            try {
+                ensureAudioRecordInit()
+            } catch (e: Exception) {
+                Log.w(TAG, "AudioRecord 预热失败，将在心跳时重试", e)
+            }
+        }
     }
 
     /**
@@ -42,22 +53,32 @@ class AudioMonitorManager(private val context: Context) {
      * @return 环境分贝值(dBFS)。如果麦克风被占用或无权限，返回 -1.0
      */
     suspend fun captureSnapshot(durationMs: Long = 250L): Double = withContext(Dispatchers.IO) {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            return@withContext -1.0
-        }
-        if (isMicrophoneOccupied) {
-            Log.d(TAG, "麦克风被其他应用占用，跳过快照。")
+        if (isMicrophoneOccupied || ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.RECORD_AUDIO
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
             return@withContext -1.0
         }
 
         try {
             ensureAudioRecordInit()
 
+            // 【自愈机制】如果实例被系统干掉或者状态损坏，直接丢弃重建
             if (audioRecord?.state != AudioRecord.STATE_INITIALIZED || isMicrophoneOccupied) {
+                Log.w(TAG, "AudioRecord 状态异常，触发销毁重建")
+                forceRelease()
                 return@withContext -1.0
             }
 
+            // 【优化】只执行轻量级的 startRecording，绝不 new 实例
             audioRecord?.startRecording()
+
+            // startRecording 是耗时操作，再次校验期间是否被高优业务（电话）抢占
+            if (isMicrophoneOccupied || audioRecord?.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
+                audioRecord?.stop()
+                return@withContext -1.0
+            }
 
             val buffer = audioBuffer!!
             val startTime = System.currentTimeMillis()
@@ -81,6 +102,7 @@ class AudioMonitorManager(private val context: Context) {
 
             try {
                 if (audioRecord?.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+                    // 采样完毕后只执行 stop 挂起.保留实例
                     audioRecord?.stop()
                 }
             } catch (e: Exception) {
@@ -96,7 +118,8 @@ class AudioMonitorManager(private val context: Context) {
             }
 
         } catch (e: Exception) {
-            Log.e(TAG, "Noise snapshot failed", e)
+            // 只有在发生底层抛错时（如死锁），才执行重量级的 forceRelease 销毁实例
+            Log.e(TAG, "Noise snapshot failed, triggering self-healing", e)
             forceRelease()
             return@withContext -1.0
         }
@@ -109,7 +132,11 @@ class AudioMonitorManager(private val context: Context) {
             if (recordBufferSize == 0) {
                 recordBufferSize = maxOf(
                     8192,
-                    AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+                    AudioRecord.getMinBufferSize(
+                        sampleRate,
+                        AudioFormat.CHANNEL_IN_MONO,
+                        AudioFormat.ENCODING_PCM_16BIT
+                    )
                 )
             }
             audioRecord = AudioRecord(
@@ -127,46 +154,62 @@ class AudioMonitorManager(private val context: Context) {
     }
 
     private fun registerAudioPolicyCallback() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            audioRecordingCallback = object : AudioManager.AudioRecordingCallback() {
-                @RequiresPermission(Manifest.permission.RECORD_AUDIO)
-                override fun onRecordingConfigChanged(configs: List<AudioRecordingConfiguration>) {
-                    super.onRecordingConfigChanged(configs)
-                    val mode = audioManager.mode
-                    val isInCall = mode == AudioManager.MODE_IN_CALL || mode == AudioManager.MODE_IN_COMMUNICATION
+        audioRecordingCallback = object : AudioManager.AudioRecordingCallback() {
+            @RequiresPermission(Manifest.permission.RECORD_AUDIO)
+            override fun onRecordingConfigChanged(configs: List<AudioRecordingConfiguration>) {
+                super.onRecordingConfigChanged(configs)
+                val mode = audioManager.mode // 获取AudioManager状态，判断是否占用
+                val isInCall =
+                    mode == AudioManager.MODE_IN_CALL || mode == AudioManager.MODE_IN_COMMUNICATION
 
-                    if(audioRecord == null) {
-                        try { ensureAudioRecordInit() } catch (e: Exception) {}
+                if (audioRecord == null) {
+                    try {
+                        ensureAudioRecordInit()
+                    } catch (e: Exception) {
+                        e.printStackTrace()
                     }
+                }
 
-                    val mySessionId = audioRecord?.audioSessionId ?: -1
-                    var isOtherRecording = false
+                val mySessionId = audioRecord?.audioSessionId ?: -1
+                var isOtherRecording = false // 其它占用
 
-                    if (configs.isNotEmpty()) {
-                        isOtherRecording = if (mySessionId == -1) true else configs.any { it.clientAudioSessionId != mySessionId }
-                    }
+                if (configs.isNotEmpty()) {
+                    isOtherRecording =
+                        if (mySessionId == -1) true else configs.any { it.clientAudioSessionId != mySessionId }
+                }
 
-                    val occupied = isInCall || isOtherRecording
-                    if (isMicrophoneOccupied != occupied) {
-                        isMicrophoneOccupied = occupied
-                        if (isMicrophoneOccupied) {
-                            try { audioRecord?.stop() } catch (e: Exception) {}
+                val occupied = isInCall || isOtherRecording
+                if (isMicrophoneOccupied != occupied) {
+                    isMicrophoneOccupied = occupied
+                    if (isMicrophoneOccupied) {
+                        try {
+                            audioRecord?.stop() //被占用就停止
+                        } catch (e: Exception) {
+                            e.printStackTrace()
                         }
                     }
                 }
             }
-            audioManager.registerAudioRecordingCallback(audioRecordingCallback!!, null)
         }
+        audioManager.registerAudioRecordingCallback(audioRecordingCallback!!, null)
     }
 
     private fun forceRelease() {
-        try { audioRecord?.release() } catch (e: Exception) {}
+        try {
+            audioRecord?.release()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
         audioRecord = null
     }
 
     fun release() {
         audioRecordingCallback?.let {
-            try { audioManager.unregisterAudioRecordingCallback(it) } catch (e: Exception) {}
+            try {
+                audioManager.unregisterAudioRecordingCallback(it)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
         forceRelease()
     }

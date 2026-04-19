@@ -1,6 +1,7 @@
 package com.feifan.fuckingnjit.utils
 
 import SleepUploadPayload
+import UploadSensorPoint
 import android.annotation.SuppressLint
 import android.content.ComponentName
 import android.content.Context
@@ -9,9 +10,11 @@ import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.webkit.CookieManager
 import android.widget.Toast
 import androidx.core.content.FileProvider
+import androidx.core.content.edit
 import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.JSONArray
 import com.alibaba.fastjson.JSONObject
@@ -23,16 +26,14 @@ import com.feifan.fuckingnjit.model.AppMode
 import com.feifan.fuckingnjit.model.Course
 import com.feifan.fuckingnjit.model.SleepRecord
 import com.feifan.fuckingnjit.model.YiBan
+import com.feifan.fuckingnjit.monitor.StepMonitorManager
 import com.feifan.fuckingnjit.service.impl.SampleWebViewImpl
 import com.feifan.fuckingnjit.service.impl.UserManagerImpl
 import com.feifan.fuckingnjit.service.impl.WebServiceImpl
 import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
-import com.feifan.fuckingnjit.utils.database.DbClearHelper
 import com.feifan.fuckingnjit.utils.database.SleepRecordBoxUtils
 import com.feifan.fuckingnjit.utils.database.SleepSensorBoxUtils
-import com.feifan.fuckingnjit.utils.database.UserBoxUtils
 import com.feifan.fuckingnjit.utils.database.YiBanBoxUtils
-import com.feifan.fuckingnjit.widget.CurriculumsWidgetProvider
 import com.feifan.yiban.Apis.Task
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -43,8 +44,6 @@ import okhttp3.Headers
 import java.io.File
 import java.time.LocalDate
 import java.time.ZoneId
-import androidx.core.content.edit
-import com.feifan.fuckingnjit.monitor.StepMonitorManager
 
 
 class Manager {
@@ -58,25 +57,8 @@ class Manager {
 
         fun init(context: Context) {
             try {
+                Log.i("Manager", "Manager")
                 this.context = context
-                if (!UserBoxUtils.isInitialized()) {
-                    UserBoxUtils.init(context)
-                    DbClearHelper.checkAndClear(context, UserBoxUtils.getBoxStore()!!, "user_1.2.5")
-                }
-                if (!BaseDataBoxUtils.isInitialized()) {
-                    BaseDataBoxUtils.init(context)
-                    DbClearHelper.checkAndClear(
-                        context,
-                        BaseDataBoxUtils.getBoxStore()!!,
-                        "base_1.2.5"
-                    )
-                }
-                if(!SleepRecordBoxUtils.isInitialized()){
-                    SleepRecordBoxUtils.init(context)
-                }
-                if(!SleepSensorBoxUtils.isInitialized()){
-                    SleepSensorBoxUtils.init(context)
-                }
                 coroutineScope.launch {
                     val week = withContext(Dispatchers.Default) {
                         val startTime =
@@ -91,13 +73,6 @@ class Manager {
                     withContext(Dispatchers.IO) {
                         BaseDataBoxUtils.updateBaseData { it.currentWeek = week }
                     }
-
-                    // 阶段3：UI更新 → Main
-                    withContext(Dispatchers.Main) {
-                        CurriculumsWidgetProvider.updateWidgets(context)
-//                        WifiUtils.initialize(context)
-                    }
-
                 }
             } catch (e: Exception) {
                 println("init error: ${e.message}")
@@ -105,7 +80,7 @@ class Manager {
 
         }
 
-        fun getContext(): Context{
+        fun getContext(): Context {
             return context;
         }
 
@@ -412,7 +387,8 @@ class Manager {
             try {
                 // 1. 获取当前策略模式
                 val prefs = context.getSharedPreferences("app_decision", Context.MODE_PRIVATE)
-                val currentModeStr = prefs.getString("current_mode", "BALANCE_MODE") ?: "BALANCE_MODE"
+                val currentModeStr =
+                    prefs.getString("current_mode", "BALANCE_MODE") ?: "BALANCE_MODE"
 
                 println("策略模式:$currentModeStr")
 
@@ -430,11 +406,14 @@ class Manager {
                 val curriculumsObj = JSON.parseObject(curriculumsJsonStr)
 
                 // 底层已经做好了合并与屏蔽过滤，我们只关心有时间安排的 "validTimeCourses"
-                val validCoursesArray = curriculumsObj?.getJSONArray("validTimeCourses") ?: JSONArray()
-                println("课表："+validCoursesArray.toJSONString())
+                val validCoursesArray =
+                    curriculumsObj?.getJSONArray("validTimeCourses") ?: JSONArray()
+                println("课表：" + validCoursesArray.toJSONString())
 
                 // 直接反序列化为 Course 实体列表
-                val allValidCourses = JSON.parseArray(validCoursesArray.toJSONString(), Course::class.java) ?: mutableListOf()
+                val allValidCourses =
+                    JSON.parseArray(validCoursesArray.toJSONString(), Course::class.java)
+                        ?: mutableListOf()
 
                 // ==========================================
                 // 3. 只需按“明天”和“当前周”进行最终筛选
@@ -447,7 +426,9 @@ class Manager {
                     course.day == targetDay && course.weekList.contains(currentWeek)
                 }.sortedWith(Comparator { c1, c2 ->
                     // 确保按上课节次早晚排序
-                    if (c1.startNode != c2.startNode) c1.startNode - c2.startNode else c1.name.compareTo(c2.name)
+                    if (c1.startNode != c2.startNode) c1.startNode - c2.startNode else c1.name.compareTo(
+                        c2.name
+                    )
                 })
 
                 // ==========================================
@@ -459,7 +440,8 @@ class Manager {
                 // 5. 传感器预留坑位
                 // ==========================================
                 val todaySteps = StepMonitorManager.currentSessionSteps
-                val usagePrefs = context.getSharedPreferences("app_usage_stats", Context.MODE_PRIVATE)
+                val usagePrefs =
+                    context.getSharedPreferences("app_usage_stats", Context.MODE_PRIVATE)
                 val todayKey = "distraction_${LocalDate.now()}"
                 val distractionMins = usagePrefs.getInt(todayKey, 0)
 
@@ -492,7 +474,7 @@ class Manager {
                     focusRatePercent = focusRatePercent,
                     distractionMins = distractionMins
                 )
-                println("结果："+dashboardJson.toJSONString())
+                println("结果：" + dashboardJson.toJSONString())
 
                 result["code"] = 200
                 result["data"] = dashboardJson

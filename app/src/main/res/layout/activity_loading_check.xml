@@ -2,9 +2,9 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="#FFFFFF"
     android:gravity="center"
-    android:orientation="vertical"
-    android:background="#FFFFFF">
+    android:orientation="vertical">
 
     <!-- 这是一个转圈圈的加载进度条 -->
     <ProgressBar
@@ -20,7 +20,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="24dp"
         android:text="正在检测网络环境..."
-        android:textSize="16sp"
-        android:textColor="#666666"/>
+        android:textColor="#666666"
+        android:textSize="16sp" />
 
 </LinearLayout>

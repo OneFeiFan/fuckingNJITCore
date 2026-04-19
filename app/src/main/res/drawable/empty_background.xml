@@ -4,7 +4,9 @@
     <item>
         <shape android:shape="oval">
             <solid android:color="#FFFFFF" />
-            <size android:width="1000dp" android:height="1000dp" />
+            <size
+                android:width="1000dp"
+                android:height="1000dp" />
         </shape>
     </item>
     <!-- 上层：图片 -->

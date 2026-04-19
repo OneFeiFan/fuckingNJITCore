@@ -11,29 +11,6 @@ import kotlin.math.min
 class DecisionEngine {
 
     /**
-     * 计算当天的目标入睡时间（返回从 00:00 算起的分钟数，例如 1380 代表 23:00）
-     */
-//    fun calculateTargetSleepTime(
-//        mode: AppMode,
-//        tomorrowCourses: List<Course>,
-//        recentSleepRecords: List<SleepRecord>,
-//        todaySteps: Int
-//    ): Int {
-//        val stressFactor = calculateCourseStressFactor(tomorrowCourses)
-//        val physicalFactor = calculatePhysicalStateFactor(recentSleepRecords, todaySteps)
-//
-//        // 基础数学公式依然保留：课业压力推迟睡觉，健康需求提前睡觉
-//        val studyOffset = mode.weight.studyWeight * (1f - stressFactor) * 120f
-//        val healthOffset = mode.weight.healthWeight * (1f - physicalFactor) * 60f
-//        var totalOffsetMinutes = (studyOffset - healthOffset).toInt()
-//
-//        // 结合你原本的防震荡限制：最大调整幅度限制在 +/- 45 分钟内
-//        totalOffsetMinutes = totalOffsetMinutes.coerceIn(-45, 45)
-//
-//        return DecisionConfig.BASE_SLEEP_TIME_MINUTES + totalOffsetMinutes
-//    }
-
-    /**
      * 因子1：计算课程压力因子 (C_stress) [范围 0.0 ~ 1.0]
      */
     private fun calculateCourseStressFactor(tomorrowCourses: List<Course>): Float {
@@ -62,15 +39,6 @@ class DecisionEngine {
         return min(1.0f, stressScore) // 封顶 1.0
     }
 
-    /**
-     * 2. [全新算法] 计算目标入睡时间 (生理干预逻辑)
-     */
-    /**
-     * 计算当天的目标入睡时间（返回从 00:00 算起的分钟数，例如 1380 代表 23:00）
-     */
-    /**
-     * [连续因子模型] 计算目标入睡时间 (生理干预逻辑)
-     */
     fun calculateTargetSleepTime(
         mode: AppMode,
         tomorrowCourses: List<Course>,
@@ -137,41 +105,6 @@ class DecisionEngine {
         return sleepScore + stepsScore
     }
 
-    /**
-     * 因子2：计算体力状态因子 (P_state) [范围 -1.0 ~ 1.0]
-     */
-    private fun calculatePhysicalStateFactor(recentSleepRecords: List<SleepRecord>, steps: Int): Float {
-        // 1. 步数得分 (权重 0.4)
-        val stepsScore = min(steps.toFloat() / DecisionConfig.BASE_STEPS, 1.0f) * 0.4f
-
-        if (recentSleepRecords.isEmpty()) {
-            return 0.6f + stepsScore // 没数据时给个及格分
-        }
-
-        // 2. 算近期的平均睡眠时长（小时）
-        val avgSleepMins = recentSleepRecords.map { it.totalSleepMinutes }.average()
-        val avgSleepHours = (avgSleepMins / 60.0).toFloat()
-
-        // 3. 昨晚的单次睡眠时长（近因效应，昨晚的影响最大）
-        val lastNightSleepHours = (recentSleepRecords.last().totalSleepMinutes / 60.0).toFloat()
-
-        // --- 科学判定逻辑 ---
-
-        // 极端情况：哪怕你前几天睡得再好，昨晚低于严重缺觉线 (5.5h)，今天必须拉响警报
-        if (lastNightSleepHours < DecisionConfig.SEVERE_SLEEP_LACK_HOURS) {
-            return -0.5f
-        }
-
-        // 睡眠得分公式：70%看平均储备(避免单日剧烈震荡)，30%看昨晚(近因)
-        val bankingScore = min(avgSleepHours / DecisionConfig.BASE_SLEEP_HOURS, 1.0f) * 0.7f
-        val lastNightScore = min(lastNightSleepHours / DecisionConfig.BASE_SLEEP_HOURS, 1.0f) * 0.3f
-
-        // 睡眠总分 (权重 0.6)
-        val sleepScore = (bankingScore + lastNightScore) * 0.6f
-
-        return sleepScore + stepsScore
-    }
-
     fun generateDashboardJson(
         mode: AppMode,
         tomorrowCourses: List<Course>,
@@ -189,7 +122,9 @@ class DecisionEngine {
         val response = JSONObject()
         response["currentMode"] = mode.name
         // 综合得分依然是雷达图/进度条的总分
-        response["overallScore"] = ((normalizedPhysical * mode.weight.healthWeight + (focusRatePercent / 100f) * mode.weight.studyWeight) * 100).toInt().coerceIn(0, 100)
+        response["overallScore"] =
+            ((normalizedPhysical * mode.weight.healthWeight + (focusRatePercent / 100f) * mode.weight.studyWeight) * 100).toInt()
+                .coerceIn(0, 100)
 
         // 3. 核心决策因子组装
         val factors = JSONObject()
@@ -199,7 +134,8 @@ class DecisionEngine {
         response["factors"] = factors
 
         // 4. 调用连续因子模型算出入睡红线
-        val targetSleepMins = calculateTargetSleepTime(mode, tomorrowCourses, recentSleepRecords, todaySteps)
+        val targetSleepMins =
+            calculateTargetSleepTime(mode, tomorrowCourses, recentSleepRecords, todaySteps)
         val h = (targetSleepMins / 60) % 24
         val m = targetSleepMins % 60
         val timeStr = String.format("%02d:%02d", h, m)
@@ -218,7 +154,8 @@ class DecisionEngine {
             insight["show"] = true
             insight["level"] = "warning"
             insight["title"] = "久坐预警"
-            insight["message"] = "今日严重缺乏活动，你可能无法在 $timeStr 前入睡，建议利用空堂去操场走走。"
+            insight["message"] =
+                "今日严重缺乏活动，你可能无法在 $timeStr 前入睡，建议利用空堂去操场走走。"
         } else {
             // 普通建议状态
             insight["show"] = true

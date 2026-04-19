@@ -1,13 +1,13 @@
 package com.feifan.fuckingnjit.utils
 
-import com.feifan.fuckingnjit.model.Course
-import java.time.LocalTime
-import java.time.LocalDate
-import java.time.ZoneId
 import com.alibaba.fastjson.JSONArray
+import com.feifan.fuckingnjit.model.Course
+import com.feifan.fuckingnjit.model.User
 import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
 import com.feifan.fuckingnjit.utils.database.UserBoxUtils
-import com.feifan.fuckingnjit.model.User
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.ZoneId
 
 /**
  * 提取的全局单例缓存管家：专门管理当天的物理上课时间
@@ -40,14 +40,17 @@ object TodayScheduleManager {
 
         // --- 这部分逻辑从小部件原封不动地搬过来 ---
         val startDateStr = TimeManager.getInstance().getSemesterStartDate()
-        val startDateMilli = LocalDate.parse(startDateStr).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val startDateMilli =
+            LocalDate.parse(startDateStr).atStartOfDay(ZoneId.systemDefault()).toInstant()
+                .toEpochMilli()
         cachedCurrentWeek = TimeManager.getInstance().calculateCurrentWeek(startDateMilli)
         val todayWeekIndex = TimeManager.getInstance().todayWeekIndex()
         val targetDay = todayWeekIndex + 1
 
         val user = UserBoxUtils.getUserById(BaseDataBoxUtils.getCurrentUserId()) ?: User()
         val curriculumsStr = user.curriculums.getString("validTimeCourses")
-        val allCurriculumData = JSONArray.parseArray(curriculumsStr, Course::class.java) ?: emptyList()
+        val allCurriculumData =
+            JSONArray.parseArray(curriculumsStr, Course::class.java) ?: emptyList()
 
         // 1. 过滤出今天的课
         val todayCourses = allCurriculumData.filter { course ->

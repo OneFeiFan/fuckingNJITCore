@@ -9,9 +9,6 @@ import android.hardware.SensorManager
 import android.util.Log
 import java.util.Calendar
 
-/**
- * 步数监测全局单例管理器 (防杀进程版)
- */
 object StepMonitorManager : SensorEventListener {
 
     private const val TAG = "StepMonitorManager"

@@ -138,12 +138,14 @@ class HttpRequestHelper {
                         // 发现 JSON 字符串，按 application/json 发送
                         jsonStr.toRequestBody("application/json; charset=utf-8".toMediaType())
                     }
+
                     formParams != null -> {
                         // 发现 Map，按传统表单发送
                         FormBody.Builder().apply {
                             formParams.forEach { (key, value) -> add(key, value) }
                         }.build()
                     }
+
                     else -> {
                         FormBody.Builder().build() // 空 POST
                     }

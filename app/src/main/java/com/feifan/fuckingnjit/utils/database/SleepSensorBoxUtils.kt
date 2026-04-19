@@ -4,7 +4,7 @@ import com.feifan.fuckingnjit.model.SleepSensorRecord
 import com.feifan.fuckingnjit.model.SleepSensorRecord_
 import io.objectbox.Box
 
-object SleepSensorBoxUtils : BaseBoxUtils(){
+object SleepSensorBoxUtils : BaseBoxUtils() {
     override fun getDatabaseName() = "SLEEP_SENSOR"
 
     private val box: Box<SleepSensorRecord> by lazy {

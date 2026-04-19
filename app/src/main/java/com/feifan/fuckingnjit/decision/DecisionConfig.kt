@@ -20,6 +20,7 @@ object DecisionConfig {
 
     // === 课表压力权重分配 ===
     const val STRESS_WEIGHT_MORNING_CLASS = 0.4f // 早八压力值
-//    const val STRESS_WEIGHT_HARD_COURSE = 0.2f   // 硬核专业课压力值(单节)
+
+    //    const val STRESS_WEIGHT_HARD_COURSE = 0.2f   // 硬核专业课压力值(单节)
     const val STRESS_WEIGHT_FULL_DAY = 0.2f      // 满课压力值
 }

@@ -12,7 +12,8 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:adjustViewBounds="true"
-        android:src="@drawable/transparent" />
+        android:src="@drawable/transparent"
+        tools:ignore="ContentDescription" />
 
     <LinearLayout
         android:layout_width="wrap_content"
@@ -21,13 +22,12 @@
         android:layout_alignTop="@id/square_background"
         android:layout_alignEnd="@id/square_background"
         android:layout_alignBottom="@id/square_background"
-        android:gravity="center"
         android:orientation="vertical">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center"
+            android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingBottom="2dp">
 
@@ -49,102 +49,104 @@
                 tools:text="周日" />
         </LinearLayout>
 
-        <!-- 分割线 -->
         <ImageView
             android:layout_width="match_parent"
             android:layout_height="1dp"
             android:layout_marginTop="2dp"
             android:layout_marginBottom="2dp"
-            android:background="@color/divider_gray" />
+            android:background="@color/divider_gray"
+            tools:ignore="ContentDescription" />
 
-        <!-- 空状态 (默认隐藏) -->
-        <TextView
-            android:id="@+id/empty_view"
-            style="@style/WidgetCourseTitle"
+        <FrameLayout
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:gravity="center"
-            android:text="今日无课"
-            android:visibility="gone" />
+            android:layout_height="match_parent">
 
-        <!-- 课程列表容器 (使用 weight 分配空间) -->
-        <LinearLayout
-            android:id="@+id/courses_container"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:orientation="vertical">
-
-            <!-- 课程块 1 -->
-            <LinearLayout
-                android:id="@+id/course_block_1"
+            <TextView
+                android:id="@+id/empty_view"
+                style="@style/WidgetCourseTitle"
                 android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1"
+                android:layout_height="match_parent"
                 android:gravity="center"
+                android:text="今日无课"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:id="@+id/courses_container"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
                 android:orientation="vertical">
 
-                <TextView
-                    android:id="@+id/course_id_1"
-                    style="@style/WidgetCourseTitle"
+                <LinearLayout
+                    android:id="@+id/course_block_1"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:ellipsize="end"
-                    android:maxLines="1"
-                    android:textSize="13sp"
-                    tools:text="高等数学" />
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:orientation="vertical">
 
-                <TextView
-                    android:id="@+id/time_id_1"
-                    style="@style/WidgetCourseDetail"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:textSize="11sp"
-                    tools:text="08:00-09:40" />
+                    <TextView
+                        android:id="@+id/course_id_1"
+                        style="@style/WidgetCourseTitle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:textSize="13sp"
+                        tools:text="高等数学" />
 
-                <TextView
-                    android:id="@+id/location_id_1"
-                    style="@style/WidgetCourseDetail"
+                    <TextView
+                        android:id="@+id/time_id_1"
+                        style="@style/WidgetCourseDetail"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textSize="11sp"
+                        tools:text="08:00-09:40" />
+
+                    <TextView
+                        android:id="@+id/location_id_1"
+                        style="@style/WidgetCourseDetail"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textSize="11sp"
+                        tools:text="A101" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/course_block_2"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:textSize="11sp"
-                    tools:text="A101" />
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:id="@+id/course_id_2"
+                        style="@style/WidgetCourseTitle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:textSize="13sp"
+                        tools:text="大学英语" />
+
+                    <TextView
+                        android:id="@+id/time_id_2"
+                        style="@style/WidgetCourseDetail"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textSize="11sp"
+                        tools:text="10:00-11:40" />
+
+                    <TextView
+                        android:id="@+id/location_id_2"
+                        style="@style/WidgetCourseDetail"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textSize="11sp"
+                        tools:text="B202" />
+                </LinearLayout>
             </LinearLayout>
-            <!-- 课程块 2 -->
-            <LinearLayout
-                android:id="@+id/course_block_2"
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1"
-                android:gravity="center_vertical"
-                android:orientation="vertical"
-                android:visibility="gone">
-
-                <TextView
-                    android:id="@+id/course_id_2"
-                    style="@style/WidgetCourseTitle"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:ellipsize="end"
-                    android:maxLines="1"
-                    android:textSize="13sp"
-                    tools:text="大学英语" />
-
-                <TextView
-                    android:id="@+id/time_id_2"
-                    style="@style/WidgetCourseDetail"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:textSize="11sp"
-                    tools:text="10:00-11:40" />
-
-                <TextView
-                    android:id="@+id/location_id_2"
-                    style="@style/WidgetCourseDetail"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:textSize="11sp"
-                    tools:text="B202" />
-            </LinearLayout>
-        </LinearLayout>
+        </FrameLayout>
     </LinearLayout>
 </RelativeLayout>

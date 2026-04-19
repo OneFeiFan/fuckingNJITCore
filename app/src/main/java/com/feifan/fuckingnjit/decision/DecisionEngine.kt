@@ -1,12 +1,19 @@
 package com.feifan.fuckingnjit.decision
 
-import com.alibaba.fastjson.JSONArray
+import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.JSONObject
+import com.feifan.fuckingnjit.model.ActionableInsight
 import com.feifan.fuckingnjit.model.AppMode
 import com.feifan.fuckingnjit.model.Course
+import com.feifan.fuckingnjit.model.DashboardResponse
+import com.feifan.fuckingnjit.model.DecisionFactors
+import com.feifan.fuckingnjit.model.RawStats
 import com.feifan.fuckingnjit.model.SleepRecord
+import com.feifan.fuckingnjit.model.Timeline
+import com.feifan.fuckingnjit.model.TimelineCourse
 import kotlin.math.max
 import kotlin.math.min
+
 
 class DecisionEngine {
 
@@ -26,10 +33,6 @@ class DecisionEngine {
         if (hasMorningClass) {
             stressScore += DecisionConfig.STRESS_WEIGHT_MORNING_CLASS
         }
-
-        // 2. 核心专业课判断：由于接口暂无该数据，逻辑暂时置空
-        // val hardCourseCount = tomorrowCourses.count { it.isHardcore }
-        // stressScore += (hardCourseCount * DecisionConfig.STRESS_WEIGHT_HARD_COURSE)
 
         // 3. 满课判定：假设明天排课数量 >= 4 大节则视为满课
         if (tomorrowCourses.size >= 4) {
@@ -105,96 +108,100 @@ class DecisionEngine {
         return sleepScore + stepsScore
     }
 
+    /**
+     * 生成仪表盘数据 (已重构为强类型驱动)
+     * 注意：移除了外部传入的 focusRatePercent，改为引擎根据摸鱼时长自动计算
+     */
     fun generateDashboardJson(
         mode: AppMode,
         tomorrowCourses: List<Course>,
         recentSleepRecords: List<SleepRecord>,
         todaySteps: Int,
         focusRatePercent: Int,
-        distractionMins: Int
+        distractionMins: Int // 仅需传入实际摸鱼分钟数
     ): JSONObject {
-        // 1. 计算 UI 表现分及压力因子 (完全独立于干预逻辑，专供进度条展示)
+        // 2. 计算 UI 表现分及压力因子
         val physicalScore = calculatePhysicalScore(recentSleepRecords, todaySteps)
         val normalizedPhysical = max(0f, physicalScore)
         val stressFactor = calculateCourseStressFactor(tomorrowCourses)
 
-        // 2. 顶层状态组装
-        val response = JSONObject()
-        response["currentMode"] = mode.name
-        // 综合得分依然是雷达图/进度条的总分
-        response["overallScore"] =
+        // 综合得分 (Score)
+        val overallScore =
             ((normalizedPhysical * mode.weight.healthWeight + (focusRatePercent / 100f) * mode.weight.studyWeight) * 100).toInt()
                 .coerceIn(0, 100)
 
-        // 3. 核心决策因子组装
-        val factors = JSONObject()
-        factors["courseStress"] = (stressFactor * 100).toInt()
-        factors["physicalState"] = (normalizedPhysical * 100).toInt()
-        factors["focusCost"] = focusRatePercent
-        response["factors"] = factors
-
-        // 4. 调用连续因子模型算出入睡红线
+        // 3. 计算红线和偏移量
         val targetSleepMins =
             calculateTargetSleepTime(mode, tomorrowCourses, recentSleepRecords, todaySteps)
         val h = (targetSleepMins / 60) % 24
         val m = targetSleepMins % 60
         val timeStr = String.format("%02d:%02d", h, m)
-
-        // 5. 动态智能建议 (Actionable Insight) - 结合新的生理中值逻辑
-        val insight = JSONObject()
-        val lastNightMins = recentSleepRecords.lastOrNull()?.totalSleepMinutes ?: 480
-        val fatigueRatio = min(1f, todaySteps / 10000f) // 体力消耗中值轴参数
-
-        if (lastNightMins < 330) {
-            insight["show"] = true
-            insight["level"] = "critical"
-            insight["title"] = "高优干预：严重睡眠负债"
-            insight["message"] = "昨晚严重缺觉，系统已强制将今晚入睡红线前置至 $timeStr"
-        } else if (fatigueRatio < 0.3f) { // 即今天步数 < 3000
-            insight["show"] = true
-            insight["level"] = "warning"
-            insight["title"] = "久坐预警"
-            insight["message"] =
-                "今日严重缺乏活动，你可能无法在 $timeStr 前入睡，建议利用空堂去操场走走。"
-        } else {
-            // 普通建议状态
-            insight["show"] = true
-            insight["level"] = if (stressFactor > 0.6f) "warning" else "info"
-            insight["title"] = "智能建议"
-            insight["message"] = "综合今日消耗与明日排课，建议最晚入睡时间：$timeStr"
-        }
-        response["actionableInsight"] = insight
-
-        // 6. Timeline 组装逻辑 (逆推 Offset，无需重复计算)
-        val timeline = JSONObject()
-        timeline["targetSleepTime"] = timeStr
-
-        // 逆推干预偏移量：用干预后的分钟数减去 23:00 基准线 (1380分钟)
         val offsetMinutes = targetSleepMins - DecisionConfig.BASE_SLEEP_TIME_MINUTES
-        timeline["offset"] = if (offsetMinutes > 0) "+${offsetMinutes}" else "${offsetMinutes}"
+        val offsetStr = if (offsetMinutes > 0) "+${offsetMinutes}" else "${offsetMinutes}"
 
-        val coursesArr = JSONArray()
-        for (course in tomorrowCourses.sortedBy { it.startNode }) {
-            val cObj = JSONObject()
-            cObj["time"] = "第 ${course.startNode} 节"
-            cObj["name"] = course.name
-            cObj["isHard"] = false // 预留坑位
-            coursesArr.add(cObj)
+        // 4. 动态智能建议 (Actionable Insight)
+        val lastNightMins = recentSleepRecords.lastOrNull()?.totalSleepMinutes ?: 480
+        val isSedentary = todaySteps < DecisionConfig.SEDENTARY_STEPS
+
+        val insight = when {
+            lastNightMins < 330 -> ActionableInsight(
+                true,
+                "critical",
+                "高优干预：严重睡眠负债",
+                "昨晚严重缺觉，系统已强制将今晚入睡红线前置至 $timeStr"
+            )
+
+            isSedentary ->
+                ActionableInsight(
+                    true,
+                    "warning",
+                    "久坐预警",
+                    "今日严重缺乏活动，你可能无法在 $timeStr 前入睡，建议利用空堂去操场走走。"
+                )
+
+            stressFactor > 0.6f -> ActionableInsight(
+                true,
+                "warning",
+                "高压预警",
+                "明日课业压力较大，建议最晚入睡时间：$timeStr"
+            )
+
+            else -> ActionableInsight(
+                true,
+                "info",
+                "智能建议",
+                "综合今日消耗与明日排课，建议最晚入睡时间：$timeStr"
+            )
         }
-        timeline["courses"] = coursesArr
-        response["timeline"] = timeline
 
-        // 7. 基础溯源数据 (Raw Stats)
-        val raw = JSONObject()
+        // 5. 组装 Timeline Courses
+        val timelineCourses = tomorrowCourses.sortedBy { it.startNode }.map { course ->
+            TimelineCourse("第 ${course.startNode} 节", course.name, false)
+        }
+
+        // 6. 实例化强类型 Response (企业级解耦)
         val sleepH = lastNightMins / 60
         val sleepM = lastNightMins % 60
-        raw["sleepDurationStr"] = "${sleepH}h ${sleepM}m"
-        raw["steps"] = todaySteps
-        raw["targetSteps"] = DecisionConfig.BASE_STEPS
-        raw["focusRate"] = focusRatePercent
-        raw["distractionMins"] = distractionMins
-        response["rawStats"] = raw
+        val responseObj = DashboardResponse(
+            currentMode = mode.name,
+            overallScore = overallScore,
+            factors = DecisionFactors(
+                (stressFactor * 100).toInt(),
+                (normalizedPhysical * 100).toInt(),
+                focusRatePercent
+            ),
+            actionableInsight = insight,
+            timeline = Timeline(timeStr, offsetStr, timelineCourses),
+            rawStats = RawStats(
+                "${sleepH}h ${sleepM}m",
+                todaySteps,
+                DecisionConfig.BASE_STEPS,
+                focusRatePercent,
+                distractionMins
+            )
+        )
 
-        return response
+        // 7. 使用 FastJSON 序列化为 JSONObject 并返回（保证不破坏与原有前端通信的接口）
+        return JSON.parseObject(JSON.toJSONString(responseObj))
     }
 }

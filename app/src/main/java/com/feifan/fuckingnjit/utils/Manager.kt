@@ -21,6 +21,7 @@ import com.alibaba.fastjson.JSONObject
 import com.example.loadinganimation.LoadingAnimationDialog
 import com.feifan.apkpatch.PatchUtils
 import com.feifan.fuckingnjit.R
+import com.feifan.fuckingnjit.decision.DecisionConfig
 import com.feifan.fuckingnjit.decision.DecisionEngine
 import com.feifan.fuckingnjit.model.AppMode
 import com.feifan.fuckingnjit.model.Course
@@ -451,7 +452,8 @@ class Manager {
                     course.day == todayDayOfWeek && course.weekList.contains(currentWeek)
                 }
 // 假设每节课(step)标准时长为 45 分钟，算出今天理论上课总时长
-                val totalClassMins = todayCourses.sumOf { it.step * 45 }
+                val totalClassMins =
+                    todayCourses.sumOf { it.step * DecisionConfig.BASE_FOCUS_MINUTES }
 
 // 5.3 结算专注率 (0-100)
                 val focusRatePercent = if (totalClassMins > 0) {

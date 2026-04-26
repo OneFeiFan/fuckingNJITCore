@@ -34,8 +34,7 @@ data class Timeline(
 
 data class TimelineCourse(
     val time: String,
-    val name: String,
-    val isHard: Boolean
+    val name: String
 )
 
 // 原始统计溯源数据

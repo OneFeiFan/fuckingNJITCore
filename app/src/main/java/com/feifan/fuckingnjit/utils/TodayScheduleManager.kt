@@ -5,9 +5,19 @@ import com.feifan.fuckingnjit.model.Course
 import com.feifan.fuckingnjit.model.User
 import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
 import com.feifan.fuckingnjit.utils.database.UserBoxUtils
+import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
+
+data class FreeSlot(
+    val startTime: LocalTime,
+    val endTime: LocalTime
+) {
+    // 动态计算空闲分钟数，供引擎进行“碎片/大段”判定
+    val durationMinutes: Long
+        get() = Duration.between(startTime, endTime).toMinutes()
+}
 
 /**
  * 提取的全局单例缓存管家：专门管理当天的物理上课时间
@@ -31,6 +41,56 @@ object TodayScheduleManager {
         val startNode: Int, // 保留给小部件做冲突判断
         val step: Int
     )
+
+    /**
+     * 获取今天白天的有效空堂时间段
+     * @param minGapMinutes 最小空闲时长（分钟），默认 45 分钟
+     */
+    fun getAvailableFreeSlots(minGapMinutes: Long = 45): List<FreeSlot> {
+        val todayDay = LocalDate.now().dayOfYear
+        if (cachedSlots == null || lastUpdateDay != todayDay) {
+            reloadTodaySlots() // 此方法内部已存在
+        }
+
+        val slots = cachedSlots?.sortedBy { it.startTime } ?: emptyList()
+        val freeSlots = mutableListOf<FreeSlot>()
+
+        // 核心产品逻辑：限定有效活跃区间 08:00 到 17:20 (第8节课结束)
+        val dayStart = LocalTime.of(8, 0)
+        val dayEnd = LocalTime.of(17, 20)
+
+        // 1. 过滤出与有效区间有交集的课程
+        val activeSlots = slots.filter { it.startTime.isBefore(dayEnd) && it.endTime.isAfter(dayStart) }
+
+        if (activeSlots.isEmpty()) {
+            freeSlots.add(FreeSlot(dayStart, dayEnd))
+        } else {
+            // 2. 挖掘早晨第一节课前的空档
+            val firstClassStart = activeSlots.first().startTime
+            if (firstClassStart.isAfter(dayStart)) {
+                freeSlots.add(FreeSlot(dayStart, firstClassStart))
+            }
+
+            // 3. 挖掘课与课之间的空档
+            for (i in 0 until activeSlots.size - 1) {
+                val currentEnd = activeSlots[i].endTime
+                val nextStart = activeSlots[i + 1].startTime
+                if (currentEnd.isBefore(nextStart)) {
+                    freeSlots.add(FreeSlot(currentEnd, nextStart))
+                }
+            }
+
+            // 4. 挖掘最后一节课到 17:20 的空档
+            val lastClassEnd = activeSlots.last().endTime
+            if (lastClassEnd.isBefore(dayEnd)) {
+                freeSlots.add(FreeSlot(lastClassEnd, dayEnd))
+            }
+        }
+
+        // 5. 过滤掉已经过去的空堂，以及长度不满足最小阈值的空堂
+        val nowTime = LocalTime.now()
+        return freeSlots.filter { it.endTime.isAfter(nowTime) && it.durationMinutes >= minGapMinutes }
+    }
 
     /**
      * 【内部核心】重新加载当天的课程并转换为物理时间

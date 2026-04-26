@@ -11,6 +11,8 @@ import com.feifan.fuckingnjit.model.RawStats
 import com.feifan.fuckingnjit.model.SleepRecord
 import com.feifan.fuckingnjit.model.Timeline
 import com.feifan.fuckingnjit.model.TimelineCourse
+import com.feifan.fuckingnjit.utils.TodayScheduleManager
+import java.time.format.DateTimeFormatter
 import kotlin.math.max
 import kotlin.math.min
 
@@ -143,40 +145,64 @@ class DecisionEngine {
         val lastNightMins = recentSleepRecords.lastOrNull()?.totalSleepMinutes ?: 480
         val isSedentary = todaySteps < DecisionConfig.SEDENTARY_STEPS
 
-        val insight = when {
-            lastNightMins < 330 -> ActionableInsight(
-                true,
-                "critical",
-                "高优干预：严重睡眠负债",
-                "昨晚严重缺觉，系统已强制将今晚入睡红线前置至 $timeStr"
-            )
+        // --- 空堂智能感知与打标 ---
+        val freeSlots = TodayScheduleManager.getAvailableFreeSlots()
+        val nextSlot = freeSlots.firstOrNull() // 优先取下一个即将来临的空堂
 
-            isSedentary ->
-                ActionableInsight(
-                    true,
-                    "warning",
-                    "久坐预警",
-                    "今日严重缺乏活动，你可能无法在 $timeStr 前入睡，建议利用空堂去操场走走。"
+        // --- 动态干预决策树（整合空堂） ---
+        val insight = if (nextSlot != null) {
+            val formatter = DateTimeFormatter.ofPattern("HH:mm")
+            val slotTimeStr = "${nextSlot.startTime.format(formatter)}-${nextSlot.endTime.format(formatter)}"
+            val isLargeGap = nextSlot.durationMinutes >= 90 // 90分钟为大段空堂阈值
+
+            when {
+                // 优先级1：极致疲劳 + 大段空堂 -> 强制补觉
+                lastNightMins < 330 && isLargeGap -> ActionableInsight(
+                    true, "critical", "高优干预：大段空堂补觉",
+                    "昨晚严重缺觉，系统已强制前置入睡红线至 $timeStr。下一个大段空堂 ($slotTimeStr) 建议回宿舍深度休息。"
                 )
+                // 优先级2：久坐状态 + 碎片空堂 -> 轻度活动
+                isSedentary && !isLargeGap -> ActionableInsight(
+                    true, "warning", "久坐预警：碎片时间活动",
+                    "今日严重缺乏活动，可能导致失眠。建议利用 $slotTimeStr 的碎片空堂去户外或走廊活动。"
+                )
+                // 优先级3：学霸模式 + 大段空堂 -> 沉浸式学习
+                mode == AppMode.SCHOLAR_MODE && isLargeGap -> ActionableInsight(
+                    true, "info", "冲刺规划：图书馆时间",
+                    "当前为学霸冲刺模式。下一个空堂 ($slotTimeStr) 长达 ${nextSlot.durationMinutes} 分钟，建议前往图书馆或自习室完成沉浸式学习。"
+                )
+                // 优先级4：健康模式 + 久坐 -> 强制运动
+                mode == AppMode.HEALTH_MODE && isSedentary -> ActionableInsight(
+                    true, "warning", "健康指令：户外运动",
+                    "当前为健康活力模式且步数极低。建议在 $slotTimeStr 的空堂时间去操场完成运动目标。"
+                )
+                else -> null // 未匹配到特征明显的空堂干预，进入默认保底逻辑
+            }
+        } else null
 
+        // --- 保底干预逻辑（无空堂时的常规判定） ---
+        val finalInsight = insight ?: when {
+            lastNightMins < 330 -> ActionableInsight(
+                true, "critical", "高优干预：严重睡眠负债",
+                "昨晚严重缺觉且今日已无可用白昼空堂，系统强制将今晚入睡红线前置至 $timeStr"
+            )
+            isSedentary -> ActionableInsight(
+                true, "warning", "久坐预警",
+                "今日严重缺乏活动，建议在晚饭后去操场走走，保证入睡质量。"
+            )
             stressFactor > 0.6f -> ActionableInsight(
-                true,
-                "warning",
-                "高压预警",
+                true, "warning", "高压预警",
                 "明日课业压力较大，建议最晚入睡时间：$timeStr"
             )
-
             else -> ActionableInsight(
-                true,
-                "info",
-                "智能建议",
+                true, "info", "智能建议",
                 "综合今日消耗与明日排课，建议最晚入睡时间：$timeStr"
             )
         }
 
         // 5. 组装 Timeline Courses
         val timelineCourses = tomorrowCourses.sortedBy { it.startNode }.map { course ->
-            TimelineCourse("第 ${course.startNode} 节", course.name, false)
+            TimelineCourse("第 ${course.startNode} 节", course.name)
         }
 
         // 6. 实例化强类型 Response (企业级解耦)
@@ -190,7 +216,7 @@ class DecisionEngine {
                 (normalizedPhysical * 100).toInt(),
                 focusRatePercent
             ),
-            actionableInsight = insight,
+            actionableInsight = finalInsight,
             timeline = Timeline(timeStr, offsetStr, timelineCourses),
             rawStats = RawStats(
                 "${sleepH}h ${sleepM}m",

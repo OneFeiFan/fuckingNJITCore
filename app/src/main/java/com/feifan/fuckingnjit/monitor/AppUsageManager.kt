@@ -30,12 +30,18 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.pow
 
 class AppUsageManager : AccessibilityService() {
 
     companion object {
         private const val TAG = "AppUsageManager"
 
+        @Volatile
+        private var lastInterventionTime: Long = 0L // 上次触发干预的时间戳
+
+        @Volatile
+        private var continuousViolationCount: Int = 0 // 连续违规计数器 (用于方案A衰减)
         @Volatile
         private var currentForegroundPkg: String = ""
 
@@ -256,58 +262,97 @@ class AppUsageManager : AccessibilityService() {
      */
 
     private suspend fun handleRealTimeIntervention(pkgName: String) {
-        // 1. 上课时间检查（保持不变）
+        // 1. 检查是否在上课时间
         if (!TodayScheduleManager.isCurrentlyInClass()) return
 
         val category = AppCategoryRepository.getCategory(applicationContext, pkgName) ?: "未知"
-        if(!(CATEGORY_GROUP_A.contains(category)||CATEGORY_GROUP_B.contains(category))){
-            return
-        }
+        val isGroupA = CATEGORY_GROUP_A.contains(category)
+        val isGroupB = CATEGORY_GROUP_B.contains(category)
+
+        // 仅拦截 A组(娱乐) 和 B组(通信)
+        if (!(isGroupA || isGroupB)) return
+
+        // 2. 获取当前模式配置
         val prefs = this.getSharedPreferences("app_decision", MODE_PRIVATE)
         val currentModeStr = prefs.getString("current_mode", "BALANCE_MODE") ?: "BALANCE_MODE"
         val currentMode = when (currentModeStr) {
             "SCHOLAR_MODE" -> AppMode.SCHOLAR_MODE
-            "HEALTH_MODE"   -> AppMode.HEALTH_MODE
-            else            -> AppMode.BALANCE_MODE
+            "HEALTH_MODE"  -> AppMode.HEALTH_MODE
+            else           -> AppMode.BALANCE_MODE
         }
 
-        // 2. 获取容忍时长（所有模式都有对应的 intervention 配置）
-        val toleranceMins = currentMode.intervention.toleranceMins
-        val toleranceMs = toleranceMins * 60 * 1000L
+        val intervention = currentMode.intervention
+        val baseToleranceMs = intervention.toleranceMins * 60 * 1000L
+        val cooldownMs = intervention.cooldownMins * 60 * 1000L
 
-        // 3. 取消之前的计时任务，确保每次切换应用都重新计时
+        // 取消旧任务
+        interceptJob?.cancel()
+
         interceptJob = serviceScope.launch {
-            delay(toleranceMs)
+            val now = System.currentTimeMillis()
+            val timeSinceLastAction = now - lastInterventionTime
 
-            // 超时后的处理
+            // --- 核心机制 1：宽恕与重置 (Forgiveness) ---
+            // 如果距离上次警告已经过去了超过 2 倍的冷却时间，说明学生认真听课了很久，重置容忍度
+            if (lastInterventionTime > 0L && timeSinceLastAction > (cooldownMs * 2)) {
+                continuousViolationCount = 0
+                Log.d(TAG, "干预系统：表现良好，容忍度已重置。")
+            }
+
+            // --- 核心机制 2：容忍度梯度递减 (方案 A) ---
+            // 每次违规，容忍时长变为上一次的 70%
+            val decayFactor = 0.7.pow(continuousViolationCount.toDouble())
+            var currentToleranceMs = (baseToleranceMs * decayFactor).toLong()
+
+            // 设定容忍度保底底线：最少 1 分钟 (避免疯狂连弹)
+            val minToleranceMs = 1 * 60 * 1000L
+            if (currentToleranceMs < minToleranceMs) {
+                currentToleranceMs = minToleranceMs
+            }
+
+            // --- 核心机制 3：全局冷却时间补偿 ---
+            // 如果还在冷却期内，则先等待冷却期结束，再叠加本次的容忍时间
+            val actualDelay = if (lastInterventionTime > 0L && timeSinceLastAction < cooldownMs) {
+                (cooldownMs - timeSinceLastAction) + currentToleranceMs
+            } else {
+                currentToleranceMs
+            }
+
+            Log.d(TAG, "干预系统：倒计时已开启。当前连犯次数: $continuousViolationCount, 本次等待: ${actualDelay / 1000}秒")
+
+            // 3. 开启倒计时
+            delay(actualDelay)
+
+            // 4. 超时执行动作 (Action Level 匹配)
             withContext(Dispatchers.Main) {
-                // ① 所有模式都必须执行的：震动 + Toast 提醒
-                triggerVibration()
-                Toast.makeText(
-                    applicationContext,
-                    "你的走神时间过久！",
-                    Toast.LENGTH_LONG
-                ).show()
+                when (intervention.actionLevel) {
+                    1 -> {
+                        // Level 1: 健康模式 (静默关怀) - 不震动，不阻断
+                        Toast.makeText(applicationContext, "健康提醒：注意坐姿，让眼睛休息一下吧~", Toast.LENGTH_SHORT).show()
+                    }
+                    2 -> {
+                        // Level 2: 劳逸结合模式 (警告) - 震动 + 提示
+                        triggerVibration()
+                        Toast.makeText(applicationContext, "走神时间有点久了，快回到学习状态！", Toast.LENGTH_LONG).show()
+                    }
+                    3 -> {
+                        // Level 3: 学霸模式 (强阻断) - 震动 + 提示 + 判断是否退回桌面
+                        triggerVibration()
+                        Toast.makeText(applicationContext, "学霸模式提醒：专注时间，拒绝摸鱼！", Toast.LENGTH_SHORT).show()
 
-                // ② 额外操作：仅当同时满足“娱乐类应用”且“学霸模式”时才退回桌面
-                val isEntertainmentApp = CATEGORY_GROUP_A.contains(category)
-                val isScholarMode = (currentMode == AppMode.SCHOLAR_MODE)
-                if (isEntertainmentApp && isScholarMode) {
-                    performGlobalAction(GLOBAL_ACTION_HOME)
-                    // 可再补充一句针对性提示（可选）
-                    Toast.makeText(
-                        applicationContext,
-                        "学霸模式已强制中断娱乐应用！",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                        // 核心机制 4：B 组通信豁免 (仅 A 组执行 HOME 动作)
+                        if (isGroupA) {
+                            performGlobalAction(GLOBAL_ACTION_HOME)
+                        }
+                    }
                 }
             }
 
-            // 4. 本轮干预结束，立即重置计时（递归调用自己，开启下一轮倒计时）
-            // 注意：这里不能带 pkgName 参数，因为可能在前台应用未切换的情况下继续计时
-            // 你可以根据业务需求决定是否要重新获取当前前台应用，或者直接沿用原 pkgName
-            // 通常应该重新获取当前前台包名，以下用原 pkgName 演示
-            interceptJob?.cancel()
+            // 5. 状态机推进：更新最后干预时间并增加“仇恨值”
+            lastInterventionTime = System.currentTimeMillis()
+            continuousViolationCount++
+
+            // 6. 开启下一轮监控 (依然在前台则继续倒计时)
             handleRealTimeIntervention(pkgName)
         }
     }

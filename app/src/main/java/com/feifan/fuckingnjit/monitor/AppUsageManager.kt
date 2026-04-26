@@ -39,7 +39,7 @@ class AppUsageManager : AccessibilityService() {
         @Volatile
         private var currentForegroundPkg: String = ""
 
-        // 【新增】标记服务是否真正连接
+        // 标记服务是否真正连接
         @Volatile
         private var isServiceConnected = false
 
@@ -254,50 +254,61 @@ class AppUsageManager : AccessibilityService() {
     /**
      * 【实时阻断流水线】
      */
+
     private suspend fun handleRealTimeIntervention(pkgName: String) {
-        // 如果当前不在上课时间，直接放行
+        // 1. 上课时间检查（保持不变）
         if (!TodayScheduleManager.isCurrentlyInClass()) return
 
         val category = AppCategoryRepository.getCategory(applicationContext, pkgName) ?: "未知"
+        if(!(CATEGORY_GROUP_A.contains(category)||CATEGORY_GROUP_B.contains(category))){
+            return
+        }
+        val prefs = this.getSharedPreferences("app_decision", MODE_PRIVATE)
+        val currentModeStr = prefs.getString("current_mode", "BALANCE_MODE") ?: "BALANCE_MODE"
+        val currentMode = when (currentModeStr) {
+            "SCHOLAR_MODE" -> AppMode.SCHOLAR_MODE
+            "HEALTH_MODE"   -> AppMode.HEALTH_MODE
+            else            -> AppMode.BALANCE_MODE
+        }
 
-        // 仅当应用属于 A 组强制阻断名单时，才考虑发射回桌面
-        if (CATEGORY_GROUP_A.contains(category)) {
+        // 2. 获取容忍时长（所有模式都有对应的 intervention 配置）
+        val toleranceMins = currentMode.intervention.toleranceMins
+        val toleranceMs = toleranceMins * 60 * 1000L
 
-            val prefs = this.getSharedPreferences("app_decision", Context.MODE_PRIVATE)
-            val currentModeStr =
-                prefs.getString("current_mode", "BALANCE_MODE") ?: "BALANCE_MODE"
+        // 3. 取消之前的计时任务，确保每次切换应用都重新计时
+        interceptJob = serviceScope.launch {
+            delay(toleranceMs)
 
-            println("策略模式:$currentModeStr")
+            // 超时后的处理
+            withContext(Dispatchers.Main) {
+                // ① 所有模式都必须执行的：震动 + Toast 提醒
+                triggerVibration()
+                Toast.makeText(
+                    applicationContext,
+                    "你的走神时间过久！",
+                    Toast.LENGTH_LONG
+                ).show()
 
-            val currentMode = when (currentModeStr) {
-                "SCHOLAR_MODE" -> AppMode.SCHOLAR_MODE
-                "HEALTH_MODE" -> AppMode.HEALTH_MODE
-                else -> AppMode.BALANCE_MODE
-            }
-
-            // 只有学霸模式才开启强制阻断
-            if (currentMode == AppMode.SCHOLAR_MODE) {
-                // 读取该模式的专属容忍阈值（这里假设我们已经按照讨论重构了 AppMode）
-                val toleranceMins = currentMode.intervention.toleranceMins
-                val toleranceMs = toleranceMins * 60 * 1000L
-
-                interceptJob = serviceScope.launch {
-                    delay(toleranceMs)
-
-                    // 炸弹引爆！踢回桌面
+                // ② 额外操作：仅当同时满足“娱乐类应用”且“学霸模式”时才退回桌面
+                val isEntertainmentApp = CATEGORY_GROUP_A.contains(category)
+                val isScholarMode = (currentMode == AppMode.SCHOLAR_MODE)
+                if (isEntertainmentApp && isScholarMode) {
                     performGlobalAction(GLOBAL_ACTION_HOME)
-
-                    // 警告提示与震动反馈 (切到主线程展示 Toast)
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(
-                            applicationContext,
-                            "学霸模式已强制中断娱乐应用！",
-                            Toast.LENGTH_LONG
-                        ).show()
-                        triggerVibration()
-                    }
+                    // 可再补充一句针对性提示（可选）
+                    Toast.makeText(
+                        applicationContext,
+                        "学霸模式已强制中断娱乐应用！",
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
             }
+
+            // 4. 本轮干预结束，立即重置计时（递归调用自己，开启下一轮倒计时）
+            // 注意：这里不能带 pkgName 参数，因为可能在前台应用未切换的情况下继续计时
+            // 你可以根据业务需求决定是否要重新获取当前前台应用，或者直接沿用原 pkgName
+            // 通常应该重新获取当前前台包名，以下用原 pkgName 演示
+            interceptJob?.cancel()
+            handleRealTimeIntervention(pkgName)
         }
     }
 
@@ -307,17 +318,45 @@ class AppUsageManager : AccessibilityService() {
     private fun triggerVibration() {
         try {
             val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val vibratorManager =
-                    getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+                val vibratorManager = getSystemService(VIBRATOR_MANAGER_SERVICE) as VibratorManager
                 vibratorManager.defaultVibrator
             } else {
                 @Suppress("DEPRECATION")
-                getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                getSystemService(VIBRATOR_SERVICE) as Vibrator
             }
 
-            vibrator.vibrate(VibrationEffect.createOneShot(500, VibrationEffect.DEFAULT_AMPLITUDE))
+            // 定义单次节奏模式
+            val singlePatternTimings = longArrayOf(0, 100, 100, 100, 100, 100, 200, 400)
+            val singlePatternAmplitudes = intArrayOf(0, 255, 0, 255, 0, 255, 0, 200)
+
+            // 重复次数
+            val repeatCount = 3
+
+            // 构造重复3次的总数组
+            val totalTimings = mutableListOf<Long>()
+            val totalAmplitudes = mutableListOf<Int>()
+
+            for (i in 0 until repeatCount) {
+                // 第一次循环需要保留开头的 0 等待，后续循环则直接衔接（不需要开头的 0 等待）
+                if (i == 0) {
+                    totalTimings.addAll(singlePatternTimings.toList())
+                    totalAmplitudes.addAll(singlePatternAmplitudes.toList())
+                } else {
+                    // 跳过开头的 0 等待，直接从第一个震动指令开始衔接
+                    totalTimings.addAll(singlePatternTimings.drop(1))
+                    totalAmplitudes.addAll(singlePatternAmplitudes.drop(1))
+                }
+            }
+
+            val effect = VibrationEffect.createWaveform(
+                totalTimings.toLongArray(),
+                totalAmplitudes.toIntArray(),
+                -1  // -1 表示不重复，播放完整个数组即停止
+            )
+
+            vibrator.vibrate(effect)
         } catch (e: Exception) {
-            Log.e(TAG, "震动调用失败", e)
+            Log.e(TAG, "紧急震动调用失败", e)
         }
     }
 

@@ -56,7 +56,9 @@ class CoreService : LifecycleService() {
 
         createNotificationChannel()
         val pm = getSystemService(POWER_SERVICE) as PowerManager
-        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "FuckingNJIT:HeartbeatWakeLock")
+        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "FuckingNJIT:HeartbeatWakeLock").apply {
+            setReferenceCounted(false) // 关掉引用计数，只要调一次 release 就彻底释放
+        }
 
         registerScreenReceiver()
     }
@@ -65,8 +67,6 @@ class CoreService : LifecycleService() {
         super.onStartCommand(intent, flags, startId)
 
         if (intent?.action == ACTION_TRIGGER_ENGINE) {
-            // 心跳触发
-            wakeLock?.acquire(5_000L)
             dispatchTick()
         } else if (!isRunning) {
             // 首次启动

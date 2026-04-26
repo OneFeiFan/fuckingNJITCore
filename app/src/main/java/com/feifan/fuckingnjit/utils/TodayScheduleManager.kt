@@ -194,4 +194,23 @@ object TodayScheduleManager {
         }
         return cachedCurrentWeek
     }
+
+    /**
+     * 对外 API 4 (核心新增：供 AppUsageManager 使用):
+     * 获取当前正在进行的具体课程。如果当前没在上课，返回 null。
+     */
+    fun getCurrentClassSlot(): DailyCourseSlot? {
+        val todayDay = LocalDate.now().dayOfYear
+        if (cachedSlots == null || lastUpdateDay != todayDay) {
+            reloadTodaySlots()
+        }
+
+        val slots = cachedSlots ?: return null
+        val nowTime = LocalTime.now()
+
+        // 返回当前时间命中的第一节课
+        return slots.firstOrNull { slot ->
+            !nowTime.isBefore(slot.startTime) && !nowTime.isAfter(slot.endTime)
+        }
+    }
 }

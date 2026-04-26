@@ -10,6 +10,7 @@ class CoreInitProvider : Initializer<Unit> {
         BaseDataBoxUtils.init(context)
         SleepRecordBoxUtils.init(context)
         SleepSensorBoxUtils.init(context)
+        ClassFocusRecordBoxUtils.init(context)
 
         DbClearHelper.checkAndClear(context, UserBoxUtils.getBoxStore()!!, "user_1.2.5")
         DbClearHelper.checkAndClear(context, BaseDataBoxUtils.getBoxStore()!!, "base_1.2.5")

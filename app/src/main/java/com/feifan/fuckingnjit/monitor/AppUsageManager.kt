@@ -20,6 +20,7 @@ import android.widget.Toast
 import com.feifan.fuckingnjit.model.AppMode
 import com.feifan.fuckingnjit.utils.TodayScheduleManager
 import com.feifan.fuckingnjit.utils.database.AppCategoryRepository
+import com.feifan.fuckingnjit.utils.database.ClassFocusRecordBoxUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -29,6 +30,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
+import java.time.ZoneId
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.pow
 
@@ -408,27 +410,43 @@ class AppUsageManager : AccessibilityService() {
     /**
      * 【事后结算流水线】：将摸鱼时长安全地持久化
      */
+    /**
+     * 【事后结算流水线】：将摸鱼时长安全地持久化到 ObjectBox 数据库，按单节课累加
+     */
     private suspend fun settleLastAppDuration(newPackageName: String) {
         val now = System.currentTimeMillis()
         val durationMs = now - lastSwitchTime
 
         if (lastPackageName.isNotEmpty() && durationMs > 10000) { // 停留超过 10 秒才算数
-            if (TodayScheduleManager.isCurrentlyInClass()) {
-                val category =
-                    AppCategoryRepository.getCategory(applicationContext, lastPackageName) ?: "未知"
+            // 核心修改：不仅仅问是否在上课，还要拿到当前上的是哪节课
+            val currentClass = TodayScheduleManager.getCurrentClassSlot()
+
+            if (currentClass != null) {
+                val category = AppCategoryRepository.getCategory(applicationContext, lastPackageName) ?: "未知"
 
                 // A组和B组统统算作违规时长进行扣分
                 if (ILLEGAL_CATEGORIES.contains(category)) {
                     val durationMins = (durationMs / (1000 * 60)).toInt()
-                    if (durationMins > 0) {
-                        Log.w(TAG, "🔴 摸鱼警告！上课玩 [$lastPackageName] 达 $durationMins 分钟！")
-                        saveDistractionTime(durationMins)
-                    }
+
+                    // 将 LocalTime 转换为绝对的时间戳(毫秒)，供数据库使用
+                    val today = LocalDate.now()
+                    val startMs = today.atTime(currentClass.startTime).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                    val endMs = today.atTime(currentClass.endTime).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+
+                    Log.w(TAG, "🔴 摸鱼警告！上课 [${currentClass.courseName}] 玩 [$lastPackageName] 达 $durationMins 分钟！")
+
+                    // --- 核心串联：调用底层 BoxUtils 进行单节课增量写入 ---
+                    ClassFocusRecordBoxUtils.addDistractionTime(
+                        courseName = currentClass.courseName,
+                        courseStartTime = startMs,
+                        courseEndTime = endMs,
+                        addedDistractionMills = durationMs // 传入精确的毫秒数
+                    )
                 }
             }
         }
 
-        // 5. 状态机推进：无论是否违规，更新时间和包名为新应用，开启下一轮计时
+        // 状态机推进：无论是否违规，更新时间和包名为新应用，开启下一轮计时
         lastPackageName = newPackageName
         lastSwitchTime = now
     }

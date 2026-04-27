@@ -1,7 +1,6 @@
 package com.feifan.fuckingnjit.monitor
 
 import com.feifan.fuckingnjit.model.SleepSensorRecord
-import com.feifan.fuckingnjit.utils.DbDiagnosticTool
 import com.feifan.fuckingnjit.utils.Manager
 import com.feifan.fuckingnjit.utils.database.SleepSensorBoxUtils
 import kotlinx.coroutines.CoroutineScope
@@ -46,7 +45,6 @@ object SensorDataBufferManager {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 SleepSensorBoxUtils.insertBatch(recordsToSave)
-                DbDiagnosticTool.analyzeAndDumpDb(Manager.getContext())
             } catch (e: Exception) {
                 e.printStackTrace()
                 println("异常：${e.message}")

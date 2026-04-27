@@ -32,6 +32,7 @@ import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.ceil
 import kotlin.math.pow
 
 class AppUsageManager : AccessibilityService() {
@@ -417,7 +418,7 @@ class AppUsageManager : AccessibilityService() {
         val now = System.currentTimeMillis()
         val durationMs = now - lastSwitchTime
 
-        if (lastPackageName.isNotEmpty() && durationMs > 10000) { // 停留超过 10 秒才算数
+        if (lastPackageName.isNotEmpty() && durationMs > 5000) { // 停留超过 10 秒才算数
             // 核心修改：不仅仅问是否在上课，还要拿到当前上的是哪节课
             val currentClass = TodayScheduleManager.getCurrentClassSlot()
 
@@ -426,7 +427,7 @@ class AppUsageManager : AccessibilityService() {
 
                 // A组和B组统统算作违规时长进行扣分
                 if (ILLEGAL_CATEGORIES.contains(category)) {
-                    val durationMins = (durationMs / (1000 * 60)).toInt()
+                    val durationMins = ceil(durationMs / 60000.0).toInt()
 
                     // 将 LocalTime 转换为绝对的时间戳(毫秒)，供数据库使用
                     val today = LocalDate.now()
@@ -434,13 +435,15 @@ class AppUsageManager : AccessibilityService() {
                     val endMs = today.atTime(currentClass.endTime).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
 
                     Log.w(TAG, "🔴 摸鱼警告！上课 [${currentClass.courseName}] 玩 [$lastPackageName] 达 $durationMins 分钟！")
+                    saveDistractionTime(durationMins)
 
                     // --- 核心串联：调用底层 BoxUtils 进行单节课增量写入 ---
                     ClassFocusRecordBoxUtils.addDistractionTime(
                         courseName = currentClass.courseName,
                         courseStartTime = startMs,
                         courseEndTime = endMs,
-                        addedDistractionMills = durationMs // 传入精确的毫秒数
+                        addedDistractionMills = durationMs,// 传入精确的毫秒数
+                        courseId = currentClass.id
                     )
                 }
             }
@@ -458,7 +461,7 @@ class AppUsageManager : AccessibilityService() {
     private fun saveDistractionTime(addedMins: Int) {
         try {
             val prefs =
-                applicationContext.getSharedPreferences("app_usage_stats", Context.MODE_PRIVATE)
+                applicationContext.getSharedPreferences("app_usage_stats", MODE_PRIVATE)
             val todayKey = "distraction_${LocalDate.now()}"
             val currentTotal = prefs.getInt(todayKey, 0)
             prefs.edit().putInt(todayKey, currentTotal + addedMins).apply()

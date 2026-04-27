@@ -34,6 +34,7 @@ object TodayScheduleManager {
      * 核心实体：将抽象的节次转换为绝对的物理时间段
      */
     data class DailyCourseSlot(
+        val id: String,
         val courseName: String,
         val classroom: String,
         val startTime: LocalTime,
@@ -129,6 +130,7 @@ object TodayScheduleManager {
 
             newSlots.add(
                 DailyCourseSlot(
+                    id = course.id,
                     courseName = course.name,
                     classroom = course.classroom,
                     startTime = startTime,

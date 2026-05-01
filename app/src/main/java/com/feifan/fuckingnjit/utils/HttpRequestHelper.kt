@@ -48,17 +48,24 @@ class HttpRequestHelper {
                 val request = Request.Builder().url(url).headers(COMMON_HEADERS.toHeaders()).build()
                 try {
                     val response = okHttpClient.newCall(request).execute()
-                    if (response.isSuccessful) {
-                        response.body?.let { body ->
-                            File(context.filesDir, fileName).outputStream().use { output ->
-                                body.byteStream().use { input -> input.copyTo(output) }
-                            }
-                            return@withContext true
-                        } ?: throw ApiException(NetworkStatus.ParseError, "下载失败：响应体为空")
-                    } else {
+
+                    // 1. 卫语句：拦截网络失败的情况，提前抛出异常
+                    if (!response.isSuccessful) {
                         val status = NetworkStatusUtils.fromCode(response.code)
                         throw ApiException(status, "下载失败：HTTP状态码 ${response.code}")
                     }
+
+                    // 2. 卫语句：拦截响应体为空的情况，安全地拿到非空 body
+                    val body = response.body ?: throw ApiException(NetworkStatus.ParseError, "下载失败：响应体为空")
+
+                    // 3. 主干逻辑：安心处理正常的流写入
+                    File(context.filesDir, fileName).outputStream().use { output ->
+                        body.byteStream().use { input -> input.copyTo(output) }
+                    }
+
+                    // 4. Lambda 的最后一行自动作为整个 withContext 的返回值，直接写 true 即可
+                    true
+
                 } catch (e: ApiException) {
                     throw e
                 } catch (e: Exception) {

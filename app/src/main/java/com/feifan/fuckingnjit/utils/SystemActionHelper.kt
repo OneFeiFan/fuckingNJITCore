@@ -57,13 +57,13 @@ object SystemActionHelper {
     }
 
     fun startLogin(activityContext: Context, relogin: Boolean = false): String {
-        if (AppConfigStorage.inLogin) {
+        if (AppConfig.inLogin) {
             return "已登录"
         } else {
-            AppConfigStorage.inLogin = true
+            AppConfig.inLogin = true
         }
         if (!relogin) {
-            AppConfigStorage.logout()
+            AppConfig.logout()
         }
         CookieManager.getInstance().removeAllCookies(null)
         val intent = Intent(activityContext, SampleWebViewImpl::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

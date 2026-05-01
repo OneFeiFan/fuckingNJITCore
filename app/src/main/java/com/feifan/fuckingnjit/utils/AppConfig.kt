@@ -3,7 +3,7 @@ package com.feifan.fuckingnjit.utils
 import com.feifan.fuckingnjit.service.impl.UserManagerImpl
 import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
 
-object AppConfigStorage {
+object AppConfig {
 
     // 内存级临时状态
     var inLogin = false

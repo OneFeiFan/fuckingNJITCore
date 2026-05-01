@@ -10,7 +10,7 @@ import android.webkit.WebView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.feifan.fuckingnjit.model.User
-import com.feifan.fuckingnjit.utils.AppConfigStorage
+import com.feifan.fuckingnjit.utils.AppConfig
 import com.feifan.fuckingnjit.utils.J2J
 import com.feifan.fuckingnjit.utils.Manager
 import com.feifan.fuckingnjit.utils.SystemActionHelper
@@ -51,7 +51,7 @@ class SampleWebViewImpl : AppCompatActivity(), Observer {
     override fun onDestroy() {
         J2J.getInstance().deleteObserver(this)
         releaseWebView()
-        AppConfigStorage.endLogin()
+        AppConfig.endLogin()
         super.onDestroy()
     }
 

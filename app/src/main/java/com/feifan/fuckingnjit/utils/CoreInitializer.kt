@@ -25,7 +25,7 @@ object CoreInitializer {
 
                 if (startMs > 0L) {
                     val week = withContext(Dispatchers.Default) {
-                        TimeManager.getInstance().calculateCurrentWeek(startMs)
+                        EduScheduleConfig.calculateCurrentWeek(startMs)
                     }
                     withContext(Dispatchers.IO) {
                         AppDataCenter.updateSystemConfig { it.currentWeek = week }

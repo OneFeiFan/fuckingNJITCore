@@ -1,4 +1,7 @@
 import java.text.SimpleDateFormat
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Date
 import java.util.Locale
 
@@ -10,8 +13,12 @@ data class UploadSensorPoint(
     companion object {
         // 提供一个转换器：将你的本地 ObjectBox 实体转为上传实体
         fun fromLocalRecord(record: com.feifan.fuckingnjit.model.SleepSensorRecord): UploadSensorPoint {
-            val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
-            val formattedTime = sdf.format(Date(record.timestamp))
+            val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+
+// 2. 将毫秒时间戳转换为带时区的时间，并格式化
+            val formattedTime = Instant.ofEpochMilli(record.timestamp)
+                .atZone(ZoneId.systemDefault())
+                .format(formatter)
             return UploadSensorPoint(
                 time = formattedTime,
                 value = record.mixdata

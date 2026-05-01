@@ -12,7 +12,7 @@ import android.util.Log
 import android.view.View
 import android.widget.RemoteViews
 import com.feifan.fuckingnjit.R
-import com.feifan.fuckingnjit.utils.CourseTimeUtils
+import com.feifan.fuckingnjit.utils.EduScheduleConfig
 import com.feifan.fuckingnjit.utils.HeartbeatBus
 import com.feifan.fuckingnjit.utils.TodayScheduleManager
 import java.time.LocalDate
@@ -196,7 +196,7 @@ class CurriculumsWidgetProvider : AppWidgetProvider() {
         rv.setTextViewText(IDS_NAME[index], slot.courseName)
         rv.setTextViewText(IDS_LOC[index], slot.classroom)
 
-        val timeStr = CourseTimeUtils.getDisplayTime(slot.startNode, slot.step)
+        val timeStr = EduScheduleConfig.getDisplayTime(slot.startNode, slot.step)
         rv.setTextViewText(IDS_TIME[index], timeStr)
         rv.setTextColor(IDS_TIME[index], timeColor)
     }

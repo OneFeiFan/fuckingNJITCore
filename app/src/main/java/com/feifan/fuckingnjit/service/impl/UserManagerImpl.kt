@@ -5,11 +5,11 @@ import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.JSONObject
 import com.feifan.fuckingnjit.model.User
 import com.feifan.fuckingnjit.service.UserManager
+import com.feifan.fuckingnjit.utils.EduScheduleConfig
 import com.feifan.fuckingnjit.utils.Manager
 import com.feifan.fuckingnjit.utils.NetworkStatus
+import com.feifan.fuckingnjit.utils.ScoreManager
 import com.feifan.fuckingnjit.utils.SystemActionHelper
-import com.feifan.fuckingnjit.utils.TimeManager
-import com.feifan.fuckingnjit.utils.Tools
 import com.feifan.fuckingnjit.utils.database.AppDataCenter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -89,7 +89,7 @@ class UserManagerImpl private constructor() : UserManager {
 
                     AppDataCenter.updateSystemConfig {
                         it.semesterStartDateMs = timestamp
-                        it.currentWeek = TimeManager.getInstance().calculateCurrentWeek(timestamp)
+                        it.currentWeek = EduScheduleConfig.calculateCurrentWeek(timestamp)
                     }
                 } catch (e: Exception) {
                     SystemActionHelper.handleException(context, e, "获取学期开始日期失败")
@@ -111,7 +111,7 @@ class UserManagerImpl private constructor() : UserManager {
 
             if (scores["code"] == 200) {
                 user.scores = scores.getJSONArray("data")
-                user.gpa = Tools.calculateAverageGPA(user.scores)
+                user.gpa = ScoreManager.calculateAverageGPA(user.scores)
             }
 
             // 处理密码存储偏好 (已合并入 User 实体)

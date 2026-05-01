@@ -13,9 +13,7 @@ import com.feifan.fuckingnjit.model.User
 import com.feifan.fuckingnjit.model.User_
 import io.objectbox.BoxStore
 import io.objectbox.query.QueryBuilder
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import java.time.LocalDate
 
 object AppDataCenter {
     private var boxStore: BoxStore? = null
@@ -88,7 +86,7 @@ object AppDataCenter {
     // ==========================================
 
     fun getTodayRecord(): DailyRecord {
-        val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        val todayStr = LocalDate.now().toString()
         var record = dailyBox.query()
             .equal(DailyRecord_.dateStr, todayStr, QueryBuilder.StringOrder.CASE_SENSITIVE).build()
             .findFirst()

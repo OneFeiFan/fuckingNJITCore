@@ -12,10 +12,6 @@ class Manager {
             return PermissionsManager.getInstance(context)
         }
 
-        fun getTimeManager(): TimeManager {
-            return TimeManager.getInstance()
-        }
-
         fun getUserManager(): UserManagerImpl {
             return UserManagerImpl.getInstance()
         }

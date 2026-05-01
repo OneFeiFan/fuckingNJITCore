@@ -9,11 +9,12 @@ import com.feifan.fuckingnjit.service.WebService
 import com.feifan.fuckingnjit.utils.ApiException
 import com.feifan.fuckingnjit.utils.CourseManager
 import com.feifan.fuckingnjit.utils.CourseParser
+import com.feifan.fuckingnjit.utils.EduScheduleConfig
 import com.feifan.fuckingnjit.utils.HttpMethod
 import com.feifan.fuckingnjit.utils.HttpRequestHelper
 import com.feifan.fuckingnjit.utils.NetworkStatus
+import com.feifan.fuckingnjit.utils.ScoreManager
 import com.feifan.fuckingnjit.utils.SystemActionHelper
-import com.feifan.fuckingnjit.utils.TimeManager
 import com.feifan.fuckingnjit.utils.Tools
 import com.feifan.fuckingnjit.utils.database.AppDataCenter
 import org.jsoup.nodes.Document
@@ -49,7 +50,7 @@ class WebServiceImpl private constructor() : WebService {
 
     override suspend fun getCurriculum(context: Context): JSONObject {
         // 1. 准备请求 (保持你原有的逻辑)
-        val schoolYearFull = TimeManager.getInstance().getCurrentSchoolYear()
+        val schoolYearFull = EduScheduleConfig.getCurrentSchoolYear()
         val schoolYear = schoolYearFull.split('-')[0]
         val semester = schoolYearFull.split('-')[2]
         val url = buildUrl(
@@ -176,9 +177,7 @@ class WebServiceImpl private constructor() : WebService {
     }
 
     override suspend fun getSemesterStartDate(context: Context): String {
-
-//        return "2025-02-17"
-        val schoolYearFull = TimeManager.getInstance().getCurrentSchoolYear()
+        val schoolYearFull = EduScheduleConfig.getCurrentSchoolYear()
 
         val schoolYear = schoolYearFull.split('-')[0]
 
@@ -231,17 +230,17 @@ class WebServiceImpl private constructor() : WebService {
         coursePeriod: String,
         buildingId: String
     ): JSONObject {
-        val semesterStartDate = TimeManager.getInstance().getSemesterStartDate()
+        val semesterStartDate = EduScheduleConfig.getSemesterStartDate()
 
         val dateList = dateRange.split("/")
         if (dateList.size != 2) {
             SystemActionHelper.showToast(context, "日期格式错误")
             return JSONObject()
         }
-        val timeManager = TimeManager.getInstance()
+
         val dateMap =
-            timeManager.dateChangeSimple(Pair(dateList[0], dateList[1]), semesterStartDate)
-        val schoolYearFull = timeManager.getCurrentSchoolYear()
+            Tools.dateChangeSimple(Pair(dateList[0], dateList[1]), semesterStartDate)
+        val schoolYearFull = EduScheduleConfig.getCurrentSchoolYear()
         val schoolYear = schoolYearFull.split("-")[0]
         val semester = schoolYearFull.split("-")[2]
 
@@ -345,7 +344,7 @@ class WebServiceImpl private constructor() : WebService {
             return NetworkStatus.NotFound.toJsonResult()
         }
 
-        return NetworkStatus.Success.toJsonResult(Tools.getScores(JSONObject.parseObject(raw)))
+        return NetworkStatus.Success.toJsonResult(ScoreManager.getScores(JSONObject.parseObject(raw)))
     }
 
     override suspend fun getSorcesDetail(

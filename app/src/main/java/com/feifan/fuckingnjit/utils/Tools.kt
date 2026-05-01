@@ -1,137 +1,57 @@
 package com.feifan.fuckingnjit.utils
 
-import com.alibaba.fastjson.JSON
-import com.alibaba.fastjson.JSONArray
-import com.alibaba.fastjson.JSONObject
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
+/**
+ * 全局通用纯函数工具类
+ * （注意：此处禁止再合入任何教务、业务相关代码）
+ */
+object Tools {
 
-class Tools {
-    companion object {
-        fun getScores(raw: JSONObject): JSONArray {
-            val result = mutableListOf<Map<String, Any>>()
-            val items: JSONArray = raw.getJSONArray("items")
-            for (i in 0 until items.size) {
-                val element = items.getJSONObject(i)
-                result.add(
-                    mapOf(
-                        "bfzcj" to element.getString("bfzcj"),//真实成绩
-                        "kclbmc" to element.getString("kclbmc"),//课程类别
-                        "kcgsmc" to if (element.containsKey("kcgsmc")) element.getString("kcgsmc") else "",//课程归属
-                        "cj" to element.getString("cj"),//成绩
-                        "jd" to element.getString("jd"),//绩点
-                        "xf" to element.getString("xf"),//学分
-                        "jsxm" to element.getString("jsxm"),//教师姓名
-                        "jxb_id" to element.getString("jxb_id"),//教学班号
-                        "xnm" to element.getString("xnm"),//学年
-                        "xqm" to element.getString("xqm"),//学期
-                        "kcmc" to element.getString("kcmc"),//课程名称
-                        "xnmmc" to element.getString("xnmmc"),//学年名称
-                        "xqmmc" to element.getString("xqmmc"),//学期名称
-                        "ksxz" to element.getString("ksxz"),//考试性质
-                    )
-                )
-            }
-            return JSONArray.parseArray(JSON.toJSONString(result))
+    private val FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+
+    fun getTargetSleepWindow(): Pair<Long, Long> {
+        val todayNoon = LocalDate.now().atTime(12, 0)
+        val yesterdayNoon = todayNoon.minusDays(1)
+        val zoneId = ZoneId.systemDefault()
+        return Pair(
+            yesterdayNoon.atZone(zoneId).toInstant().toEpochMilli(),
+            todayNoon.atZone(zoneId).toInstant().toEpochMilli()
+        )
+    }
+
+    fun isInLateNightPeriod(): Boolean {
+        val currentHour = LocalTime.now().hour
+        return currentHour >= 20 || currentHour < 5
+    }
+
+    fun todayWeekIndex(): Int {
+        return LocalDate.now().dayOfWeek.value - 1
+    }
+
+    fun dateChangeSimple(
+        dateRange: Pair<String, String>,
+        semesterStartDate: String
+    ): Map<String, List<String>> {
+        val startDate = LocalDate.parse(dateRange.first, FORMATTER)
+        val endDate = LocalDate.parse(dateRange.second, FORMATTER)
+
+        val weekAndDay = mutableMapOf<String, MutableList<String>>()
+        var currentDate = startDate
+
+        while (!currentDate.isAfter(endDate)) {
+            val currentDateStr = currentDate.format(FORMATTER)
+            // 调用新的 EduScheduleConfig 获取周次
+            val week = EduScheduleConfig.calculateCurrentWeek(semesterStartDate, currentDateStr)
+            val adjustedDay = currentDate.dayOfWeek.value
+
+            weekAndDay.getOrPut(week.toString()) { mutableListOf() }.add(adjustedDay.toString())
+            currentDate = currentDate.plusDays(1)
         }
 
-        fun calculateAverageGPA(tableData: JSONArray): String {
-            try {
-                // 删除不计入GPA的课程和特殊算法课程
-                val excludedCourses = (0 until tableData.size)
-                    .map { tableData.getJSONObject(it) }
-                    .filter { item ->
-                        item.getString("kcgsmc") != "劳动教育" &&
-                                item.getString("kcgsmc") != "跨专业选修" &&
-                                item.getString("kcgsmc") != "公选" &&
-                                item.getString("kcgsmc") != "劳动选修" &&
-                                item.getString("kcgsmc") != "素质拓展" &&
-                                item.getString("kclbmc") != "专业选修课程" &&
-                                item.getString("kclbmc") != "大学外语类课程" &&
-                                item.getInteger("bfzcj") >= 60 //不是挂科的
-                    }
-
-                // 过滤特殊算法课程
-                val specialCourses = (0 until tableData.size)
-                    .map { tableData.getJSONObject(it) }
-                    .filter { item ->
-                        item.getString("kclbmc") == "专业选修课程" ||
-                                item.getString("kclbmc") == "大学外语类课程"
-                    }
-
-                // 取出专业选修课程和大学外语类课程的最高分
-                val highestScoreSpecialCourses = specialCourses
-                    .groupBy { it.getString("kclbmc") }
-                    .mapValues { (_, items) ->
-                        items.maxByOrNull { it.getDouble("bfzcj") }!!
-                    }
-                    .values
-
-                // 合并结果
-
-                val finalCourseList =
-                    JSONArray.parseArray(JSON.toJSONString(excludedCourses + highestScoreSpecialCourses))
-
-                var totalCredit = 0.0
-                var totalCreditPoint = 0.0
-
-                (0 until finalCourseList.size).forEach { i ->
-                    val item = finalCourseList.getJSONObject(i)
-
-                    var gradePoint = item.getDouble("jd")
-
-                    if (item.getString("cj") == "合格" || item.getString("cj") == "通过") {
-                        if (item.getString("ksxz") != "正常考试") {
-                            gradePoint = 3.0
-                        } else {
-                            gradePoint = 3.5
-                        }
-                    } else if (item.getString("cj") == "优秀") {
-                        gradePoint = 4.5
-                    } else if (item.getString("cj") == "良好") {
-                        gradePoint = 3.5
-                    } else if (item.getString("cj") == "中等") {
-                        gradePoint = 2.5
-                    } else if (item.getString("cj") == "及格") {
-                        gradePoint = 1.5
-                    } else if (item.getInteger("cj") >= 95) {
-                        gradePoint = 5.0
-                    } else if (item.getInteger("cj") >= 90) {
-                        gradePoint = 4.5
-                    } else if (item.getInteger("cj") >= 85) {
-                        gradePoint = 4.0
-                    } else if (item.getInteger("cj") >= 80) {
-                        gradePoint = 3.5
-                    } else if (item.getInteger("cj") >= 75) {
-                        gradePoint = 3.0
-                    } else if (item.getInteger("cj") >= 70) {
-                        gradePoint = 2.5
-                    } else if (item.getInteger("cj") >= 65) {
-                        gradePoint = 2.0
-                    } else if (item.getInteger("cj") >= 60) {
-                        gradePoint = 1.0
-                    }
-
-                    if (item.getString("ksxz") != "正常考试") {
-                        if (gradePoint != 1.0) {
-                            gradePoint -= 0.5
-                        }
-                    }
-
-                    val credit = item.getDouble("xf")
-
-                    item.getString("kcmc")
-
-                    totalCredit += credit
-                    totalCreditPoint += credit * gradePoint
-                }
-
-                return (totalCreditPoint / totalCredit).let {
-                    String.format("%.2f", it)
-                }
-            } catch (e: Exception) {
-//                Manager.handleException(e, "calculateAverageGPA")
-                return "0.00"
-            }
-        }
+        return weekAndDay
     }
 }

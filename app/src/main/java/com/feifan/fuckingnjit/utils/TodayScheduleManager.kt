@@ -100,12 +100,12 @@ object TodayScheduleManager {
         val todayDay = LocalDate.now().dayOfYear
 
         // --- 这部分逻辑从小部件原封不动地搬过来 ---
-        val startDateStr = TimeManager.getInstance().getSemesterStartDate()
+        val startDateStr = EduScheduleConfig.getSemesterStartDate()
         val startDateMilli =
             LocalDate.parse(startDateStr).atStartOfDay(ZoneId.systemDefault()).toInstant()
                 .toEpochMilli()
-        cachedCurrentWeek = TimeManager.getInstance().calculateCurrentWeek(startDateMilli)
-        val todayWeekIndex = TimeManager.getInstance().todayWeekIndex()
+        cachedCurrentWeek = EduScheduleConfig.calculateCurrentWeek(startDateMilli)
+        val todayWeekIndex = Tools.todayWeekIndex()
         val targetDay = todayWeekIndex + 1
 
         val user = AppDataCenter.getCurrentUser() ?: User()
@@ -125,8 +125,8 @@ object TodayScheduleManager {
         for (course in todayCourses) {
             // 利用你原有的 CourseTimeUtils 进行物理时间转换
             // 假设你有一个方法能拿到开始时间，如果没有，请在 Utils 里补一个
-            val startTime = CourseTimeUtils.getCourseStartTime(course.startNode)
-            val endTime = CourseTimeUtils.getCourseEndTime(course.startNode, course.step)
+            val startTime = EduScheduleConfig.getCourseStartTime(course.startNode)
+            val endTime = EduScheduleConfig.getCourseEndTime(course.startNode, course.step)
 
             newSlots.add(
                 DailyCourseSlot(

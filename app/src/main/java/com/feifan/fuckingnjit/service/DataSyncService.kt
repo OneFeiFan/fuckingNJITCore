@@ -7,7 +7,7 @@ import com.alibaba.fastjson.JSONObject
 import com.feifan.fuckingnjit.service.impl.UserManagerImpl
 import com.feifan.fuckingnjit.utils.HttpMethod
 import com.feifan.fuckingnjit.utils.HttpRequestHelper
-import com.feifan.fuckingnjit.utils.TimeManager
+import com.feifan.fuckingnjit.utils.Tools
 import com.feifan.fuckingnjit.utils.database.AppDataCenter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -21,7 +21,7 @@ object DataSyncService {
             val userId = UserManagerImpl.getInstance().getCurrentUser().id
             val deviceModel = android.os.Build.MODEL.replace(" ", "_")
 
-            val window = TimeManager.getInstance().getTargetSleepWindow()
+            val window = Tools.getTargetSleepWindow()
             val startTimeMs = window.first
             val endTimeMs = window.second
 

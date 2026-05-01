@@ -103,7 +103,7 @@ class AppUsageManager : AccessibilityService() {
          * 检查系统设置里的开关是否开启
          */
         fun isAccessibilitySettingsOn(context: Context): Boolean {
-            var accessibilityEnabled = 0
+            var accessibilityEnabled: Int
             val service = "${context.packageName}/${AppUsageManager::class.java.name}"
             try {
                 accessibilityEnabled = Settings.Secure.getInt(
@@ -111,6 +111,7 @@ class AppUsageManager : AccessibilityService() {
                     Settings.Secure.ACCESSIBILITY_ENABLED
                 )
             } catch (e: Settings.SettingNotFoundException) {
+                e.printStackTrace()
                 return false
             }
             if (accessibilityEnabled == 1) {
@@ -277,12 +278,7 @@ class AppUsageManager : AccessibilityService() {
         if (!(isGroupA || isGroupB)) return
 
         // 2. 获取当前模式配置
-        val currentModeStr = AppDataCenter.getCurrentUser()?.currentAppMode ?: "BALANCE_MODE"
-        val currentMode = when (currentModeStr) {
-            "SCHOLAR_MODE" -> AppMode.SCHOLAR_MODE
-            "HEALTH_MODE" -> AppMode.HEALTH_MODE
-            else -> AppMode.BALANCE_MODE
-        }
+        val currentMode = AppDataCenter.getCurrentUser()?.currentAppMode ?: AppMode.BALANCE_MODE
 
         val intervention = currentMode.intervention
         val baseToleranceMs = intervention.toleranceMins * 60 * 1000L
@@ -508,6 +504,7 @@ class AppUsageManager : AccessibilityService() {
             }
             pkgName
         } catch (e: Exception) {
+            e.printStackTrace()
             // 获取 root 节点可能会超时或抛出异常
             null
         }

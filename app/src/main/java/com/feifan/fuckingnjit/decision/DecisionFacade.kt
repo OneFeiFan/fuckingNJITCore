@@ -13,11 +13,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 
+@Suppress("unused")
 object DecisionFacade {
 
-    fun switchAppMode(appContext: Context, mode: String): JSONObject {
+    fun switchAppMode(modeStr: String): JSONObject {
         AppDataCenter.getCurrentUser()?.let { user ->
-            user.currentAppMode = mode
+            user.currentAppMode = AppMode.fromName(modeStr)
             AppDataCenter.saveUser(user)
         }
 
@@ -25,15 +26,8 @@ object DecisionFacade {
     }
 
     suspend fun getDashboardInsight(appContext: Context): JSONObject = withContext(Dispatchers.IO) {
-        val result = JSONObject()
         try {
-            val currentModeStr = AppDataCenter.getCurrentUser()?.currentAppMode ?: "BALANCE_MODE"
-
-            val mode = when (currentModeStr) {
-                "SCHOLAR_MODE" -> AppMode.SCHOLAR_MODE
-                "HEALTH_MODE" -> AppMode.HEALTH_MODE
-                else -> AppMode.BALANCE_MODE
-            }
+            val mode = AppDataCenter.getCurrentUser()?.currentAppMode ?: AppMode.BALANCE_MODE
 
             val curriculumsObj = UserManagerImpl.getInstance().getCurriculum(appContext, false)
             val validCoursesArray = curriculumsObj.getJSONArray("validTimeCourses") ?: JSONArray()
@@ -80,11 +74,10 @@ object DecisionFacade {
                 distractionMins = distractionMins
             )
 
-            result["data"] = dashboardJson
+            return@withContext NetworkStatus.Success.toJsonResult(dashboardJson)
         } catch (e: Exception) {
             e.printStackTrace()
             return@withContext NetworkStatus.UnknownError.toJsonResult()
         }
-        return@withContext NetworkStatus.Success.toJsonResult(result)
     }
 }

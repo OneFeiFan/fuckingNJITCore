@@ -21,4 +21,14 @@ enum class AppMode(
     SCHOLAR_MODE("学霸冲刺模式", ModeWeight(1.0f, 0.2f), InterventionConfig(2, 1, 3)),
     BALANCE_MODE("劳逸结合模式", ModeWeight(0.5f, 0.5f), InterventionConfig(10, 10, 2)),
     HEALTH_MODE("健康活力模式", ModeWeight(0.1f, 1.0f), InterventionConfig(20, 30, 1));
+
+    companion object {
+        /**
+         * 统一映射逻辑：String -> AppMode
+         * 默认返回 BALANCE_MODE 以增强健壮性
+         */
+        fun fromName(name: String?): AppMode {
+            return AppMode.entries.find { it.name == name } ?: BALANCE_MODE
+        }
+    }
 }

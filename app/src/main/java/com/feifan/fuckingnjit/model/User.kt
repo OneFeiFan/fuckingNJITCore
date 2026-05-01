@@ -3,6 +3,7 @@ package com.feifan.fuckingnjit.model
 import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.JSONArray
 import com.alibaba.fastjson.JSONObject
+import com.feifan.fuckingnjit.decision.AppMode
 import com.feifan.fuckingnjit.utils.RSAPasswordConverter
 import io.objectbox.annotation.Convert
 import io.objectbox.annotation.Entity
@@ -26,7 +27,8 @@ data class User(
 
     // --- 用户个人偏好 (从 SP 和 Base 吸收) ---
     var storePassword: Boolean = true,
-    var currentAppMode: String = "BALANCE_MODE", // 取值: SCHOLAR_MODE, BALANCE_MODE, HEALTH_MODE
+    @Convert(converter = AppModeConverter::class, dbType = String::class)
+    var currentAppMode: AppMode = AppMode.BALANCE_MODE,
 
     // --- 教务学业数据 ---
     var gpa: String = "0",
@@ -69,5 +71,15 @@ class JSONArrayConverter : PropertyConverter<JSONArray?, String?> {
             return null
         }
         return entityProperty.toJSONString()
+    }
+}
+
+class AppModeConverter : PropertyConverter<AppMode, String> {
+    override fun convertToEntityProperty(databaseValue: String?): AppMode {
+        return AppMode.fromName(databaseValue)
+    }
+
+    override fun convertToDatabaseValue(entityProperty: AppMode?): String {
+        return entityProperty?.name ?: AppMode.BALANCE_MODE.name
     }
 }

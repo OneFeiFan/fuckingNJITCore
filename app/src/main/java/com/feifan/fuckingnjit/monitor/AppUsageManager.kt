@@ -277,8 +277,7 @@ class AppUsageManager : AccessibilityService() {
         if (!(isGroupA || isGroupB)) return
 
         // 2. 获取当前模式配置
-        val prefs = this.getSharedPreferences("app_decision", MODE_PRIVATE)
-        val currentModeStr = prefs.getString("current_mode", "BALANCE_MODE") ?: "BALANCE_MODE"
+        val currentModeStr = AppDataCenter.getCurrentUser()?.currentAppMode ?: "BALANCE_MODE"
         val currentMode = when (currentModeStr) {
             "SCHOLAR_MODE" -> AppMode.SCHOLAR_MODE
             "HEALTH_MODE" -> AppMode.HEALTH_MODE
@@ -480,18 +479,14 @@ class AppUsageManager : AccessibilityService() {
     }
 
     /**
-     * 【核心新增】：将摸鱼时长安全地持久化到 SharedPreferences
      * 按照每天一个 Key 来存，例如 "distraction_2026-04-05"
      */
     private fun saveDistractionTime(addedMins: Int) {
         try {
-            val prefs =
-                applicationContext.getSharedPreferences("app_usage_stats", MODE_PRIVATE)
-            val todayKey = "distraction_${LocalDate.now()}"
-            val currentTotal = prefs.getInt(todayKey, 0)
-            prefs.edit().putInt(todayKey, currentTotal + addedMins).apply()
-
-            Log.d(TAG, "💾 今日累计摸鱼已达: ${currentTotal + addedMins} 分钟")
+            AppDataCenter.updateTodayRecord { record ->
+                record.totalDistractionMins += addedMins
+                Log.d(TAG, "💾 今日累计摸鱼已达: ${record.totalDistractionMins} 分钟")
+            }
         } catch (e: Exception) {
             Log.e(TAG, "保存摸鱼时长失败", e)
         }

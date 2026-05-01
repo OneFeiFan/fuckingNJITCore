@@ -1,49 +1,31 @@
 package com.feifan.fuckingnjit.monitor
 
 import android.content.Context
-import android.content.SharedPreferences
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.util.Log
-import java.util.Calendar
+import com.feifan.fuckingnjit.utils.database.AppDataCenter
 
 object StepMonitorManager : SensorEventListener {
 
     private const val TAG = "StepMonitorManager"
-    private const val PREFS_NAME = "step_monitor_prefs"
 
     private var sensorManager: SensorManager? = null
     private var stepSensor: Sensor? = null
-    private var prefs: SharedPreferences? = null
 
-    private var rawTotalSteps: Float = -1f
-    private var lastRawSteps: Float = -1f
-    private var lastRecordedDayOfYear = -1
-
-    var currentSessionSteps: Int = 0
-        get() {
-            checkAndResetIfNewDay()
-            return field
-        }
-        private set
+    // 直接通过数据中心获取今日步数，对外保持只读
+    val currentSessionSteps: Int
+        get() = AppDataCenter.getTodayRecord().currentSteps
 
     @Synchronized
     fun init(context: Context) {
         if (sensorManager != null) return
 
         val appContext = context.applicationContext
-        // 1. 初始化本地持久化存储
-        prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-        // 2. 从硬盘恢复上次 App 死亡前的数据
-        lastRecordedDayOfYear = prefs?.getInt("last_day", -1) ?: -1
-        lastRawSteps = prefs?.getFloat("last_raw", -1f) ?: -1f
-        currentSessionSteps = prefs?.getInt("current_steps", 0) ?: 0
-
-
-        // 3. 注册传感器
+        // 注册传感器 (彻底移除了 的初始化逻辑)
         sensorManager = appContext.getSystemService(Context.SENSOR_SERVICE) as SensorManager
         stepSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
 
@@ -55,62 +37,27 @@ object StepMonitorManager : SensorEventListener {
         }
     }
 
-    private fun checkAndResetIfNewDay() {
-        val currentDay = Calendar.getInstance().get(Calendar.DAY_OF_YEAR)
-
-        if (lastRecordedDayOfYear == -1) {
-            lastRecordedDayOfYear = currentDay
-            saveToDisk() // 存盘
-            return
-        }
-
-        if (lastRecordedDayOfYear != currentDay) {
-            Log.d(TAG, "检测到跨天，今日步数清零")
-            currentSessionSteps = 0
-            lastRecordedDayOfYear = currentDay
-            saveToDisk() // 存盘
-        }
-    }
-
     override fun onSensorChanged(event: SensorEvent?) {
         if (event?.sensor?.type == Sensor.TYPE_STEP_COUNTER) {
-            checkAndResetIfNewDay()
+            val rawTotalSteps = event.values[0]
 
-            rawTotalSteps = event.values[0]
+            // 将所有逻辑委托给 AppDataCenter 安全的高阶函数，ObjectBox 的写入极速且线程安全
+            AppDataCenter.updateTodayRecord { record ->
 
-            if (lastRawSteps < 0) {
-                lastRawSteps = rawTotalSteps
-                saveToDisk()
+                // 1. 跨天自动重置，或者设备重启后的基准对齐
+                if (record.lastRawSteps < 0 || rawTotalSteps < record.lastRawSteps) {
+                    Log.w(TAG, "对齐计步器基准 (新基准: $rawTotalSteps)")
+                    record.lastRawSteps = rawTotalSteps
+                }
+
+                // 2. 计算增量并累加
+                val delta = (rawTotalSteps - record.lastRawSteps).toInt()
+                if (delta > 0) {
+                    record.currentSteps += delta
+                    record.lastRawSteps = rawTotalSteps
+                    Log.d(TAG, "步数增加: +$delta, 今日累计: ${record.currentSteps}")
+                }
             }
-
-            if (rawTotalSteps < lastRawSteps) {
-                Log.w(TAG, "检测到设备硬件重启，重新对齐计步器基准")
-                lastRawSteps = rawTotalSteps
-                saveToDisk()
-            }
-
-            val delta = (rawTotalSteps - lastRawSteps).toInt()
-            if (delta > 0) {
-                currentSessionSteps += delta
-                lastRawSteps = rawTotalSteps
-                Log.d(TAG, "步数增加: +$delta, 今日累计: $currentSessionSteps")
-
-                // 每次有实质性增加时，异步写入硬盘
-                saveToDisk()
-            }
-        }
-    }
-
-    /**
-     * 将关键状态写入硬盘，防止被杀后台丢失
-     */
-    private fun saveToDisk() {
-        // 使用 apply() 是异步非阻塞的，不会卡顿传感器回调线程
-        prefs?.edit()?.apply {
-            putInt("last_day", lastRecordedDayOfYear)
-            putFloat("last_raw", lastRawSteps)
-            putInt("current_steps", currentSessionSteps)
-            apply()
         }
     }
 

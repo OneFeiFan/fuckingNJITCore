@@ -1,7 +1,6 @@
 package com.feifan.fuckingnjit.decision
 
 import android.content.Context
-import androidx.core.content.edit
 import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.JSONArray
 import com.alibaba.fastjson.JSONObject
@@ -16,21 +15,19 @@ import java.time.LocalDate
 
 object DecisionFacade {
 
-    fun switchAppMode(appContext: Context, mode: String): String {
-        val prefs = appContext.getSharedPreferences("app_decision", Context.MODE_PRIVATE)
-        prefs.edit { putString("current_mode", mode) }
+    fun switchAppMode(appContext: Context, mode: String): JSONObject {
+        AppDataCenter.getCurrentUser()?.let { user ->
+            user.currentAppMode = mode
+            AppDataCenter.saveUser(user)
+        }
 
-        val result = JSONObject()
-        result["code"] = 200
-        result["msg"] = "切换成功"
-        return result.toJSONString()
+        return NetworkStatus.Success.toJsonResult("切换成功")
     }
 
     suspend fun getDashboardInsight(appContext: Context): JSONObject = withContext(Dispatchers.IO) {
         val result = JSONObject()
         try {
-            val prefs = appContext.getSharedPreferences("app_decision", Context.MODE_PRIVATE)
-            val currentModeStr = prefs.getString("current_mode", "BALANCE_MODE") ?: "BALANCE_MODE"
+            val currentModeStr = AppDataCenter.getCurrentUser()?.currentAppMode ?: "BALANCE_MODE"
 
             val mode = when (currentModeStr) {
                 "SCHOLAR_MODE" -> AppMode.SCHOLAR_MODE
@@ -58,10 +55,7 @@ object DecisionFacade {
 
             val recentSleepRecords = AppDataCenter.getValidSleepRecordsForUI().take(7).reversed()
             val todaySteps = StepMonitorManager.currentSessionSteps
-            val usagePrefs =
-                appContext.getSharedPreferences("app_usage_stats", Context.MODE_PRIVATE)
-            val todayKey = "distraction_${LocalDate.now()}"
-            val distractionMins = usagePrefs.getInt(todayKey, 0)
+            val distractionMins = AppDataCenter.getTodayRecord().totalDistractionMins
 
             val todayDayOfWeek = LocalDate.now().dayOfWeek.value
             val todayCourses = allValidCourses.filter { course ->

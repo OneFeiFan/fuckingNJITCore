@@ -56,7 +56,10 @@ class HttpRequestHelper {
                     }
 
                     // 2. 卫语句：拦截响应体为空的情况，安全地拿到非空 body
-                    val body = response.body ?: throw ApiException(NetworkStatus.ParseError, "下载失败：响应体为空")
+                    val body = response.body ?: throw ApiException(
+                        NetworkStatus.ParseError,
+                        "下载失败：响应体为空"
+                    )
 
                     // 3. 主干逻辑：安心处理正常的流写入
                     File(context.filesDir, fileName).outputStream().use { output ->

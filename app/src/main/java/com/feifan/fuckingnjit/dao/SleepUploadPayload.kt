@@ -1,9 +1,6 @@
-import java.text.SimpleDateFormat
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.util.Date
-import java.util.Locale
 
 // 单个传感器数据点 (对应服务器端的 data 数组内部对象)
 data class UploadSensorPoint(

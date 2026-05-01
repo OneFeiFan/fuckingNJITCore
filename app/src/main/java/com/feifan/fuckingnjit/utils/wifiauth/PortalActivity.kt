@@ -14,6 +14,7 @@ import android.os.Parcelable
 import android.util.Log
 import android.widget.Toast
 import com.feifan.fuckingnjit.utils.Manager
+import com.feifan.fuckingnjit.utils.SystemActionHelper
 import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
 import com.feifan.fuckingnjit.utils.database.UserBoxUtils
 import kotlinx.coroutines.CoroutineScope
@@ -61,8 +62,7 @@ class PortalActivity : Activity() {
         val captivePortal =
             intent.getParcelableExtra<Parcelable>("android.net.extra.CAPTIVE_PORTAL") as CaptivePortal
         this.mCaptivePortal = captivePortal
-//        setContentView(R.layout.activity_loading_check) // 显示“正在检测...”
-        Manager.openDialog("正在处理目标网络...", this)
+        SystemActionHelper.openDialog("正在处理目标网络...", this)
         val network: Network? = intent.getParcelableExtra(ConnectivityManager.EXTRA_NETWORK)
 
         if (network == null) {
@@ -70,8 +70,6 @@ class PortalActivity : Activity() {
             forwardToSystemComponent()
             return
         }
-
-//        findViewById<TextView>(R.id.tv_loading_text).text = "正在探测目标内网..."
 
         // 开启主动探测
         checkTargetServerDirectly(network)
@@ -187,7 +185,7 @@ class PortalActivity : Activity() {
                 }
                 val cm = getSystemService(ConnectivityManager::class.java)
                 cm.bindProcessToNetwork(null) // 解除绑定
-                Manager.dismissDialog()
+                SystemActionHelper.dismissDialog()
                 finish()
             }
         }
@@ -229,7 +227,7 @@ class PortalActivity : Activity() {
         }
         val cm = getSystemService(ConnectivityManager::class.java)
         cm.bindProcessToNetwork(null) // 解除绑定
-        Manager.dismissDialog()
+        SystemActionHelper.dismissDialog()
         finish()
     }
 }

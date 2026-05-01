@@ -1,11 +1,14 @@
 package com.feifan.fuckingnjit.service.impl
 
+import android.content.Context
+import android.util.Log
 import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.JSONObject
 import com.feifan.fuckingnjit.model.User
 import com.feifan.fuckingnjit.service.UserManager
 import com.feifan.fuckingnjit.utils.Manager
 import com.feifan.fuckingnjit.utils.NetworkStatus
+import com.feifan.fuckingnjit.utils.SystemActionHelper
 import com.feifan.fuckingnjit.utils.TimeManager
 import com.feifan.fuckingnjit.utils.Tools
 import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
@@ -22,10 +25,10 @@ class UserManagerImpl private constructor() : UserManager {
         fun getInstance(): UserManagerImpl = instance_
     }
 
-    override fun setCurrentUser(id: String) {
+    override fun setCurrentUser(context: Context,id: String) {
         if (UserBoxUtils.getUserById(id) != null) {
             BaseDataBoxUtils.updateBaseData { it.currentUserId = id }
-            Manager.startLogin(true)
+            SystemActionHelper.startLogin(context,true)
         }
     }
 
@@ -37,7 +40,7 @@ class UserManagerImpl private constructor() : UserManager {
         BaseDataBoxUtils.updateBaseData { it.currentUserId = "" }
     }
 
-    override fun getAllUsers(): String {
+    override fun getAllUsers(context: Context): String {
         val resultList = JSONObject()
         val userDataList = UserBoxUtils.getAllUser()
         for (userData in userDataList) {
@@ -50,13 +53,12 @@ class UserManagerImpl private constructor() : UserManager {
         return try {
             resultList.toJSONString()
         } catch (e: Exception) {
-            println(e.message)
-            Manager.handleException(e, "Failed to get all users")
+            SystemActionHelper.handleException(context,e, "Failed to get all users")
             JSON.toJSONString(intArrayOf())
         }
     }
 
-    override suspend fun deleteUser(id: String): Boolean {
+    override suspend fun deleteUser(context: Context,id: String): Boolean {
         return try {
             val tmp = UserBoxUtils.getUserById(id)
             if (tmp != null) {
@@ -64,18 +66,18 @@ class UserManagerImpl private constructor() : UserManager {
             }
             true
         } catch (e: Exception) {
-            Manager.handleException(e, "Failed to delete user")
+            SystemActionHelper.handleException(context,e, "Failed to delete user")
             false
         }
     }
 
-    override suspend fun addUser(user: User) = withContext(Dispatchers.IO) {
+    override suspend fun addUser(context: Context,user: User) = withContext(Dispatchers.IO) {
         try {
             if (user.id.isEmpty()) throw Exception("用户ID不能为空")
             // 等待学期日期处理完成（如果有）
             (async {
                 try {
-                    val startDate = Manager.getWebService().getSemesterStartDate()
+                    val startDate = Manager.getWebService().getSemesterStartDate(context)
                     val timestamp = LocalDate.parse(startDate)
                         .atStartOfDay(ZoneId.systemDefault())
                         .toInstant()
@@ -85,23 +87,25 @@ class UserManagerImpl private constructor() : UserManager {
                         it.currentWeek = TimeManager.getInstance().calculateCurrentWeek(timestamp)
                     }
                 } catch (e: Exception) {
-                    Manager.handleException(e, "获取学期开始日期失败")
+                    SystemActionHelper.handleException(context,e, "获取学期开始日期失败")
                 }
             }).await()
-            val userData = (async { Manager.getWebService().getUserData() }).await()
-            val scores = (async { Manager.getWebService().getAllSorces("", "") }).await()
+            val userData = (async { Manager.getWebService().getUserData(context) }).await()
+            val scores = (async { Manager.getWebService().getAllSorces(context,"", "") }).await()
 
-            if (userData.isEmpty()) {
-                Manager.showToast("获取用户信息失败")
+            if (userData.isEmpty()&&userData["code"] != 200) {
+                SystemActionHelper.showToast(context,"获取用户信息失败")
                 return@withContext
             }
 
             // 更新用户数据
-            user.id = userData.getString("id")
-            user.name = userData.getString("name")
+            user.id = (userData["data"] as JSONObject).getString("id")
+            user.name = (userData["data"] as JSONObject).getString("name")
             println(scores.toJSONString())
-            user.scores = scores.getJSONArray("data")
-            user.gpa = Tools.calculateAverageGPA(user.scores)
+            if(scores["code"] == 200) {
+                user.scores = scores.getJSONArray("data")
+                user.gpa = Tools.calculateAverageGPA(user.scores)
+            }
             if (!isPasswordStorageEnabled()) {
                 user.password = ""
             }
@@ -109,12 +113,12 @@ class UserManagerImpl private constructor() : UserManager {
             // 更新存储
             UserBoxUtils.updateUser(user)
             BaseDataBoxUtils.updateBaseData { it.currentUserId = user.id }
-            getCurriculum(true)
+            getCurriculum(context,true)
         } catch (e: Exception) {
-            Manager.handleException(e, "添加用户失败")
+            SystemActionHelper.handleException(context,e, "添加用户失败")
             throw e  // 重新抛出异常，让调用方知道失败
         } finally {
-            Manager.dismissDialog()
+            SystemActionHelper.dismissDialog()
         }
     }
 
@@ -150,16 +154,16 @@ class UserManagerImpl private constructor() : UserManager {
         }
     }
 
-    suspend fun getUserScores(xnm: String, xqm: String, refresh: Boolean): String {
+    suspend fun getUserScores(context: Context,xnm: String, xqm: String, refresh: Boolean): JSONObject {
         val userData = UserBoxUtils.getUserById(BaseDataBoxUtils.getCurrentUserId())
         if (userData == null) {
-            Manager.startLogin(true)
-            Manager.showToast("需要登录")
-            return "{}"
+            SystemActionHelper.startLogin(context,true)
+            SystemActionHelper.showToast(context,"需要登录")
+            return JSONObject()
         }
 
         if (userData.scores.isEmpty() || refresh) {
-            val tmp = Manager.getWebService().getAllSorces(xnm, xqm)
+            val tmp = Manager.getWebService().getAllSorces(context,xnm, xqm)
             if (!tmp.isEmpty()) {
                 userData.scores = tmp.getJSONArray("data")
                 UserBoxUtils.updateUser(userData)
@@ -167,41 +171,41 @@ class UserManagerImpl private constructor() : UserManager {
         }
         val result = JSONObject()
         result["data"] = userData.scores
-        return result.toJSONString()
+        return result
     }
 
-    suspend fun getCurriculum(refresh: Boolean): String {
+    suspend fun getCurriculum(context: Context,refresh: Boolean): JSONObject {
         try {
             val userData = UserBoxUtils.getUserById(BaseDataBoxUtils.getCurrentUserId())
             if (userData == null) {
-                Manager.startLogin(true)
-                Manager.showToast("需要登录")
-                return "{}"
+                SystemActionHelper.startLogin(context,true)
+                SystemActionHelper.showToast(context,"需要登录")
+                return JSONObject()
             }
             if (userData.curriculums.isEmpty() || refresh) {
-                val tmp = Manager.getWebService().getCurriculum()
+                val tmp = Manager.getWebService().getCurriculum(context)
                 if (!tmp.isEmpty()) {
                     userData.curriculums = tmp
                     UserBoxUtils.updateUser(userData)
                 }
             }
-            return userData.curriculums.toJSONString()
+            return userData.curriculums
         } catch (e: Exception) {
-            Manager.handleException(e, "获取课程表失败")
-            return "{}"
+            SystemActionHelper.handleException(context,e, "获取课程表失败")
+            return JSONObject()
         }
     }
 
-    suspend fun getAcademicProgress(refresh: Boolean): JSONObject {
+    suspend fun getAcademicProgress(context: Context,refresh: Boolean): JSONObject {
         try {
             val userData = UserBoxUtils.getUserById(BaseDataBoxUtils.getCurrentUserId())
             if (userData == null) {
-                Manager.startLogin(true)
-                Manager.showToast("需要登录")
+                SystemActionHelper.startLogin(context,true)
+                SystemActionHelper.showToast(context,"需要登录")
                 return NetworkStatus.Unauthorized.toJsonResult()
             }
             if (userData.academicProgress.isEmpty() || refresh) {
-                val tmp = Manager.getWebService().getAcademicProgress()
+                val tmp = Manager.getWebService().getAcademicProgress(context)
                 if (!tmp.isEmpty()) {
                     userData.academicProgress = tmp
                     UserBoxUtils.updateUser(userData)
@@ -209,7 +213,7 @@ class UserManagerImpl private constructor() : UserManager {
             }
             return userData.academicProgress
         } catch (e: Exception) {
-            Manager.handleException(e, "获取学业进度失败")
+            SystemActionHelper.handleException(context,e, "获取学业进度失败")
             return NetworkStatus.UnknownError.toJsonResult()
         }
     }

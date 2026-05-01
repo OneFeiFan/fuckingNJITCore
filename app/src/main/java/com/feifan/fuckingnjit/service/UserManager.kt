@@ -1,12 +1,13 @@
 package com.feifan.fuckingnjit.service
 
+import android.content.Context
 import com.feifan.fuckingnjit.model.User
 
 
 interface UserManager {
-    suspend fun addUser(user: User)
-    suspend fun deleteUser(id: String): Boolean
+    suspend fun addUser(context: Context,user: User)
+    suspend fun deleteUser(context: Context,id: String): Boolean
     fun getCurrentUser(): User
-    fun setCurrentUser(id: String)
-    fun getAllUsers(): String
+    fun setCurrentUser(context: Context,id: String)
+    fun getAllUsers(context : Context): String
 }

@@ -1,6 +1,7 @@
 package com.feifan.fuckingnjit.service.impl
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
@@ -9,8 +10,10 @@ import android.webkit.WebView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.feifan.fuckingnjit.model.User
+import com.feifan.fuckingnjit.utils.AppConfigStorage
 import com.feifan.fuckingnjit.utils.J2J
 import com.feifan.fuckingnjit.utils.Manager
+import com.feifan.fuckingnjit.utils.SystemActionHelper
 import com.feifan.fuckingnjit.utils.TodayScheduleManager
 import kotlinx.coroutines.launch
 import java.util.Observable
@@ -47,9 +50,8 @@ class SampleWebViewImpl : AppCompatActivity(), Observer {
 
     override fun onDestroy() {
         J2J.getInstance().deleteObserver(this)
-//        J2J.getInstance().deleteObserver(CurriculumsWidgetProvider.observer)
         releaseWebView()
-        Manager.endLogin()
+        AppConfigStorage.endLogin()
         super.onDestroy()
     }
 
@@ -75,10 +77,10 @@ class SampleWebViewImpl : AppCompatActivity(), Observer {
     override fun update(o: Observable?, arg: Any?) {
         lifecycleScope.launch {
             try {
-                Manager.getUserManager().addUser(arg as User)
+                Manager.getUserManager().addUser(this@SampleWebViewImpl,arg as User)
                 finish() // 确保在主线程执行
             } catch (e: Exception) {
-                Manager.handleException(e, "失败")
+                SystemActionHelper.handleException(this@SampleWebViewImpl,e, "失败")
             }
         }
     }

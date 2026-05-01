@@ -4,6 +4,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import com.feifan.fuckingnjit.utils.Manager
+import com.feifan.fuckingnjit.utils.SystemActionHelper
 import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
 
 class SampleWebViewClientImpl() : WebViewClient() {
@@ -33,7 +34,7 @@ class SampleWebViewClientImpl() : WebViewClient() {
             )
             BaseDataBoxUtils.updateBaseData { it.currentUserId = "" }
         } else if (url.startsWith("https://casb.njit.edu.cn/enlink/sso/login")) {
-            Manager.openDialog("处理SSO登录", view.context)
+            SystemActionHelper.openDialog("处理SSO登录", view.context)
             view.evaluateJavascript(
                 """
                 (function() {
@@ -42,7 +43,7 @@ class SampleWebViewClientImpl() : WebViewClient() {
                 """.trimIndent(), null
             )
         } else if (url.startsWith("https://casb.njit.edu.cn/http/webvpn3e1a11b7208e283ab07ade5d2913fc13d6f6fe09d2dc7372db2a51a14aa4167a/jwglxt/xtgl/index_initMenu.html")) {
-            Manager.openDialog("正在更新用户信息", view.context)
+            SystemActionHelper.openDialog("正在更新用户信息", view.context)
             view.evaluateJavascript(
                 """
                 (function() {

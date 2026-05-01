@@ -42,7 +42,7 @@ class KillYiBan : AppCompatActivity() {
                 lateinit var task: Task
                 try {
                     withContext(Dispatchers.Main) {
-                        Manager.openDialog(
+                        SystemActionHelper.openDialog(
                             "正在登录易班...",
                             this@KillYiBan
                         )
@@ -53,8 +53,8 @@ class KillYiBan : AppCompatActivity() {
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
-                        Manager.dismissDialog()
-                        Manager.handleException(e, "登录易班失败")
+                        SystemActionHelper.dismissDialog()
+                        SystemActionHelper.handleException(this@KillYiBan, e,"登录易班失败")
                         showToast(this@KillYiBan, "登录失败，请检查网络连接或密码是否正确")
                     }
                     this@KillYiBan.finish()
@@ -62,7 +62,7 @@ class KillYiBan : AppCompatActivity() {
 
                 try {
                     withContext(Dispatchers.Main) {
-                        Manager.openDialog(
+                        SystemActionHelper.openDialog(
                             "正在尝试签到...",
                             this@KillYiBan
                         )
@@ -71,14 +71,14 @@ class KillYiBan : AppCompatActivity() {
                         task.submitSignFeedback()
                     }
                     withContext(Dispatchers.Main) {
-                        Manager.dismissDialog()
+                        SystemActionHelper.dismissDialog()
                         showToast(this@KillYiBan, result)
                     }
                     this@KillYiBan.finish()
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
-                        Manager.dismissDialog()
-                        Manager.handleException(e, "签到失败")
+                        SystemActionHelper.dismissDialog()
+                        SystemActionHelper.handleException(this@KillYiBan,e, "签到失败")
                         showToast(this@KillYiBan, "签到失败，请检查网络连接或密码是否正确")
                     }
                     this@KillYiBan.finish()

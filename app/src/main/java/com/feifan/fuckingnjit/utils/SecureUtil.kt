@@ -108,7 +108,7 @@ class SecureUtil {
                 val encryptedBytes = cipher.doFinal(plaintext.toByteArray())
                 return Base64.encodeToString(encryptedBytes, Base64.DEFAULT)
             } catch (e: Exception) {
-                Manager.handleException(e, "RSA加密失败")
+                e.printStackTrace()
             }
             return plaintext
         }
@@ -128,7 +128,7 @@ class SecureUtil {
                 val decryptedBytes = cipher.doFinal(decodedBytes)
                 return String(decryptedBytes)
             } catch (e: Exception) {
-                Manager.handleException(e, "RSA解密失败")
+                e.printStackTrace()
             }
             return ciphertext
         }

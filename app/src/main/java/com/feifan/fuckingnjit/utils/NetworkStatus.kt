@@ -2,6 +2,11 @@ package com.feifan.fuckingnjit.utils
 
 import com.alibaba.fastjson.JSONObject
 
+class ApiException(
+    val status: NetworkStatus,
+    override val message: String = status.message,
+    cause: Throwable? = null
+) : Exception(message, cause)
 /**
  * 网络状态码基类
  */
@@ -82,31 +87,3 @@ object NetworkStatusUtils {
         }
     }
 }
-
-// 使用示例
-//fun main() {
-//    // 示例1: 直接使用状态码
-//    val responseCode = 404
-//    val status = NetworkStatusUtils.fromCode(responseCode)
-//
-//    println("状态码: ${status.code}")
-//    println("状态信息: ${status.message}")
-//    println("是否成功: ${status.isSuccess()}")
-//    println("是否是客户端错误: ${status.isClientError()}")
-//
-//    // 示例2: 处理API响应
-//    val apiResponse = NetworkStatusUtils.handleResponse(200, mapOf("data" to "示例数据"))
-//
-//    apiResponse.onSuccess {
-//        println("API请求成功: $it")
-//    }.onFailure {
-//        println("API请求失败: ${it.message}")
-//    }
-//
-//    // 示例3: 匹配特定状态
-//    when (NetworkStatusUtils.fromCode(503)) {
-//        is NetworkStatus.ServiceUnavailable -> println("服务不可用，请稍后重试")
-//        is NetworkStatus.NotFound -> println("请求的资源不存在")
-//        else -> println("其他错误")
-//    }
-//}

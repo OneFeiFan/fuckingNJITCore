@@ -15,21 +15,14 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.io.File
 import java.io.IOException
-import java.net.ConnectException
 import java.net.HttpURLConnection
 import java.net.ProtocolException
-import java.net.SocketException
-import java.net.SocketTimeoutException
-import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
-import kotlin.coroutines.resume
-import kotlin.coroutines.suspendCoroutine
-
 
 class HttpRequestHelper {
     companion object {
         private var lastLoginCheckTime = 0L
-        private const val LOGIN_CHECK_INTERVAL = 60 * 1000 // 1分钟检查一次
+        private const val LOGIN_CHECK_INTERVAL = 60 * 1000
         private val okHttpClient: OkHttpClient by lazy {
             OkHttpClient.Builder()
                 .retryOnConnectionFailure(true)
@@ -40,8 +33,7 @@ class HttpRequestHelper {
         }
         private val cookieManager: CookieManager = CookieManager.getInstance()
         const val BASE_URL = "https://casb.njit.edu.cn"
-        const val WEBVPN_PATH =
-            "/http/webvpn3e1a11b7208e283ab07ade5d2913fc13d6f6fe09d2dc7372db2a51a14aa4167a"
+        const val WEBVPN_PATH = "/http/webvpn3e1a11b7208e283ab07ade5d2913fc13d6f6fe09d2dc7372db2a51a14aa4167a"
         val COMMON_HEADERS = mapOf(
             "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
             "Accept" to "*/*",
@@ -50,231 +42,114 @@ class HttpRequestHelper {
             "Origin" to BASE_URL
         )
 
-        suspend fun downloadFile(
-            url: String,
-            fileName: String,
-            context: Context
-        ): Boolean {
-            val request = Request.Builder()
-                .url(url)
-                .headers(COMMON_HEADERS.toHeaders())
-                .build()
-
-            return suspendCoroutine { continuation ->
-                try {
-                    val response = okHttpClient.newCall(request).execute()
-                    if (response.isSuccessful) {
-                        response.body?.let { body ->
-                            val file = File(context.filesDir, fileName)
-                            file.outputStream().use { output ->
-                                body.byteStream().use { input ->
-                                    input.copyTo(output)
-                                }
-                            }
-                            continuation.resume(true)
-                        } ?: continuation.resume(false)
-                    } else {
-                        continuation.resume(false)
-                    }
-                } catch (e: Exception) {
-                    Manager.handleException(e, "文件下载失败")
-                    continuation.resume(false)
+        suspend fun downloadFile(url: String, fileName: String, context: Context): Boolean = withContext(Dispatchers.IO) {
+            val request = Request.Builder().url(url).headers(COMMON_HEADERS.toHeaders()).build()
+            try {
+                val response = okHttpClient.newCall(request).execute()
+                if (response.isSuccessful) {
+                    response.body?.let { body ->
+                        File(context.filesDir, fileName).outputStream().use { output ->
+                            body.byteStream().use { input -> input.copyTo(output) }
+                        }
+                        return@withContext true
+                    } ?: throw ApiException(NetworkStatus.ParseError, "下载失败：响应体为空")
+                } else {
+                    val status = NetworkStatusUtils.fromCode(response.code)
+                    throw ApiException(status, "下载失败：HTTP状态码 ${response.code}")
                 }
+            } catch (e: ApiException) {
+                throw e
+            } catch (e: Exception) {
+                throw ApiException(NetworkStatus.NetworkUnavailable, "文件下载异常: ${e.message}", e)
             }
         }
-
 
         private fun getPersistentCookies(cookie: String): Map<String, String> {
-            return cookie.split(";")
-                .associate { it.split("=").let { parts -> parts[0] to parts.getOrElse(1) { "" } } }
+            return cookie.split(";").associate { it.split("=").let { parts -> parts[0] to parts.getOrElse(1) { "" } } }
         }
 
-        private fun checkLoginIfNeeded(): Boolean {
-            val currentTime = System.currentTimeMillis()
-            return currentTime - lastLoginCheckTime >= LOGIN_CHECK_INTERVAL // 在有效期内，跳过检查
-        }
+        private fun checkLoginIfNeeded(): Boolean = (System.currentTimeMillis() - lastLoginCheckTime) >= LOGIN_CHECK_INTERVAL
 
-        // 网络异常统一处理
-        private fun handleNetworkException(e: IOException) {
-            when (e) {
-                is ConnectException, is UnknownHostException, is SocketException -> {
-                    Manager.handleException(e, "网络异常，请检查网络连接")
-                }
-
-                else -> {
-                    Manager.handleException(e, "登录验证失败")
-                }
-            }
-        }
-
-        /**
-         * 基础网络请求方法
-         */
         suspend fun executeBaseRequest(
             url: String,
             method: HttpMethod = HttpMethod.GET,
-            formParams: Map<String, String>? = null, // 用于传统表单请求 (如教务系统)
-            jsonStr: String? = null,                 // 用于 JSON 请求 (如我们的睡眠算法)
+            formParams: Map<String, String>? = null,
+            jsonStr: String? = null,
             headers: Headers? = null,
             cookie: String? = null
         ): String = withContext(Dispatchers.IO) {
 
             val requestBuilder = Request.Builder().url(url)
-
-            if (headers != null) {
-                requestBuilder.headers(headers)
-            } else {
-                requestBuilder.headers(COMMON_HEADERS.toHeaders())
-            }
-
-            if (!cookie.isNullOrBlank()) {
-                requestBuilder.addHeader("Cookie", cookie)
-            }
+            requestBuilder.headers(headers ?: COMMON_HEADERS.toHeaders())
+            if (!cookie.isNullOrBlank()) requestBuilder.addHeader("Cookie", cookie)
 
             if (method == HttpMethod.POST) {
-                // 根据传入的参数决定 Body 类型
                 val body = when {
-                    jsonStr != null -> {
-                        // 发现 JSON 字符串，按 application/json 发送
-                        jsonStr.toRequestBody("application/json; charset=utf-8".toMediaType())
-                    }
-
-                    formParams != null -> {
-                        // 发现 Map，按传统表单发送
-                        FormBody.Builder().apply {
-                            formParams.forEach { (key, value) -> add(key, value) }
-                        }.build()
-                    }
-
-                    else -> {
-                        FormBody.Builder().build() // 空 POST
-                    }
+                    jsonStr != null -> jsonStr.toRequestBody("application/json; charset=utf-8".toMediaType())
+                    formParams != null -> FormBody.Builder().apply { formParams.forEach { (k, v) -> add(k, v) } }.build()
+                    else -> FormBody.Builder().build()
                 }
                 requestBuilder.post(body)
             } else {
                 requestBuilder.get()
             }
 
-            val request = requestBuilder.build()
-
-            okHttpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    throw IOException("Unexpected code $response")
+            try {
+                okHttpClient.newCall(requestBuilder.build()).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        // 🎯 核心运用：将 HTTP 错误码完美映射到你的密封类
+                        throw ApiException(NetworkStatusUtils.fromCode(response.code), "请求失败，状态码: ${response.code}")
+                    }
+                    response.body?.string() ?: throw ApiException(NetworkStatus.ParseError, "响应体为空")
                 }
-                response.body?.string() ?: ""
+            } catch (e: IOException) {
+                throw ApiException(NetworkStatus.NetworkUnavailable, "网络请求失败: ${e.message}", e)
             }
         }
 
-        private suspend fun makeRequest(
-            url: String,
-            method: HttpMethod = HttpMethod.GET,
-            requestBody: Map<String, String> = emptyMap()
-        ): String {
-            // 1. 获取并校验 Cookie
+        private suspend fun makeRequest(url: String, method: HttpMethod = HttpMethod.GET, requestBody: Map<String, String> = emptyMap()): String {
             val cookie = cookieManager.getCookie(BASE_URL)
             if (cookie.isNullOrBlank()) {
-                Manager.showToast("需要登录")
-                Manager.startLogin(true)
-                return ""
+                // 🎯 核心运用：直接抛出 Unauthorized (401)
+                throw ApiException(NetworkStatus.Unauthorized, "Cookie 已失效，需要登录")
             }
 
-            // 2. 会话状态/VPN状态校验
             if (checkLoginIfNeeded()) {
                 lastLoginCheckTime = System.currentTimeMillis()
                 try {
-                    val connection =
-                        Jsoup.connect("$BASE_URL$WEBVPN_PATH/jwglxt/xtgl/index_initMenu.html")
-                            .cookies(getPersistentCookies(cookie))
-                            .followRedirects(false)
-                            .timeout(10000) // 10秒超时
-
+                    val connection = Jsoup.connect("$BASE_URL$WEBVPN_PATH/jwglxt/xtgl/index_initMenu.html")
+                        .cookies(getPersistentCookies(cookie)).followRedirects(false).timeout(10000)
                     val response = connection.execute()
 
                     when (response.statusCode()) {
                         HttpURLConnection.HTTP_OK -> {}
-                        // 直接重定向到登录页 -> 会话失效
                         HttpURLConnection.HTTP_MOVED_TEMP -> {
                             val location = response.header("Location")
-                            if (location?.contains("index_initMenu.html") == true ||
-                                location?.contains("login_slogin") == true
-                            ) {
-                                Manager.showToast("需要登录")
-                                Manager.startLogin(true)
-                                return ""
+                            if (location?.contains("index_initMenu.html") == true || location?.contains("login_slogin") == true) {
+                                throw ApiException(NetworkStatus.Unauthorized, "会话已过期 (302)")
                             }
                         }
-                        // 其他状态码处理
-                        else -> {
-                            Manager.handleException(
-                                Exception("HTTP状态异常: ${response.statusCode()}"),
-                                "登录验证失败"
-                            )
-                            return ""
-                        }
+                        else -> throw ApiException(NetworkStatusUtils.fromCode(response.statusCode()), "会话验证失败")
                     }
                 } catch (e: IOException) {
-                    when (e) {
-                        is SocketTimeoutException -> {
-                            Manager.handleException(e, "请求超时，请稍后再试")
-                        }
-
-                        else -> {
-                            handleNetworkException(e) // 统一处理网络异常
-                            return ""
-                        }
-                    }
+                    throw ApiException(NetworkStatus.GatewayTimeout, "验证会话超时: ${e.message}", e)
                 }
             }
 
-            // 3. 执行基础网络请求，并捕获业务特定的异常
-            return try {
-                // 调用我们刚刚抽离出来的纯净网络请求方法
-                executeBaseRequest(
-                    url = url,
-                    method = method,
-                    formParams = requestBody,
-                    headers = COMMON_HEADERS.toHeaders(),
-                    cookie = cookie
-                )
+            try {
+                return executeBaseRequest(url, method, requestBody, cookie = cookie)
             } catch (e: Exception) {
-                // 将原先在 suspendCoroutine 里的 catch 逻辑移到这里
-                if (e is ProtocolException) {
-                    if (e.message?.contains("Too many follow-up requests") == true) {
-                        Manager.handleException(e, "重试次数过多，cookie可能失效,请重新登录")
-                        Manager.startLogin(true)
-                    } else {
-                        Manager.handleException(e, "捕获到其他IO异常")
-                    }
-                } else {
-                    // 保留原代码中的 "onnect" 匹配逻辑 (匹配 connect / Connect)
-                    if (e.message?.contains("onnect") == true) {
-                        Manager.handleException(e, "网络异常，请检查网络连接")
-                    }
-                    Manager.handleException(e, "捕获到非ProtocolException异常")
+                if (e is ProtocolException && e.message?.contains("Too many follow-up requests") == true) {
+                    throw ApiException(NetworkStatus.Forbidden, "重定向次数过多")
                 }
-                "" // 发生异常时返回空字符串，与原逻辑保持一致
+                throw e
             }
         }
 
-        suspend fun getJsonResponse(
-            url: String,
-            method: HttpMethod = HttpMethod.GET,
-            requestBody: Map<String, String> = emptyMap()
-        ): String {
-            return makeRequest(url, method, requestBody)
-        }
+        suspend fun getJsonResponse(url: String, method: HttpMethod = HttpMethod.GET, requestBody: Map<String, String> = emptyMap()): String = makeRequest(url, method, requestBody)
 
-        suspend fun getHtmlResponse(
-            url: String,
-            method: HttpMethod = HttpMethod.GET,
-            requestBody: Map<String, String> = emptyMap()
-        ): Document {
-            val result = makeRequest(url, method, requestBody)
-            if (result.isEmpty()) {
-                return Document.createShell("")
-            } else {
-                return Jsoup.parse(result)
-            }
+        suspend fun getHtmlResponse(url: String, method: HttpMethod = HttpMethod.GET, requestBody: Map<String, String> = emptyMap()): Document {
+            return Jsoup.parse(makeRequest(url, method, requestBody))
         }
     }
 }

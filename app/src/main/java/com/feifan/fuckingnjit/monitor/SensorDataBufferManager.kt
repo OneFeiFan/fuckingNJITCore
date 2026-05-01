@@ -1,7 +1,7 @@
 package com.feifan.fuckingnjit.monitor
 
 import com.feifan.fuckingnjit.model.SleepSensorRecord
-import com.feifan.fuckingnjit.utils.Manager
+import com.feifan.fuckingnjit.service.DataSyncService
 import com.feifan.fuckingnjit.utils.database.SleepSensorBoxUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -67,7 +67,7 @@ object SensorDataBufferManager {
 
             CoroutineScope(Dispatchers.IO).launch {
                 println("⏰ 触发心跳机制：每天 11 点边缘计算数据修剪与自动上传")
-                Manager.uploadAndClearData()
+                DataSyncService.uploadAndClearData()
             }
         }
     }

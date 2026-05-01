@@ -1,4 +1,4 @@
-package com.feifan.fuckingnjit.utils
+package com.feifan.fuckingnjit.utils.network
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -8,6 +8,7 @@ import com.feifan.fuckingnjit.dao.FocusRecordDTO
 import com.feifan.fuckingnjit.dao.FocusUploadRequest
 import com.feifan.fuckingnjit.utils.database.AppDataCenter
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.security.MessageDigest
 
@@ -82,7 +83,7 @@ object FocusDataSyncManager {
 
     private suspend fun mockNetworkRequest(payload: FocusUploadRequest): Boolean {
         // 模拟网络耗时
-        kotlinx.coroutines.delay(1000)
+        delay(1000)
         return true
     }
 }

@@ -1,4 +1,4 @@
-package com.feifan.fuckingnjit.utils
+package com.feifan.fuckingnjit.utils.system
 
 import android.annotation.SuppressLint
 import android.content.ComponentName
@@ -20,6 +20,7 @@ import com.hjq.permissions.permission.base.IPermission
  * 权限与业务状态管理器 (专为 uni-app 桥接设计)
  * 采用 object 声明，彻底杜绝 Context 内存泄漏
  */
+@Suppress("unused")
 class PermissionsManager private constructor(private var context: Context) {
     companion object {
         @SuppressLint("StaticFieldLeak")
@@ -204,35 +205,6 @@ class PermissionsManager private constructor(private var context: Context) {
      */
     fun isAccessibilitySettingsOn(): Boolean {
         return !AppUsageManager.isServiceZombie(context)
-//        var accessibilityEnabled = 0
-//        val service = "${context.packageName}/${AppUsageManager::class.java.name}"
-//        println("无障碍名称：$service")
-//        try {
-//            accessibilityEnabled = Settings.Secure.getInt(
-//                context.contentResolver,
-//                Settings.Secure.ACCESSIBILITY_ENABLED
-//            )
-//        } catch (e: Settings.SettingNotFoundException) {
-//            return false
-//        }
-//
-//        if (accessibilityEnabled == 1) {
-//            val settingValue = Settings.Secure.getString(
-//                context.contentResolver,
-//                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-//            )
-//            if (settingValue != null) {
-//                val splitter = TextUtils.SimpleStringSplitter(':')
-//                splitter.setString(settingValue)
-//                while (splitter.hasNext()) {
-//                    val accessibilityService = splitter.next()
-//                    if (accessibilityService.equals(service, ignoreCase = true)) {
-//                        return true
-//                    }
-//                }
-//            }
-//        }
-//        return false
     }
 
     /**

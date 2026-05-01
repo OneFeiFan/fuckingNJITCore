@@ -7,7 +7,7 @@ import com.alibaba.fastjson.JSONObject
 import com.feifan.fuckingnjit.model.Course
 import com.feifan.fuckingnjit.monitor.StepMonitorManager
 import com.feifan.fuckingnjit.service.impl.UserManagerImpl
-import com.feifan.fuckingnjit.utils.NetworkStatus
+import com.feifan.fuckingnjit.utils.network.NetworkStatus
 import com.feifan.fuckingnjit.utils.database.AppDataCenter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

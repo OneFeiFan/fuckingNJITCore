@@ -4,7 +4,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import com.feifan.fuckingnjit.utils.Manager
-import com.feifan.fuckingnjit.utils.SystemActionHelper
+import com.feifan.fuckingnjit.utils.system.SystemActionHelper
 import com.feifan.fuckingnjit.utils.database.AppDataCenter
 
 class SampleWebViewClientImpl() : WebViewClient() {

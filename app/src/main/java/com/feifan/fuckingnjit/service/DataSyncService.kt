@@ -5,8 +5,8 @@ import UploadSensorPoint
 import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.JSONObject
 import com.feifan.fuckingnjit.service.impl.UserManagerImpl
-import com.feifan.fuckingnjit.utils.HttpMethod
-import com.feifan.fuckingnjit.utils.HttpRequestHelper
+import com.feifan.fuckingnjit.utils.network.HttpMethod
+import com.feifan.fuckingnjit.utils.network.HttpRequestHelper
 import com.feifan.fuckingnjit.utils.Tools
 import com.feifan.fuckingnjit.utils.database.AppDataCenter
 import kotlinx.coroutines.Dispatchers

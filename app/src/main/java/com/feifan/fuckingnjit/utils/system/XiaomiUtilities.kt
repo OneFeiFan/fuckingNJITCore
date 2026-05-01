@@ -1,4 +1,4 @@
-package com.feifan.fuckingnjit.utils
+package com.feifan.fuckingnjit.utils.system
 
 import android.annotation.SuppressLint
 import android.annotation.TargetApi

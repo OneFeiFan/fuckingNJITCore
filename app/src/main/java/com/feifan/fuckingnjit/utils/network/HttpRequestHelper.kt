@@ -1,4 +1,4 @@
-package com.feifan.fuckingnjit.utils
+package com.feifan.fuckingnjit.utils.network
 
 import android.content.Context
 import android.webkit.CookieManager

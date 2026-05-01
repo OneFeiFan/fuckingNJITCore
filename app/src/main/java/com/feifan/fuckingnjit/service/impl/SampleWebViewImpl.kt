@@ -12,7 +12,7 @@ import com.feifan.fuckingnjit.model.User
 import com.feifan.fuckingnjit.utils.AppConfig
 import com.feifan.fuckingnjit.utils.J2J
 import com.feifan.fuckingnjit.utils.Manager
-import com.feifan.fuckingnjit.utils.SystemActionHelper
+import com.feifan.fuckingnjit.utils.system.SystemActionHelper
 import com.feifan.fuckingnjit.utils.TodayScheduleManager
 import kotlinx.coroutines.launch
 import java.util.Observable

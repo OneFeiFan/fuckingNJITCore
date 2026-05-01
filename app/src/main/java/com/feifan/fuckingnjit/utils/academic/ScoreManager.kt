@@ -1,4 +1,4 @@
-package com.feifan.fuckingnjit.utils
+package com.feifan.fuckingnjit.utils.academic
 
 import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.JSONArray

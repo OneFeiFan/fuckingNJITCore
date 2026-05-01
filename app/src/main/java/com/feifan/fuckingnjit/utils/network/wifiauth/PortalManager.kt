@@ -1,4 +1,4 @@
-package com.feifan.fuckingnjit.utils.wifiauth
+package com.feifan.fuckingnjit.utils.network.wifiauth
 
 import android.content.ComponentName
 import android.content.Context

@@ -1,10 +1,11 @@
-package com.feifan.fuckingnjit.utils
+package com.feifan.fuckingnjit.utils.academic
 
 import android.app.Activity
 import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.feifan.fuckingnjit.utils.system.SystemActionHelper
 import com.feifan.fuckingnjit.utils.database.AppDataCenter
 import com.feifan.yiban.Apis.Task
 import kotlinx.coroutines.Dispatchers

@@ -1,9 +1,8 @@
-package com.feifan.fuckingnjit.utils
+package com.feifan.fuckingnjit.utils.security
 
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
-import io.objectbox.converter.PropertyConverter
 import java.security.InvalidAlgorithmParameterException
 import java.security.KeyPairGenerator
 import java.security.KeyStore
@@ -132,21 +131,5 @@ class SecureUtil {
             }
             return ciphertext
         }
-    }
-}
-
-class RSAPasswordConverter : PropertyConverter<String?, String?> {
-    override fun convertToEntityProperty(databaseValue: String?): String? {
-        if (databaseValue == null) {
-            return null
-        }
-        return SecureUtil.rsaDecrypt(databaseValue)
-    }
-
-    override fun convertToDatabaseValue(entityProperty: String?): String? {
-        if (entityProperty == null) {
-            return null
-        }
-        return SecureUtil.rsaEncrypt(entityProperty)
     }
 }

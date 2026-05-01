@@ -6,7 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.widget.RemoteViews
-import com.feifan.fuckingnjit.utils.XiaomiUtilities
+import com.feifan.fuckingnjit.utils.system.XiaomiUtilities
 
 abstract class BaseWidgetBridge(protected val context: Context) {
 

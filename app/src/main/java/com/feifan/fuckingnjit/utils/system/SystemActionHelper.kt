@@ -1,4 +1,4 @@
-package com.feifan.fuckingnjit.utils
+package com.feifan.fuckingnjit.utils.system
 
 import android.content.Context
 import android.content.Intent
@@ -14,6 +14,8 @@ import com.example.loadinganimation.LoadingAnimationDialog
 import com.feifan.apkpatch.PatchUtils
 import com.feifan.fuckingnjit.R
 import com.feifan.fuckingnjit.service.impl.SampleWebViewImpl
+import com.feifan.fuckingnjit.utils.AppConfig
+import com.feifan.fuckingnjit.utils.network.HttpRequestHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File

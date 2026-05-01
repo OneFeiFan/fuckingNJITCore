@@ -1,4 +1,4 @@
-package com.feifan.fuckingnjit.utils.wifiauth
+package com.feifan.fuckingnjit.utils.network.wifiauth
 
 import android.app.Activity
 import android.content.ComponentName
@@ -14,7 +14,7 @@ import android.os.Parcelable
 import android.util.Log
 import android.widget.Toast
 import com.feifan.fuckingnjit.utils.AppConfig
-import com.feifan.fuckingnjit.utils.SystemActionHelper
+import com.feifan.fuckingnjit.utils.system.SystemActionHelper
 import com.feifan.fuckingnjit.utils.database.AppDataCenter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

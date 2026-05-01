@@ -46,7 +46,7 @@
     <application android:usesCleartextTraffic="true">
         <!-- 易班登录 -->
         <activity
-            android:name=".utils.KillYiBan"
+            android:name=".utils.academic.KillYiBan"
             android:enabled="false"
             android:excludeFromRecents="true"
             android:exported="true"
@@ -74,7 +74,7 @@
         </activity>
         <!-- WIFI认证 -->
         <activity
-            android:name=".utils.wifiauth.PortalActivity"
+            android:name=".utils.network.wifiauth.PortalActivity"
             android:enabled="false"
             android:excludeFromRecents="true"
             android:exported="true"

@@ -132,7 +132,7 @@ class DecisionEngine {
         val m = targetSleepMins % 60
         val timeStr = String.format("%02d:%02d", h, m)
         val offsetMinutes = targetSleepMins - DecisionConfig.BASE_SLEEP_TIME_MINUTES
-        val offsetStr = if (offsetMinutes > 0) "+${offsetMinutes}" else "${offsetMinutes}"
+        val offsetStr = if (offsetMinutes > 0) "+${offsetMinutes}" else "$offsetMinutes"
 
         // 4. 动态智能建议 (Actionable Insight)
         val lastNightMins = recentSleepRecords.lastOrNull()?.totalSleepMinutes ?: 480

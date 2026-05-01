@@ -17,10 +17,10 @@ import android.util.LruCache
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityWindowInfo
 import android.widget.Toast
-import com.feifan.fuckingnjit.model.AppMode
+import com.feifan.fuckingnjit.decision.AppMode
 import com.feifan.fuckingnjit.utils.TodayScheduleManager
 import com.feifan.fuckingnjit.utils.database.AppCategoryRepository
-import com.feifan.fuckingnjit.utils.database.ClassFocusRecordBoxUtils
+import com.feifan.fuckingnjit.utils.database.AppDataCenter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -45,6 +45,7 @@ class AppUsageManager : AccessibilityService() {
 
         @Volatile
         private var continuousViolationCount: Int = 0 // 连续违规计数器 (用于方案A衰减)
+
         @Volatile
         private var currentForegroundPkg: String = ""
 
@@ -280,8 +281,8 @@ class AppUsageManager : AccessibilityService() {
         val currentModeStr = prefs.getString("current_mode", "BALANCE_MODE") ?: "BALANCE_MODE"
         val currentMode = when (currentModeStr) {
             "SCHOLAR_MODE" -> AppMode.SCHOLAR_MODE
-            "HEALTH_MODE"  -> AppMode.HEALTH_MODE
-            else           -> AppMode.BALANCE_MODE
+            "HEALTH_MODE" -> AppMode.HEALTH_MODE
+            else -> AppMode.BALANCE_MODE
         }
 
         val intervention = currentMode.intervention
@@ -321,7 +322,10 @@ class AppUsageManager : AccessibilityService() {
                 currentToleranceMs
             }
 
-            Log.d(TAG, "干预系统：倒计时已开启。当前连犯次数: $continuousViolationCount, 本次等待: ${actualDelay / 1000}秒")
+            Log.d(
+                TAG,
+                "干预系统：倒计时已开启。当前连犯次数: $continuousViolationCount, 本次等待: ${actualDelay / 1000}秒"
+            )
 
             // 3. 开启倒计时
             delay(actualDelay)
@@ -331,17 +335,31 @@ class AppUsageManager : AccessibilityService() {
                 when (intervention.actionLevel) {
                     1 -> {
                         // Level 1: 健康模式 (静默关怀) - 不震动，不阻断
-                        Toast.makeText(applicationContext, "健康提醒：注意坐姿，让眼睛休息一下吧~", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(
+                            applicationContext,
+                            "健康提醒：注意坐姿，让眼睛休息一下吧~",
+                            Toast.LENGTH_SHORT
+                        ).show()
                     }
+
                     2 -> {
                         // Level 2: 劳逸结合模式 (警告) - 震动 + 提示
                         triggerVibration()
-                        Toast.makeText(applicationContext, "走神时间有点久了，快回到学习状态！", Toast.LENGTH_LONG).show()
+                        Toast.makeText(
+                            applicationContext,
+                            "走神时间有点久了，快回到学习状态！",
+                            Toast.LENGTH_LONG
+                        ).show()
                     }
+
                     3 -> {
                         // Level 3: 学霸模式 (强阻断) - 震动 + 提示 + 判断是否退回桌面
                         triggerVibration()
-                        Toast.makeText(applicationContext, "学霸模式提醒：专注时间，拒绝摸鱼！", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(
+                            applicationContext,
+                            "学霸模式提醒：专注时间，拒绝摸鱼！",
+                            Toast.LENGTH_SHORT
+                        ).show()
 
                         // 核心机制 4：B 组通信豁免 (仅 A 组执行 HOME 动作)
                         if (isGroupA) {
@@ -423,7 +441,8 @@ class AppUsageManager : AccessibilityService() {
             val currentClass = TodayScheduleManager.getCurrentClassSlot()
 
             if (currentClass != null) {
-                val category = AppCategoryRepository.getCategory(applicationContext, lastPackageName) ?: "未知"
+                val category =
+                    AppCategoryRepository.getCategory(applicationContext, lastPackageName) ?: "未知"
 
                 // A组和B组统统算作违规时长进行扣分
                 if (ILLEGAL_CATEGORIES.contains(category)) {
@@ -431,19 +450,25 @@ class AppUsageManager : AccessibilityService() {
 
                     // 将 LocalTime 转换为绝对的时间戳(毫秒)，供数据库使用
                     val today = LocalDate.now()
-                    val startMs = today.atTime(currentClass.startTime).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-                    val endMs = today.atTime(currentClass.endTime).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                    val startMs =
+                        today.atTime(currentClass.startTime).atZone(ZoneId.systemDefault())
+                            .toInstant().toEpochMilli()
+                    val endMs = today.atTime(currentClass.endTime).atZone(ZoneId.systemDefault())
+                        .toInstant().toEpochMilli()
 
-                    Log.w(TAG, "🔴 摸鱼警告！上课 [${currentClass.courseName}] 玩 [$lastPackageName] 达 $durationMins 分钟！")
+                    Log.w(
+                        TAG,
+                        "🔴 摸鱼警告！上课 [${currentClass.courseName}] 玩 [$lastPackageName] 达 $durationMins 分钟！"
+                    )
                     saveDistractionTime(durationMins)
 
                     // --- 核心串联：调用底层 BoxUtils 进行单节课增量写入 ---
-                    ClassFocusRecordBoxUtils.addDistractionTime(
+                    AppDataCenter.addDistractionTime(
+                        courseId = currentClass.id,
                         courseName = currentClass.courseName,
-                        courseStartTime = startMs,
-                        courseEndTime = endMs,
-                        addedDistractionMills = durationMs,// 传入精确的毫秒数
-                        courseId = currentClass.id
+                        startTime = startMs,
+                        endTime = endMs,
+                        addedMills = durationMs,// 传入精确的毫秒数
                     )
                 }
             }

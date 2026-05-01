@@ -2,15 +2,8 @@ package com.feifan.fuckingnjit.decision
 
 import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.JSONObject
-import com.feifan.fuckingnjit.model.ActionableInsight
-import com.feifan.fuckingnjit.model.AppMode
 import com.feifan.fuckingnjit.model.Course
-import com.feifan.fuckingnjit.model.DashboardResponse
-import com.feifan.fuckingnjit.model.DecisionFactors
-import com.feifan.fuckingnjit.model.RawStats
-import com.feifan.fuckingnjit.model.SleepRecord
-import com.feifan.fuckingnjit.model.Timeline
-import com.feifan.fuckingnjit.model.TimelineCourse
+import com.feifan.fuckingnjit.model.DailyRecord
 import com.feifan.fuckingnjit.utils.TodayScheduleManager
 import java.time.format.DateTimeFormatter
 import kotlin.math.max
@@ -47,7 +40,7 @@ class DecisionEngine {
     fun calculateTargetSleepTime(
         mode: AppMode,
         tomorrowCourses: List<Course>,
-        recentSleepRecords: List<SleepRecord>,
+        recentSleepRecords: List<DailyRecord>,
         todaySteps: Int
     ): Int {
         // 基准线：23:00 (1380分钟)
@@ -93,7 +86,7 @@ class DecisionEngine {
      * 1. 表现得分计算 (专供 UI 进度条使用，不参与睡眠推导)
      * 逻辑不变：睡得越好、走得越多，得分越高
      */
-    private fun calculatePhysicalScore(recentSleepRecords: List<SleepRecord>, steps: Int): Float {
+    private fun calculatePhysicalScore(recentSleepRecords: List<DailyRecord>, steps: Int): Float {
         val stepsScore = min(steps.toFloat() / DecisionConfig.BASE_STEPS, 1.0f) * 0.4f
         if (recentSleepRecords.isEmpty()) return 0.6f + stepsScore
 
@@ -117,7 +110,7 @@ class DecisionEngine {
     fun generateDashboardJson(
         mode: AppMode,
         tomorrowCourses: List<Course>,
-        recentSleepRecords: List<SleepRecord>,
+        recentSleepRecords: List<DailyRecord>,
         todaySteps: Int,
         focusRatePercent: Int,
         distractionMins: Int // 仅需传入实际摸鱼分钟数
@@ -152,7 +145,8 @@ class DecisionEngine {
         // --- 动态干预决策树（整合空堂） ---
         val insight = if (nextSlot != null) {
             val formatter = DateTimeFormatter.ofPattern("HH:mm")
-            val slotTimeStr = "${nextSlot.startTime.format(formatter)}-${nextSlot.endTime.format(formatter)}"
+            val slotTimeStr =
+                "${nextSlot.startTime.format(formatter)}-${nextSlot.endTime.format(formatter)}"
             val isLargeGap = nextSlot.durationMinutes >= 90 // 90分钟为大段空堂阈值
 
             when {
@@ -176,6 +170,7 @@ class DecisionEngine {
                     true, "warning", "健康指令：户外运动",
                     "当前为健康活力模式且步数极低。建议在 $slotTimeStr 的空堂时间去操场完成运动目标。"
                 )
+
                 else -> null // 未匹配到特征明显的空堂干预，进入默认保底逻辑
             }
         } else null
@@ -186,14 +181,17 @@ class DecisionEngine {
                 true, "critical", "高优干预：严重睡眠负债",
                 "昨晚严重缺觉且今日已无可用白昼空堂，系统强制将今晚入睡红线前置至 $timeStr"
             )
+
             isSedentary -> ActionableInsight(
                 true, "warning", "久坐预警",
                 "今日严重缺乏活动，建议在晚饭后去操场走走，保证入睡质量。"
             )
+
             stressFactor > 0.6f -> ActionableInsight(
                 true, "warning", "高压预警",
                 "明日课业压力较大，建议最晚入睡时间：$timeStr"
             )
+
             else -> ActionableInsight(
                 true, "info", "智能建议",
                 "综合今日消耗与明日排课，建议最晚入睡时间：$timeStr"

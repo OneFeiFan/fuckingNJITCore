@@ -4,13 +4,11 @@ import SleepUploadPayload
 import UploadSensorPoint
 import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.JSONObject
-import com.feifan.fuckingnjit.model.SleepRecord
 import com.feifan.fuckingnjit.service.impl.UserManagerImpl
 import com.feifan.fuckingnjit.utils.HttpMethod
 import com.feifan.fuckingnjit.utils.HttpRequestHelper
 import com.feifan.fuckingnjit.utils.TimeManager
-import com.feifan.fuckingnjit.utils.database.SleepRecordBoxUtils
-import com.feifan.fuckingnjit.utils.database.SleepSensorBoxUtils
+import com.feifan.fuckingnjit.utils.database.AppDataCenter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Headers
@@ -28,9 +26,9 @@ object DataSyncService {
             val endTimeMs = window.second
 
             // 回收机制
-            SleepSensorBoxUtils.deleteRecordsBefore(startTimeMs)
+            AppDataCenter.clearOldSensorsBefore(startTimeMs)
 
-            val uploadRecords = SleepSensorBoxUtils.getRecordsBetween(startTimeMs, endTimeMs)
+            val uploadRecords = AppDataCenter.getSensorRecordsBetween(startTimeMs, endTimeMs)
             if (uploadRecords.isEmpty()) return@withContext
 
             val uploadPoints = uploadRecords.map { UploadSensorPoint.fromLocalRecord(it) }
@@ -60,22 +58,14 @@ object DataSyncService {
 
                     if (sleepHours > 0) {
                         val totalMinutes = (sleepHours * 60).toInt()
-                        val existingRecord = SleepRecordBoxUtils.getByDate(targetDate)
 
-                        if (existingRecord != null) {
-                            existingRecord.totalSleepMinutes = totalMinutes
-                            existingRecord.sleepStartTimeMs = sleepStartTimeMs
-                            existingRecord.wakeUpTimeMs = wakeUpTimeMs
-                            SleepRecordBoxUtils.insertOrUpdate(existingRecord)
-                        } else {
-                            val newRecord = SleepRecord(
-                                targetDate = targetDate,
-                                totalSleepMinutes = totalMinutes,
-                                sleepStartTimeMs = sleepStartTimeMs,
-                                wakeUpTimeMs = wakeUpTimeMs
-                            )
-                            SleepRecordBoxUtils.insertOrUpdate(newRecord)
-                        }
+                        // 使用一行代码替代原有的 SleepRecordBoxUtils 复杂逻辑
+                        AppDataCenter.saveSleepResult(
+                            dateStr = targetDate,
+                            sleepStartMs = sleepStartTimeMs,
+                            wakeUpMs = wakeUpTimeMs,
+                            durationMins = totalMinutes
+                        )
                     }
                 }
             }

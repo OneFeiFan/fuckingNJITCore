@@ -15,7 +15,7 @@ interface WebService {
         buildingId: String
     ): JSONObject
 
-    suspend fun getAllSorces(context: Context,xnm: String, xqm: String): JSONObject
+    suspend fun getAllSorces(context: Context, xnm: String, xqm: String): JSONObject
     suspend fun getSorcesDetail(
         context: Context,
         classId: String,
@@ -24,6 +24,6 @@ interface WebService {
         courseName: String
     ): JSONObject
 
-//    suspend fun getNoticeInformation(): JSONObject
+    //    suspend fun getNoticeInformation(): JSONObject
     suspend fun getAcademicProgress(context: Context): JSONObject
 }

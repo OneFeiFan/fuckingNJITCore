@@ -2,12 +2,13 @@ package com.feifan.fuckingnjit.utils
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Handler
 import android.os.Looper
-import android.widget.Toast
-import android.content.pm.PackageManager
 import android.util.Log
+import android.webkit.CookieManager
+import android.widget.Toast
 import androidx.core.content.FileProvider
 import com.example.loadinganimation.LoadingAnimationDialog
 import com.feifan.apkpatch.PatchUtils
@@ -16,7 +17,6 @@ import com.feifan.fuckingnjit.service.impl.SampleWebViewImpl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-import android.webkit.CookieManager
 
 object SystemActionHelper {
     private var dialog: LoadingAnimationDialog? = null
@@ -27,7 +27,7 @@ object SystemActionHelper {
         }
     }
 
-    fun openDialog(text: String,activityContext: Context) {
+    fun openDialog(text: String, activityContext: Context) {
         if (dialog != null && dialog!!.isShowing) {
             dialog!!.dismiss()
         }
@@ -52,7 +52,7 @@ object SystemActionHelper {
 
     fun handleException(appContext: Context, e: Exception, message: String) {
         e.printStackTrace()
-        Log.i("handleException:",message)
+        Log.i("handleException:", message)
         showToast(appContext, message)
     }
 
@@ -66,7 +66,10 @@ object SystemActionHelper {
             AppConfig.logout()
         }
         CookieManager.getInstance().removeAllCookies(null)
-        val intent = Intent(activityContext, SampleWebViewImpl::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val intent = Intent(
+            activityContext,
+            SampleWebViewImpl::class.java
+        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         activityContext.startActivity(intent)
         return ""
     }
@@ -79,42 +82,49 @@ object SystemActionHelper {
         appContext.startActivity(intent)
     }
 
-    suspend fun updateApp(activityContext: Context, url: String): Boolean = withContext(Dispatchers.IO) {
-        try {
-            withContext(Dispatchers.Main) { openDialog("正在增量更新...",activityContext) }
+    suspend fun updateApp(activityContext: Context, url: String): Boolean =
+        withContext(Dispatchers.IO) {
+            try {
+                withContext(Dispatchers.Main) { openDialog("正在增量更新...", activityContext) }
 
-            val pm: PackageManager = activityContext.packageManager
-            val appInfo = pm.getApplicationInfo(activityContext.packageName, 0)
-            val oldPath = appInfo.sourceDir
-            val newApkFile = File(activityContext.filesDir, "new.apk")
-            val patchFile = File(activityContext.filesDir, "bin")
+                val pm: PackageManager = activityContext.packageManager
+                val appInfo = pm.getApplicationInfo(activityContext.packageName, 0)
+                val oldPath = appInfo.sourceDir
+                val newApkFile = File(activityContext.filesDir, "new.apk")
+                val patchFile = File(activityContext.filesDir, "bin")
 
-            newApkFile.delete()
-            patchFile.delete()
-            // 异步下载文件
-            HttpRequestHelper.downloadFile(url, "bin", activityContext)
+                newApkFile.delete()
+                patchFile.delete()
+                // 异步下载文件
+                HttpRequestHelper.downloadFile(url, "bin", activityContext)
 
-            if (!patchFile.exists()) {
-                withContext(Dispatchers.Main) { showToast(activityContext, "下载增量包失败") }
-                return@withContext false
-            }
+                if (!patchFile.exists()) {
+                    withContext(Dispatchers.Main) { showToast(activityContext, "下载增量包失败") }
+                    return@withContext false
+                }
 
-            val result = PatchUtils.patch(oldPath, newApkFile.absolutePath, patchFile.absolutePath)
+                val result =
+                    PatchUtils.patch(oldPath, newApkFile.absolutePath, patchFile.absolutePath)
 
-            if (result == 0) {
-                withContext(Dispatchers.Main) { install(activityContext, newApkFile.absolutePath) }
-                true
-            } else {
-                withContext(Dispatchers.Main) { showToast(activityContext, "合并失败") }
+                if (result == 0) {
+                    withContext(Dispatchers.Main) {
+                        install(
+                            activityContext,
+                            newApkFile.absolutePath
+                        )
+                    }
+                    true
+                } else {
+                    withContext(Dispatchers.Main) { showToast(activityContext, "合并失败") }
+                    false
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { handleException(activityContext, e, "操作失败") }
                 false
+            } finally {
+                withContext(Dispatchers.Main) { dismissDialog() }
             }
-        } catch (e: Exception) {
-            withContext(Dispatchers.Main) { handleException(activityContext, e, "操作失败") }
-            false
-        } finally {
-            withContext(Dispatchers.Main) { dismissDialog() }
         }
-    }
 
     private fun install(activityContext: Context, apkPath: String) {
         val file = File(apkPath)

@@ -1,7 +1,6 @@
 package com.feifan.fuckingnjit.service.impl
 
 import android.annotation.SuppressLint
-import android.content.Context
 import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
@@ -77,10 +76,10 @@ class SampleWebViewImpl : AppCompatActivity(), Observer {
     override fun update(o: Observable?, arg: Any?) {
         lifecycleScope.launch {
             try {
-                Manager.getUserManager().addUser(this@SampleWebViewImpl,arg as User)
+                Manager.getUserManager().addUser(this@SampleWebViewImpl, arg as User)
                 finish() // 确保在主线程执行
             } catch (e: Exception) {
-                SystemActionHelper.handleException(this@SampleWebViewImpl,e, "失败")
+                SystemActionHelper.handleException(this@SampleWebViewImpl, e, "失败")
             }
         }
     }

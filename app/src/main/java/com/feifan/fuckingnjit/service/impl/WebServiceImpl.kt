@@ -15,7 +15,7 @@ import com.feifan.fuckingnjit.utils.NetworkStatus
 import com.feifan.fuckingnjit.utils.SystemActionHelper
 import com.feifan.fuckingnjit.utils.TimeManager
 import com.feifan.fuckingnjit.utils.Tools
-import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
+import com.feifan.fuckingnjit.utils.database.AppDataCenter
 import org.jsoup.nodes.Document
 import org.jsoup.select.Elements
 import java.lang.Integer.parseInt
@@ -103,8 +103,7 @@ class WebServiceImpl private constructor() : WebService {
             allCourses.addAll(parsedList)
         }
         // 1. 获取隐藏名单
-        val studentId = BaseDataBoxUtils.getCurrentUserId()
-        val hiddenMap = CourseManager.getHiddenRules(studentId)
+        val hiddenMap = CourseManager.getHiddenRules()
 
         // 3. 高效过滤
         val (hiddenSystemCourses, validSystemCourses) = allCourses.partition { course ->
@@ -114,7 +113,7 @@ class WebServiceImpl private constructor() : WebService {
             // partition: true=保留, false=被隐藏
         }
         // 3. 获取本地课程
-        val localCourses = CourseManager.getLocalCourses(studentId)
+        val localCourses = CourseManager.getLocalCourses()
         allCourses = ArrayList()
         // 4. 合并
         allCourses.addAll(validSystemCourses)
@@ -342,7 +341,7 @@ class WebServiceImpl private constructor() : WebService {
             return NetworkStatus.UnknownError.toJsonResult()
         }
 
-        if(raw.isEmpty()){
+        if (raw.isEmpty()) {
             return NetworkStatus.NotFound.toJsonResult()
         }
 
@@ -541,7 +540,7 @@ class WebServiceImpl private constructor() : WebService {
     fun getDate(context: Context): String {
         try {
             val result = JSONObject()
-            val dateMs = BaseDataBoxUtils.getSemesterStartDate()
+            val dateMs = AppDataCenter.getSystemConfig().semesterStartDateMs
             if (dateMs != 0L) {
                 val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
                 result["startDate"] = Instant.ofEpochMilli(dateMs)
@@ -551,7 +550,7 @@ class WebServiceImpl private constructor() : WebService {
             } else {
                 result["startDate"] = "2025-02-17"
             }
-            result["currentWeek"] = BaseDataBoxUtils.getCurrentWeek()
+            result["currentWeek"] = AppDataCenter.getSystemConfig().currentWeek
             return result.toJSONString()
         } catch (e: Exception) {
             SystemActionHelper.handleException(context, e, "时间获取失败：getDate")
@@ -561,7 +560,6 @@ class WebServiceImpl private constructor() : WebService {
 
     fun saveCourse(context: Context, courseJson: String, hideRule: String?): JSONObject {
         try {
-            val studentId = BaseDataBoxUtils.getCurrentUserId()
             // 1. 如果有 hideId (说明是修改系统课程)，先隐藏原课程
             if (!hideRule.isNullOrEmpty()) {
                 val rule = JSONObject.parseObject(hideRule)
@@ -571,7 +569,7 @@ class WebServiceImpl private constructor() : WebService {
 
                 // 添加到隐藏规则列表
                 if (!id.isNullOrEmpty()) {
-                    CourseManager.addHiddenRule(studentId, id, day, start)
+                    CourseManager.addHiddenRule(id, day, start)
                 }
             }
             // 2. 保存新课程
@@ -580,7 +578,7 @@ class WebServiceImpl private constructor() : WebService {
             if (course.step == 0 || course.weekList.isEmpty()) {
                 return NetworkStatus.UnknownError.toJsonResult("课程数据结构异常")
             }
-            val success = CourseManager.saveLocalCourse(studentId, course)
+            val success = CourseManager.saveLocalCourse(course)
 
             if (success) {
                 return NetworkStatus.Success.toJsonResult("保存成功")
@@ -601,7 +599,6 @@ class WebServiceImpl private constructor() : WebService {
         start: Int?
     ): JSONObject {
         try {
-            val studentId = BaseDataBoxUtils.getCurrentUserId()
             if (courseId.isEmpty()) {
                 return NetworkStatus.BadRequest.toJsonResult("参数错误：课程ID为空")
             }
@@ -612,10 +609,10 @@ class WebServiceImpl private constructor() : WebService {
             if (isSystem) {
                 //如果是系统课程，进行“精准隐藏”
                 // 前端必须传 day 和 start
-                success = CourseManager.addHiddenRule(studentId, courseId, day!!, start!!)
+                success = CourseManager.addHiddenRule(courseId, day!!, start!!)
             } else {
                 // 如果是本地课程，直接物理删除
-                success = CourseManager.deleteLocalCourse(studentId, courseId)
+                success = CourseManager.deleteLocalCourse(courseId)
             }
             // 3. 返回结果
             if (success) {
@@ -631,8 +628,7 @@ class WebServiceImpl private constructor() : WebService {
 
     fun restoreCourse(context: Context, courseId: String, day: Int, start: Int): JSONObject {
         try {
-            val studentId = BaseDataBoxUtils.getCurrentUserId()
-            val success = CourseManager.removeHiddenRule(studentId, courseId, day, start)
+            val success = CourseManager.removeHiddenRule(courseId, day, start)
             if (success) {
                 return NetworkStatus.Success.toJsonResult("恢复成功")
             } else {

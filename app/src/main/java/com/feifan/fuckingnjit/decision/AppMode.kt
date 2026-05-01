@@ -1,4 +1,4 @@
-package com.feifan.fuckingnjit.model
+package com.feifan.fuckingnjit.decision
 
 // 权重矩阵
 data class ModeWeight(

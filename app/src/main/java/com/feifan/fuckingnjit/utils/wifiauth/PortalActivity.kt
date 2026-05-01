@@ -13,10 +13,9 @@ import android.os.Looper
 import android.os.Parcelable
 import android.util.Log
 import android.widget.Toast
-import com.feifan.fuckingnjit.utils.Manager
+import com.feifan.fuckingnjit.utils.AppConfig
 import com.feifan.fuckingnjit.utils.SystemActionHelper
-import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
-import com.feifan.fuckingnjit.utils.database.UserBoxUtils
+import com.feifan.fuckingnjit.utils.database.AppDataCenter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -134,17 +133,8 @@ class PortalActivity : Activity() {
 
         // 1. 绑定进程到网络
 
-        if (!BaseDataBoxUtils.isInitialized()) {
-            println("BaseDataBoxUtils not initialized")
-            BaseDataBoxUtils.init(this)
-        }
-        if (!UserBoxUtils.isInitialized()) {
-            println("UserBoxUtils not initialized")
-            UserBoxUtils.init(this)
-        }
-        val userId = BaseDataBoxUtils.getCurrentUserId()
-        val type = BaseDataBoxUtils.getWifiAuthTupe()
-        val user = UserBoxUtils.getUserById(userId)
+        val type = AppConfig.getWifiAuthType()
+        val user = AppDataCenter.getCurrentUser()
         val url =
             "http://172.31.255.156:801/eportal/portal/login?login_method=1&user_account=${user?.id + type}&user_password=${user?.password}"
 

@@ -1,4 +1,4 @@
-package com.feifan.fuckingnjit.model
+package com.feifan.fuckingnjit.decision
 
 // 顶层响应体
 data class DashboardResponse(

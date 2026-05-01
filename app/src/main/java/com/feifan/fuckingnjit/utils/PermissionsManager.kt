@@ -9,7 +9,7 @@ import android.provider.Settings
 import androidx.core.net.toUri
 import com.feifan.fuckingnjit.monitor.AppUsageManager
 import com.feifan.fuckingnjit.service.CoreService
-import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
+import com.feifan.fuckingnjit.utils.database.AppDataCenter
 import com.hjq.permissions.OnPermissionCallback
 import com.hjq.permissions.XXPermissions
 import com.hjq.permissions.permission.PermissionLists
@@ -41,11 +41,11 @@ class PermissionsManager private constructor(private var context: Context) {
     // ==========================================
 
     fun isSmartUpdate(): Boolean {
-        return BaseDataBoxUtils.getSmartUpdate()
+        return AppDataCenter.getSystemConfig().smartUpdate
     }
 
     fun setSmartUpdate(isSmart: Boolean) {
-        BaseDataBoxUtils.updateBaseData { it.smartUpdate = isSmart }
+        AppDataCenter.updateSystemConfig { it.smartUpdate = isSmart }
     }
 
 

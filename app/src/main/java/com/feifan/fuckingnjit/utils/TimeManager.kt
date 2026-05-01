@@ -1,6 +1,7 @@
 package com.feifan.fuckingnjit.utils
 
-import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
+
+import com.feifan.fuckingnjit.utils.database.AppDataCenter
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -33,7 +34,7 @@ class TimeManager private constructor() {
 
     fun getSemesterStartDate(): String {
         return "2025-02-17"
-        val dateMs = BaseDataBoxUtils.getSemesterStartDate()
+        val dateMs = AppDataCenter.getSystemConfig().semesterStartDateMs
         return try {
             if (dateMs != 0L) {
                 Instant.ofEpochMilli(dateMs)

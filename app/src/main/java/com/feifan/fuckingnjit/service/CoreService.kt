@@ -56,9 +56,10 @@ class CoreService : LifecycleService() {
 
         createNotificationChannel()
         val pm = getSystemService(POWER_SERVICE) as PowerManager
-        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "FuckingNJIT:HeartbeatWakeLock").apply {
-            setReferenceCounted(false) // 关掉引用计数，只要调一次 release 就彻底释放
-        }
+        wakeLock =
+            pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "FuckingNJIT:HeartbeatWakeLock").apply {
+                setReferenceCounted(false) // 关掉引用计数，只要调一次 release 就彻底释放
+            }
 
         registerScreenReceiver()
     }

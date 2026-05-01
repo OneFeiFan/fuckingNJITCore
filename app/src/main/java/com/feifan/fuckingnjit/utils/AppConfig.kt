@@ -1,7 +1,7 @@
 package com.feifan.fuckingnjit.utils
 
 import com.feifan.fuckingnjit.service.impl.UserManagerImpl
-import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
+import com.feifan.fuckingnjit.utils.database.AppDataCenter
 
 object AppConfig {
 
@@ -18,11 +18,11 @@ object AppConfig {
         }
     }
 
-    fun setWifiAuthTupe(type: String) {
-        BaseDataBoxUtils.updateBaseData { it.wifiAuthTupe = type }
+    fun setWifiAuthType(type: String) {
+        AppDataCenter.updateSystemConfig { it.wifiAuthType = type }
     }
 
-    fun getWifiAuthTupe(): String {
-        return BaseDataBoxUtils.getWifiAuthTupe()
+    fun getWifiAuthType(): String {
+        return AppDataCenter.getSystemConfig().wifiAuthType
     }
 }

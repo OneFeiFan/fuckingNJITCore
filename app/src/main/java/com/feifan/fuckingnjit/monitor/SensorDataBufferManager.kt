@@ -2,7 +2,7 @@ package com.feifan.fuckingnjit.monitor
 
 import com.feifan.fuckingnjit.model.SleepSensorRecord
 import com.feifan.fuckingnjit.service.DataSyncService
-import com.feifan.fuckingnjit.utils.database.SleepSensorBoxUtils
+import com.feifan.fuckingnjit.utils.database.AppDataCenter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -44,7 +44,7 @@ object SensorDataBufferManager {
         // 在 IO 线程池中执行数据库写入，绝不阻塞当前业务
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                SleepSensorBoxUtils.insertBatch(recordsToSave)
+                AppDataCenter.insertSensorBatch(recordsToSave)
             } catch (e: Exception) {
                 e.printStackTrace()
                 println("异常：${e.message}")

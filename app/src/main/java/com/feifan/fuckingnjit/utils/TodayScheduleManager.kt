@@ -3,8 +3,7 @@ package com.feifan.fuckingnjit.utils
 import com.alibaba.fastjson.JSONArray
 import com.feifan.fuckingnjit.model.Course
 import com.feifan.fuckingnjit.model.User
-import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
-import com.feifan.fuckingnjit.utils.database.UserBoxUtils
+import com.feifan.fuckingnjit.utils.database.AppDataCenter
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalTime
@@ -61,7 +60,8 @@ object TodayScheduleManager {
         val dayEnd = LocalTime.of(17, 20)
 
         // 1. 过滤出与有效区间有交集的课程
-        val activeSlots = slots.filter { it.startTime.isBefore(dayEnd) && it.endTime.isAfter(dayStart) }
+        val activeSlots =
+            slots.filter { it.startTime.isBefore(dayEnd) && it.endTime.isAfter(dayStart) }
 
         if (activeSlots.isEmpty()) {
             freeSlots.add(FreeSlot(dayStart, dayEnd))
@@ -108,7 +108,7 @@ object TodayScheduleManager {
         val todayWeekIndex = TimeManager.getInstance().todayWeekIndex()
         val targetDay = todayWeekIndex + 1
 
-        val user = UserBoxUtils.getUserById(BaseDataBoxUtils.getCurrentUserId()) ?: User()
+        val user = AppDataCenter.getCurrentUser() ?: User()
         val curriculumsStr = user.curriculums.getString("validTimeCourses")
         val allCurriculumData =
             JSONArray.parseArray(curriculumsStr, Course::class.java) ?: emptyList()

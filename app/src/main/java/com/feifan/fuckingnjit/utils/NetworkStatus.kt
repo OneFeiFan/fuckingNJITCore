@@ -7,6 +7,7 @@ class ApiException(
     override val message: String = status.message,
     cause: Throwable? = null
 ) : Exception(message, cause)
+
 /**
  * 网络状态码基类
  */

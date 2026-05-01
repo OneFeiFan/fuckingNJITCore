@@ -9,15 +9,26 @@ import io.objectbox.annotation.Entity
 import io.objectbox.annotation.Id
 import io.objectbox.converter.PropertyConverter
 
-
 @Entity
 data class User(
-    @Id
-    var uuid: Long = 0,
-    var id: String = "",
+    @Id var uuid: Long = 0,
+
+    // --- 教务系统核心身份 ---
+    var id: String = "", // 学号
     @Convert(converter = RSAPasswordConverter::class, dbType = String::class)
     var password: String = "",
     var name: String = "",
+
+    // --- 易班系统身份 (合并原 YiBan 实体) ---
+    var yibanId: String = "", // 通常为手机号
+    @Convert(converter = RSAPasswordConverter::class, dbType = String::class)
+    var yibanPassword: String = "",
+
+    // --- 用户个人偏好 (从 SP 和 Base 吸收) ---
+    var storePassword: Boolean = true,
+    var currentAppMode: String = "BALANCE_MODE", // 取值: SCHOLAR_MODE, BALANCE_MODE, HEALTH_MODE
+
+    // --- 教务学业数据 ---
     var gpa: String = "0",
     @Convert(converter = JSONObjectConverter::class, dbType = String::class)
     var academicProgress: JSONObject = JSONObject(),
@@ -26,7 +37,7 @@ data class User(
     @Convert(converter = JSONObjectConverter::class, dbType = String::class)
     var curriculums: JSONObject = JSONObject(),
     @Convert(converter = JSONObjectConverter::class, dbType = String::class)
-    var localCurriculums: JSONObject? = JSONObject(),
+    var localCurriculums: JSONObject? = JSONObject()
 )
 
 class JSONObjectConverter : PropertyConverter<JSONObject?, String?> {

@@ -6,7 +6,7 @@ import android.provider.Settings
 import android.util.Log
 import com.feifan.fuckingnjit.dao.FocusRecordDTO
 import com.feifan.fuckingnjit.dao.FocusUploadRequest
-import com.feifan.fuckingnjit.utils.database.ClassFocusRecordBoxUtils
+import com.feifan.fuckingnjit.utils.database.AppDataCenter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.security.MessageDigest
@@ -21,7 +21,7 @@ object FocusDataSyncManager {
     suspend fun syncUnuploadedData(context: Context) = withContext(Dispatchers.IO) {
         try {
             // 1. 获取未上传的数据
-            val unuploadedRecords = ClassFocusRecordBoxUtils.getUnuploadedRecords()
+            val unuploadedRecords = AppDataCenter.getUnuploadedFocusRecords()
             if (unuploadedRecords.isEmpty()) {
                 Log.d(TAG, "没有需要同步的专注度数据")
                 return@withContext
@@ -37,12 +37,12 @@ object FocusDataSyncManager {
                     courseName = record.courseName,
                     totalDurationMills = record.endTime - record.startTime,
                     distractionDurationMills = record.distractionDurationMills,
-                    recordDate = record.dateStr
+                    recordDate = record.dailyRecord.target?.dateStr ?: ""
                 )
             }
 
             for (dTO in dtoList) {
-                Log.i(TAG,dTO.courseId+dTO.courseName)
+                Log.i(TAG, dTO.courseId + dTO.courseName)
             }
 
             val payload = FocusUploadRequest(deviceHash, dtoList)
@@ -53,7 +53,7 @@ object FocusDataSyncManager {
 
             // 5. 如果服务端接收成功，更新本地状态
             if (isSuccess) {
-                ClassFocusRecordBoxUtils.markAsUploaded(unuploadedRecords)
+                AppDataCenter.markFocusRecordsAsUploaded(unuploadedRecords)
                 Log.i(TAG, "成功同步 ${unuploadedRecords.size} 条专注度数据到服务端")
             } else {
                 Log.w(TAG, "数据同步失败，将在下次重试")
@@ -69,7 +69,9 @@ object FocusDataSyncManager {
      */
     @SuppressLint("HardwareIds")
     private fun getAnonymousDeviceHash(context: Context): String {
-        val androidId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: "UNKNOWN_DEVICE"
+        val androidId =
+            Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
+                ?: "UNKNOWN_DEVICE"
         return hashString(androidId + "salt_for_privacy")
     }
 

@@ -5,13 +5,11 @@ import androidx.core.content.edit
 import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.JSONArray
 import com.alibaba.fastjson.JSONObject
-import com.feifan.fuckingnjit.model.AppMode
 import com.feifan.fuckingnjit.model.Course
 import com.feifan.fuckingnjit.monitor.StepMonitorManager
 import com.feifan.fuckingnjit.service.impl.UserManagerImpl
 import com.feifan.fuckingnjit.utils.NetworkStatus
-import com.feifan.fuckingnjit.utils.database.BaseDataBoxUtils
-import com.feifan.fuckingnjit.utils.database.SleepRecordBoxUtils
+import com.feifan.fuckingnjit.utils.database.AppDataCenter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
@@ -40,23 +38,28 @@ object DecisionFacade {
                 else -> AppMode.BALANCE_MODE
             }
 
-            val curriculumsObj = UserManagerImpl.getInstance().getCurriculum(appContext,false)
+            val curriculumsObj = UserManagerImpl.getInstance().getCurriculum(appContext, false)
             val validCoursesArray = curriculumsObj.getJSONArray("validTimeCourses") ?: JSONArray()
-            val allValidCourses = JSON.parseArray(validCoursesArray.toJSONString(), Course::class.java) ?: mutableListOf()
+            val allValidCourses =
+                JSON.parseArray(validCoursesArray.toJSONString(), Course::class.java)
+                    ?: mutableListOf()
 
-            val currentWeek = BaseDataBoxUtils.getBaseData().currentWeek
+            val currentWeek = AppDataCenter.getSystemConfig().currentWeek
             val tomorrow = LocalDate.now().plusDays(1)
             val targetDay = tomorrow.dayOfWeek.value
 
             val tomorrowCourses = allValidCourses.filter { course ->
                 course.day == targetDay && course.weekList.contains(currentWeek)
             }.sortedWith { c1, c2 ->
-                if (c1.startNode != c2.startNode) c1.startNode - c2.startNode else c1.name.compareTo(c2.name)
+                if (c1.startNode != c2.startNode) c1.startNode - c2.startNode else c1.name.compareTo(
+                    c2.name
+                )
             }
 
-            val recentSleepRecords = SleepRecordBoxUtils.getAllRecordsForUI().take(7).reversed()
+            val recentSleepRecords = AppDataCenter.getValidSleepRecordsForUI().take(7).reversed()
             val todaySteps = StepMonitorManager.currentSessionSteps
-            val usagePrefs = appContext.getSharedPreferences("app_usage_stats", Context.MODE_PRIVATE)
+            val usagePrefs =
+                appContext.getSharedPreferences("app_usage_stats", Context.MODE_PRIVATE)
             val todayKey = "distraction_${LocalDate.now()}"
             val distractionMins = usagePrefs.getInt(todayKey, 0)
 

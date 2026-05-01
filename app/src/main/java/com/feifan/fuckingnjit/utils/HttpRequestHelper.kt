@@ -33,7 +33,8 @@ class HttpRequestHelper {
         }
         private val cookieManager: CookieManager = CookieManager.getInstance()
         const val BASE_URL = "https://casb.njit.edu.cn"
-        const val WEBVPN_PATH = "/http/webvpn3e1a11b7208e283ab07ade5d2913fc13d6f6fe09d2dc7372db2a51a14aa4167a"
+        const val WEBVPN_PATH =
+            "/http/webvpn3e1a11b7208e283ab07ade5d2913fc13d6f6fe09d2dc7372db2a51a14aa4167a"
         val COMMON_HEADERS = mapOf(
             "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
             "Accept" to "*/*",
@@ -42,33 +43,40 @@ class HttpRequestHelper {
             "Origin" to BASE_URL
         )
 
-        suspend fun downloadFile(url: String, fileName: String, context: Context): Boolean = withContext(Dispatchers.IO) {
-            val request = Request.Builder().url(url).headers(COMMON_HEADERS.toHeaders()).build()
-            try {
-                val response = okHttpClient.newCall(request).execute()
-                if (response.isSuccessful) {
-                    response.body?.let { body ->
-                        File(context.filesDir, fileName).outputStream().use { output ->
-                            body.byteStream().use { input -> input.copyTo(output) }
-                        }
-                        return@withContext true
-                    } ?: throw ApiException(NetworkStatus.ParseError, "下载失败：响应体为空")
-                } else {
-                    val status = NetworkStatusUtils.fromCode(response.code)
-                    throw ApiException(status, "下载失败：HTTP状态码 ${response.code}")
+        suspend fun downloadFile(url: String, fileName: String, context: Context): Boolean =
+            withContext(Dispatchers.IO) {
+                val request = Request.Builder().url(url).headers(COMMON_HEADERS.toHeaders()).build()
+                try {
+                    val response = okHttpClient.newCall(request).execute()
+                    if (response.isSuccessful) {
+                        response.body?.let { body ->
+                            File(context.filesDir, fileName).outputStream().use { output ->
+                                body.byteStream().use { input -> input.copyTo(output) }
+                            }
+                            return@withContext true
+                        } ?: throw ApiException(NetworkStatus.ParseError, "下载失败：响应体为空")
+                    } else {
+                        val status = NetworkStatusUtils.fromCode(response.code)
+                        throw ApiException(status, "下载失败：HTTP状态码 ${response.code}")
+                    }
+                } catch (e: ApiException) {
+                    throw e
+                } catch (e: Exception) {
+                    throw ApiException(
+                        NetworkStatus.NetworkUnavailable,
+                        "文件下载异常: ${e.message}",
+                        e
+                    )
                 }
-            } catch (e: ApiException) {
-                throw e
-            } catch (e: Exception) {
-                throw ApiException(NetworkStatus.NetworkUnavailable, "文件下载异常: ${e.message}", e)
             }
-        }
 
         private fun getPersistentCookies(cookie: String): Map<String, String> {
-            return cookie.split(";").associate { it.split("=").let { parts -> parts[0] to parts.getOrElse(1) { "" } } }
+            return cookie.split(";")
+                .associate { it.split("=").let { parts -> parts[0] to parts.getOrElse(1) { "" } } }
         }
 
-        private fun checkLoginIfNeeded(): Boolean = (System.currentTimeMillis() - lastLoginCheckTime) >= LOGIN_CHECK_INTERVAL
+        private fun checkLoginIfNeeded(): Boolean =
+            (System.currentTimeMillis() - lastLoginCheckTime) >= LOGIN_CHECK_INTERVAL
 
         suspend fun executeBaseRequest(
             url: String,
@@ -86,7 +94,9 @@ class HttpRequestHelper {
             if (method == HttpMethod.POST) {
                 val body = when {
                     jsonStr != null -> jsonStr.toRequestBody("application/json; charset=utf-8".toMediaType())
-                    formParams != null -> FormBody.Builder().apply { formParams.forEach { (k, v) -> add(k, v) } }.build()
+                    formParams != null -> FormBody.Builder()
+                        .apply { formParams.forEach { (k, v) -> add(k, v) } }.build()
+
                     else -> FormBody.Builder().build()
                 }
                 requestBuilder.post(body)
@@ -98,16 +108,30 @@ class HttpRequestHelper {
                 okHttpClient.newCall(requestBuilder.build()).execute().use { response ->
                     if (!response.isSuccessful) {
                         // 🎯 核心运用：将 HTTP 错误码完美映射到你的密封类
-                        throw ApiException(NetworkStatusUtils.fromCode(response.code), "请求失败，状态码: ${response.code}")
+                        throw ApiException(
+                            NetworkStatusUtils.fromCode(response.code),
+                            "请求失败，状态码: ${response.code}"
+                        )
                     }
-                    response.body?.string() ?: throw ApiException(NetworkStatus.ParseError, "响应体为空")
+                    response.body?.string() ?: throw ApiException(
+                        NetworkStatus.ParseError,
+                        "响应体为空"
+                    )
                 }
             } catch (e: IOException) {
-                throw ApiException(NetworkStatus.NetworkUnavailable, "网络请求失败: ${e.message}", e)
+                throw ApiException(
+                    NetworkStatus.NetworkUnavailable,
+                    "网络请求失败: ${e.message}",
+                    e
+                )
             }
         }
 
-        private suspend fun makeRequest(url: String, method: HttpMethod = HttpMethod.GET, requestBody: Map<String, String> = emptyMap()): String {
+        private suspend fun makeRequest(
+            url: String,
+            method: HttpMethod = HttpMethod.GET,
+            requestBody: Map<String, String> = emptyMap()
+        ): String {
             val cookie = cookieManager.getCookie(BASE_URL)
             if (cookie.isNullOrBlank()) {
                 // 🎯 核心运用：直接抛出 Unauthorized (401)
@@ -117,22 +141,35 @@ class HttpRequestHelper {
             if (checkLoginIfNeeded()) {
                 lastLoginCheckTime = System.currentTimeMillis()
                 try {
-                    val connection = Jsoup.connect("$BASE_URL$WEBVPN_PATH/jwglxt/xtgl/index_initMenu.html")
-                        .cookies(getPersistentCookies(cookie)).followRedirects(false).timeout(10000)
+                    val connection =
+                        Jsoup.connect("$BASE_URL$WEBVPN_PATH/jwglxt/xtgl/index_initMenu.html")
+                            .cookies(getPersistentCookies(cookie)).followRedirects(false)
+                            .timeout(10000)
                     val response = connection.execute()
 
                     when (response.statusCode()) {
                         HttpURLConnection.HTTP_OK -> {}
                         HttpURLConnection.HTTP_MOVED_TEMP -> {
                             val location = response.header("Location")
-                            if (location?.contains("index_initMenu.html") == true || location?.contains("login_slogin") == true) {
+                            if (location?.contains("index_initMenu.html") == true || location?.contains(
+                                    "login_slogin"
+                                ) == true
+                            ) {
                                 throw ApiException(NetworkStatus.Unauthorized, "会话已过期 (302)")
                             }
                         }
-                        else -> throw ApiException(NetworkStatusUtils.fromCode(response.statusCode()), "会话验证失败")
+
+                        else -> throw ApiException(
+                            NetworkStatusUtils.fromCode(response.statusCode()),
+                            "会话验证失败"
+                        )
                     }
                 } catch (e: IOException) {
-                    throw ApiException(NetworkStatus.GatewayTimeout, "验证会话超时: ${e.message}", e)
+                    throw ApiException(
+                        NetworkStatus.GatewayTimeout,
+                        "验证会话超时: ${e.message}",
+                        e
+                    )
                 }
             }
 
@@ -146,9 +183,17 @@ class HttpRequestHelper {
             }
         }
 
-        suspend fun getJsonResponse(url: String, method: HttpMethod = HttpMethod.GET, requestBody: Map<String, String> = emptyMap()): String = makeRequest(url, method, requestBody)
+        suspend fun getJsonResponse(
+            url: String,
+            method: HttpMethod = HttpMethod.GET,
+            requestBody: Map<String, String> = emptyMap()
+        ): String = makeRequest(url, method, requestBody)
 
-        suspend fun getHtmlResponse(url: String, method: HttpMethod = HttpMethod.GET, requestBody: Map<String, String> = emptyMap()): Document {
+        suspend fun getHtmlResponse(
+            url: String,
+            method: HttpMethod = HttpMethod.GET,
+            requestBody: Map<String, String> = emptyMap()
+        ): Document {
             return Jsoup.parse(makeRequest(url, method, requestBody))
         }
     }

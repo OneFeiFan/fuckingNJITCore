@@ -2,7 +2,7 @@ package com.feifan.fuckingnjit.model
 
 import com.alibaba.fastjson.annotation.JSONField
 
-// 核心课程实体：代表“某一门课在某一个时间段的安排”
+// 基础课程实体（for教务系统）
 data class Course(
     @JSONField(name = "id") var id: String = "",
     @JSONField(name = "name") var name: String = "未知课程",

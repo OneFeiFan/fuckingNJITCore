@@ -4,8 +4,7 @@ import android.webkit.JavascriptInterface
 import com.feifan.fuckingnjit.model.User
 import java.util.Observable
 
-//import leakcanary.AppWatcher
-
+//基于观察者模式的类，在登录成功后可以通过这个方法通知其它方法更新
 class J2J private constructor() : Observable() {
     private lateinit var user: User
 

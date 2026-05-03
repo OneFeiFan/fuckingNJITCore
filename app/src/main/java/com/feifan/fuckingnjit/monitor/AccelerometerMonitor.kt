@@ -11,29 +11,23 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.math.sqrt
 
-class SleepMotionDetector(context: Context) : SensorEventListener {
+class AccelerometerMonitor(context: Context) : SensorEventListener {
 
-    private val TAG = "SleepMotionDetector"
+    private val TAG = "AccelerometerMonitor"
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     private val accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
 
-    // 滤波参数
-    private val alpha = 0.8f
+    private val alpha = 0.8f    // 滤波参数
     private val gravity = floatArrayOf(0f, 0f, 0f)
 
-    // 计算变量（增加 Mutex 保证多线程采样安全）
-    private val calculationLock = Mutex()
+    private val calculationLock = Mutex() // 保证多线程采样安全
     private var sumSquares: Double = 0.0
     private var sampleCount: Int = 0
 
     @Volatile
-    private var isSampling = false
+    private var isSampling = false // 是否在采样
 
-    /**
-     * 核心方法：单次采样触发
-     * @param durationMs 采样窗口长度（如 300ms 或 1000ms）
-     * @return 该时段内的运动能量分数
-     */
+    //单次采样触发
     suspend fun captureEnergyScore(durationMs: Long): Double = calculationLock.withLock {
         if (accelerometer == null) return 1.0
 
@@ -43,17 +37,18 @@ class SleepMotionDetector(context: Context) : SensorEventListener {
             isSampling = true
             sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_UI)
 
-            // 2. 等待采样窗口结束
+            // 等待采样窗口结束
             delay(durationMs)
 
         } catch (e: Exception) {
+            e.printStackTrace()
             Log.e(TAG, "采样过程中出现异常", e)
         } finally {
-            // 3. 无论如何，一定要关闭监听以省电
+            // 无论如何，一定要关闭监听以省电
             stopInternal()
         }
 
-        // 4. 计算并返回结果
+        // 计算并返回结果
         return calculateRmsScore()
     }
 
@@ -62,6 +57,7 @@ class SleepMotionDetector(context: Context) : SensorEventListener {
         sampleCount = 0
     }
 
+    // 停止采样
     private fun stopInternal() {
         isSampling = false
         sensorManager.unregisterListener(this)
@@ -75,7 +71,7 @@ class SleepMotionDetector(context: Context) : SensorEventListener {
         val y = event.values[1]
         val z = event.values[2]
 
-        // 经典高通滤波：分离重力
+        // 采用高通滤波分离重力
         gravity[0] = alpha * gravity[0] + (1 - alpha) * x
         gravity[1] = alpha * gravity[1] + (1 - alpha) * y
         gravity[2] = alpha * gravity[2] + (1 - alpha) * z
@@ -90,6 +86,7 @@ class SleepMotionDetector(context: Context) : SensorEventListener {
         sampleCount++
     }
 
+    //没有具体功能，只为了实现对象
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 
     private fun calculateRmsScore(): Double {
@@ -99,7 +96,7 @@ class SleepMotionDetector(context: Context) : SensorEventListener {
         }
 
         val meanSquare = sumSquares / sampleCount
-        val score = sqrt(meanSquare) + 1.0
+        val score = sqrt(meanSquare) + 1.0 //最少为1，防止出现无穷小数影响后续计算
 
         Log.d(TAG, "采样结束: 样本数=$sampleCount, 能量分数=$score")
         return score

@@ -4,8 +4,8 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import com.feifan.fuckingnjit.utils.Manager
-import com.feifan.fuckingnjit.utils.system.SystemActionHelper
 import com.feifan.fuckingnjit.utils.database.AppDataCenter
+import com.feifan.fuckingnjit.utils.system.SystemActionHelper
 
 class SampleWebViewClientImpl() : WebViewClient() {
     // 拦截 URL 加载
@@ -32,8 +32,10 @@ class SampleWebViewClientImpl() : WebViewClient() {
                 })();
                 """.trimIndent(), null
             )
-            AppDataCenter.updateSystemConfig { it.currentUserId = "" }
         } else if (url.startsWith("https://casb.njit.edu.cn/enlink/sso/login")) {
+            AppDataCenter.updateSystemConfig {
+                it.currentUserId = ""
+            }// 如果是不同用户在登录，到这一步就可以清空旧账号登录状态了
             SystemActionHelper.openDialog("处理SSO登录", view.context)
             view.evaluateJavascript(
                 """

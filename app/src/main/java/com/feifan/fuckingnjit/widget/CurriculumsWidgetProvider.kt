@@ -12,6 +12,7 @@ import android.util.Log
 import android.view.View
 import android.widget.RemoteViews
 import com.feifan.fuckingnjit.R
+import com.feifan.fuckingnjit.utils.DailyCourseSlot
 import com.feifan.fuckingnjit.utils.EduScheduleConfig
 import com.feifan.fuckingnjit.utils.HeartbeatBus
 import com.feifan.fuckingnjit.utils.TodayScheduleManager
@@ -187,7 +188,7 @@ class CurriculumsWidgetProvider : AppWidgetProvider() {
     private fun fillCourseBlock(
         rv: RemoteViews,
         index: Int,
-        slot: TodayScheduleManager.DailyCourseSlot,
+        slot: DailyCourseSlot,
         timeColor: Int
     ) {
         if (index >= IDS_BLOCK.size) return
@@ -202,8 +203,8 @@ class CurriculumsWidgetProvider : AppWidgetProvider() {
     }
 
     private fun isConflict(
-        current: TodayScheduleManager.DailyCourseSlot,
-        prev: TodayScheduleManager.DailyCourseSlot
+        current: DailyCourseSlot,
+        prev: DailyCourseSlot
     ): Boolean {
         return current.startNode <= prev.startNode
     }
@@ -211,7 +212,7 @@ class CurriculumsWidgetProvider : AppWidgetProvider() {
     /**
      * 新版精华：计算下一次课程的开始/结束时间点，并向 HeartbeatBus 注册。
      */
-    private fun calculateAndRegisterNextCriticalNode(courses: List<TodayScheduleManager.DailyCourseSlot>) {
+    private fun calculateAndRegisterNextCriticalNode(courses: List<DailyCourseSlot>) {
         if (courses.isEmpty()) return
 
         val nowTime = LocalTime.now()

@@ -1,18 +1,13 @@
 package com.feifan.fuckingnjit.utils
 
 import java.time.LocalDate
-import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-/**
- * 全局通用纯函数工具类
- * （注意：此处禁止再合入任何教务、业务相关代码）
- */
 object Tools {
-
     private val FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
+    // 返回从昨天中午 12:00 到今天中午 12:00 的时间范围作为睡眠时间计算窗口（如果能睡到今天12:00后，那就是真神人
     fun getTargetSleepWindow(): Pair<Long, Long> {
         val todayNoon = LocalDate.now().atTime(12, 0)
         val yesterdayNoon = todayNoon.minusDays(1)
@@ -23,11 +18,12 @@ object Tools {
         )
     }
 
-    fun isInLateNightPeriod(): Boolean {
-        val currentHour = LocalTime.now().hour
-        return currentHour >= 20 || currentHour < 5
-    }
+//    fun isInLateNightPeriod(): Boolean {
+//        val currentHour = LocalTime.now().hour
+//        return currentHour >= 20 || currentHour < 5
+//    }
 
+    // 获取当前日期在“一周之内”的索引值（以周一为起始点 0）
     fun todayWeekIndex(): Int {
         return LocalDate.now().dayOfWeek.value - 1
     }
@@ -45,7 +41,7 @@ object Tools {
         while (!currentDate.isAfter(endDate)) {
             val currentDateStr = currentDate.format(FORMATTER)
             // 调用新的 EduScheduleConfig 获取周次
-            val week = EduScheduleConfig.calculateCurrentWeek(semesterStartDate, currentDateStr)
+            val week = EduScheduleConfig.calculateWeek(semesterStartDate, currentDateStr)
             val adjustedDay = currentDate.dayOfWeek.value
 
             weekAndDay.getOrPut(week.toString()) { mutableListOf() }.add(adjustedDay.toString())

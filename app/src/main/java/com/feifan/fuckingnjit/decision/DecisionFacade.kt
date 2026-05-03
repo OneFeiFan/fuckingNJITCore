@@ -7,15 +7,18 @@ import com.alibaba.fastjson.JSONObject
 import com.feifan.fuckingnjit.model.Course
 import com.feifan.fuckingnjit.monitor.StepMonitorManager
 import com.feifan.fuckingnjit.service.impl.UserManagerImpl
-import com.feifan.fuckingnjit.utils.network.NetworkStatus
+import com.feifan.fuckingnjit.utils.TodayScheduleManager
 import com.feifan.fuckingnjit.utils.database.AppDataCenter
+import com.feifan.fuckingnjit.utils.network.NetworkStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
+import kotlin.math.max
 
 @Suppress("unused")
 object DecisionFacade {
 
+    //切换app状态
     fun switchAppMode(modeStr: String): JSONObject {
         AppDataCenter.getCurrentUser()?.let { user ->
             user.currentAppMode = AppMode.fromName(modeStr)
@@ -25,6 +28,7 @@ object DecisionFacade {
         return NetworkStatus.Success.toJsonResult("切换成功")
     }
 
+    // 获取仪表盘数据
     suspend fun getDashboardInsight(appContext: Context): JSONObject = withContext(Dispatchers.IO) {
         try {
             val mode = AppDataCenter.getCurrentUser()?.currentAppMode ?: AppMode.BALANCE_MODE
@@ -35,7 +39,7 @@ object DecisionFacade {
                 JSON.parseArray(validCoursesArray.toJSONString(), Course::class.java)
                     ?: mutableListOf()
 
-            val currentWeek = AppDataCenter.getSystemConfig().currentWeek
+            val currentWeek = TodayScheduleManager.getCurrentWeek()
             val tomorrow = LocalDate.now().plusDays(1)
             val targetDay = tomorrow.dayOfWeek.value
 
@@ -58,14 +62,14 @@ object DecisionFacade {
 
             val totalClassMins = todayCourses.sumOf { it.step * DecisionConfig.BASE_FOCUS_MINUTES }
             val focusRatePercent = if (totalClassMins > 0) {
-                val focusMins = kotlin.math.max(0, totalClassMins - distractionMins)
+                val focusMins = max(0, totalClassMins - distractionMins)
                 (focusMins * 100 / totalClassMins)
             } else {
                 100
             }
 
-            val engine = DecisionEngine()
-            val dashboardJson = engine.generateDashboardJson(
+            //将获取的数送往计算
+            val dashboardJson = DecisionEngine().generateDashboardJson(
                 mode = mode,
                 tomorrowCourses = tomorrowCourses,
                 recentSleepRecords = recentSleepRecords,

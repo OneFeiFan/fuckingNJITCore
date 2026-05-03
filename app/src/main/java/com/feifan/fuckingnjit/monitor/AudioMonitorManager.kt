@@ -33,7 +33,7 @@ class AudioMonitorManager(private val context: Context) {
 
     fun init() {
         registerAudioPolicyCallback()
-        // 【优化】尝试在服务启动时就提前预热 AudioRecord 实例，建立长连接
+        // 尝试在服务启动时就提前预热 AudioRecord 实例，建立长连接
         if (ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.RECORD_AUDIO
@@ -47,11 +47,7 @@ class AudioMonitorManager(private val context: Context) {
         }
     }
 
-    /**
-     * 获取环境噪音快照
-     * @param durationMs 录音时长(毫秒)
-     * @return 环境分贝值(dBFS)。如果麦克风被占用或无权限，返回 -1.0
-     */
+    // 获取环境噪音快照
     suspend fun captureSnapshot(durationMs: Long = 250L): Double = withContext(Dispatchers.IO) {
         if (isMicrophoneOccupied || ContextCompat.checkSelfPermission(
                 context,
@@ -64,14 +60,13 @@ class AudioMonitorManager(private val context: Context) {
         try {
             ensureAudioRecordInit()
 
-            // 【自愈机制】如果实例被系统干掉或者状态损坏，直接丢弃重建
+            // 如果实例被系统干掉或者状态损坏，直接丢弃重建
             if (audioRecord?.state != AudioRecord.STATE_INITIALIZED || isMicrophoneOccupied) {
                 Log.w(TAG, "AudioRecord 状态异常，触发销毁重建")
                 forceRelease()
                 return@withContext -1.0
             }
 
-            // 【优化】只执行轻量级的 startRecording，绝不 new 实例
             audioRecord?.startRecording()
 
             // startRecording 是耗时操作，再次校验期间是否被高优业务（电话）抢占
@@ -118,6 +113,7 @@ class AudioMonitorManager(private val context: Context) {
             }
 
         } catch (e: Exception) {
+            e.printStackTrace()
             // 只有在发生底层抛错时（如死锁），才执行重量级的 forceRelease 销毁实例
             Log.e(TAG, "Noise snapshot failed, triggering self-healing", e)
             forceRelease()

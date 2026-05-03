@@ -21,11 +21,11 @@ import java.util.concurrent.TimeUnit
 
 class HttpRequestHelper {
     companion object {
-        private var lastLoginCheckTime = 0L
-        private const val LOGIN_CHECK_INTERVAL = 60 * 1000
+        private var lastLoginCheckTime = 0L //控制登录状态检测
+        private const val LOGIN_CHECK_INTERVAL = 60 * 1000 // 控制一分钟检测一次
         private val okHttpClient: OkHttpClient by lazy {
             OkHttpClient.Builder()
-                .retryOnConnectionFailure(true)
+                .retryOnConnectionFailure(true) // 连接失败重试
                 .connectTimeout(10, TimeUnit.SECONDS)
                 .readTimeout(15, TimeUnit.SECONDS)
                 .writeTimeout(15, TimeUnit.SECONDS)
@@ -49,29 +49,28 @@ class HttpRequestHelper {
                 try {
                     val response = okHttpClient.newCall(request).execute()
 
-                    // 1. 卫语句：拦截网络失败的情况，提前抛出异常
+                    // 拦截网络失败的情况，提前抛出异常
                     if (!response.isSuccessful) {
                         val status = NetworkStatusUtils.fromCode(response.code)
                         throw ApiException(status, "下载失败：HTTP状态码 ${response.code}")
                     }
 
-                    // 2. 卫语句：拦截响应体为空的情况，安全地拿到非空 body
+                    // 拦截响应体为空的情况，安全地拿到非空 body
                     val body = response.body ?: throw ApiException(
                         NetworkStatus.ParseError,
                         "下载失败：响应体为空"
                     )
 
-                    // 3. 主干逻辑：安心处理正常的流写入
+                    // 主干逻辑：安心处理正常的流写入
                     File(context.filesDir, fileName).outputStream().use { output ->
                         body.byteStream().use { input -> input.copyTo(output) }
                     }
 
-                    // 4. Lambda 的最后一行自动作为整个 withContext 的返回值，直接写 true 即可
+                    // 默认返回
                     true
 
-                } catch (e: ApiException) {
-                    throw e
                 } catch (e: Exception) {
+                    e.printStackTrace()
                     throw ApiException(
                         NetworkStatus.NetworkUnavailable,
                         "文件下载异常: ${e.message}",
@@ -80,14 +79,13 @@ class HttpRequestHelper {
                 }
             }
 
+        // 为Jsoup提供特定格式的cookie
         private fun getPersistentCookies(cookie: String): Map<String, String> {
             return cookie.split(";")
                 .associate { it.split("=").let { parts -> parts[0] to parts.getOrElse(1) { "" } } }
         }
 
-        private fun checkLoginIfNeeded(): Boolean =
-            (System.currentTimeMillis() - lastLoginCheckTime) >= LOGIN_CHECK_INTERVAL
-
+        // 核心请求方法
         suspend fun executeBaseRequest(
             url: String,
             method: HttpMethod = HttpMethod.GET,
@@ -96,7 +94,6 @@ class HttpRequestHelper {
             headers: Headers? = null,
             cookie: String? = null
         ): String = withContext(Dispatchers.IO) {
-
             val requestBuilder = Request.Builder().url(url)
             requestBuilder.headers(headers ?: COMMON_HEADERS.toHeaders())
             if (!cookie.isNullOrBlank()) requestBuilder.addHeader("Cookie", cookie)
@@ -117,7 +114,6 @@ class HttpRequestHelper {
             try {
                 okHttpClient.newCall(requestBuilder.build()).execute().use { response ->
                     if (!response.isSuccessful) {
-                        // 🎯 核心运用：将 HTTP 错误码完美映射到你的密封类
                         throw ApiException(
                             NetworkStatusUtils.fromCode(response.code),
                             "请求失败，状态码: ${response.code}"
@@ -144,13 +140,14 @@ class HttpRequestHelper {
         ): String {
             val cookie = cookieManager.getCookie(BASE_URL)
             if (cookie.isNullOrBlank()) {
-                // 🎯 核心运用：直接抛出 Unauthorized (401)
+                // 没有cookie就直接默认登录失效
                 throw ApiException(NetworkStatus.Unauthorized, "Cookie 已失效，需要登录")
             }
 
-            if (checkLoginIfNeeded()) {
+            if ((System.currentTimeMillis() - lastLoginCheckTime) >= LOGIN_CHECK_INTERVAL) {
                 lastLoginCheckTime = System.currentTimeMillis()
                 try {
+                    // 采用Jsoup访问教务系统首页，检测登录状态
                     val connection =
                         Jsoup.connect("$BASE_URL$WEBVPN_PATH/jwglxt/xtgl/index_initMenu.html")
                             .cookies(getPersistentCookies(cookie)).followRedirects(false)
@@ -193,12 +190,14 @@ class HttpRequestHelper {
             }
         }
 
+        // 用于获取json数据
         suspend fun getJsonResponse(
             url: String,
             method: HttpMethod = HttpMethod.GET,
             requestBody: Map<String, String> = emptyMap()
         ): String = makeRequest(url, method, requestBody)
 
+        // 用于获取网页对象
         suspend fun getHtmlResponse(
             url: String,
             method: HttpMethod = HttpMethod.GET,

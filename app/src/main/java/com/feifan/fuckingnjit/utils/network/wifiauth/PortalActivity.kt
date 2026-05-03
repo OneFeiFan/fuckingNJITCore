@@ -1,6 +1,5 @@
 package com.feifan.fuckingnjit.utils.network.wifiauth
 
-import android.app.Activity
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -13,12 +12,12 @@ import android.os.Looper
 import android.os.Parcelable
 import android.util.Log
 import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import com.feifan.fuckingnjit.utils.AppConfig
-import com.feifan.fuckingnjit.utils.system.SystemActionHelper
 import com.feifan.fuckingnjit.utils.database.AppDataCenter
-import kotlinx.coroutines.CoroutineScope
+import com.feifan.fuckingnjit.utils.system.SystemActionHelper
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -30,22 +29,21 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 
-class PortalActivity : Activity() {
+class PortalActivity : AppCompatActivity() {
 
-    // 你的目标认证服务器地址
+    // 目标认证服务器地址
     private val TARGET_CHECK_URL = "http://172.31.255.156"
     private val TAG = "PortalCheck"
 
     private val MAX_RETRY_COUNT = 2
     private var httpClient: OkHttpClient? = null
-    private val coroutineScope = CoroutineScope(Dispatchers.Main + Job())
     private var mCaptivePortal: CaptivePortal? = null
 
     private val httpClientInstance: OkHttpClient by lazy {
         OkHttpClient.Builder()
             .connectTimeout(5, TimeUnit.SECONDS)
             .readTimeout(5, TimeUnit.SECONDS)
-            .retryOnConnectionFailure(false)
+            .retryOnConnectionFailure(false)// 连接失败后不再尝试
             .build()
     }
 
@@ -58,9 +56,9 @@ class PortalActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val captivePortal =
+        // 获取CaptivePortal对象
+        this.mCaptivePortal =
             intent.getParcelableExtra<Parcelable>("android.net.extra.CAPTIVE_PORTAL") as CaptivePortal
-        this.mCaptivePortal = captivePortal
         SystemActionHelper.openDialog("正在处理目标网络...", this)
         val network: Network? = intent.getParcelableExtra(ConnectivityManager.EXTRA_NETWORK)
 
@@ -75,35 +73,34 @@ class PortalActivity : Activity() {
     }
 
     private fun checkTargetServerDirectly(network: Network) {
-        val executor = Executors.newSingleThreadExecutor()
+        val executor = Executors.newSingleThreadExecutor()  // 单线程的任务执行器
         val handler = Handler(Looper.getMainLooper())
         val cm = getSystemService(ConnectivityManager::class.java)
-        cm.bindProcessToNetwork(network)
+        cm.bindProcessToNetwork(network)// 将当前整个进程的网络出口锁定到指定的 network 对象上
         executor.execute {
             var isTargetNetwork = false
 
             try {
                 Log.d(TAG, "尝试直接连接目标: $TARGET_CHECK_URL")
 
-                // 1. 必须使用 network.openConnection 确保走 WiFi 通道
+                // 使用 network.openConnection 确保走 WiFi 通道，否则所有请求都不会正常前往TARGET_CHECK_URL
                 val urlObj = URL(TARGET_CHECK_URL)
                 val connection = network.openConnection(urlObj) as HttpURLConnection
 
-                // 2. 设置极短的超时时间
+                // 设置极短的超时时间
                 // 如果在内网，连接这个 IP 应该非常快 (50-100ms)
                 // 如果不在内网，这个私有 IP 是不通的，我们不想等太久
                 connection.connectTimeout = 2000 // 2秒超时
                 connection.readTimeout = 2000
-                connection.requestMethod = "HEAD" // 我们只需要探一下头，不需要下载页面
+                connection.requestMethod = "HEAD" // 我们只需要检查一下连通信，不需要完整请求
 
-                // 3. 发起连接
+                // 发起连接
                 connection.connect()
                 val responseCode = connection.responseCode
 
                 Log.d(TAG, "目标服务器响应码: $responseCode")
 
-                // 只要服务器有响应（无论是 200, 302, 403...），说明我们就在这个内网里！
-                // 只有 ConnectException/TimeoutException 才说明不在。
+                // 响应码为200说明能够正常访问TARGET_CHECK_URL
                 if (responseCode == 200) {
                     isTargetNetwork = true
                 }
@@ -118,10 +115,10 @@ class PortalActivity : Activity() {
             // 回到主线程分发结果
             handler.post {
                 if (isTargetNetwork) {
-                    // === 命中！是我们要拦截的网络 ===
+                    // 是TARGET_CHECK_URL则转入自定义连接方法
                     handleMyTargetNetwork()
                 } else {
-                    // === 没命中！转交给系统 ===
+                    // 不是TARGET_CHECK_URL则让系统默认处理
                     forwardToSystemComponent()
                 }
             }
@@ -131,15 +128,13 @@ class PortalActivity : Activity() {
     private fun handleMyTargetNetwork() {
         Log.i(TAG, "确认是目标网络，开始拦截处理")
 
-        // 1. 绑定进程到网络
-
         val type = AppConfig.getWifiAuthType()
         val user = AppDataCenter.getCurrentUser()
         val url =
-            "http://172.31.255.156:801/eportal/portal/login?login_method=1&user_account=${user?.id + type}&user_password=${user?.password}"
+            "$TARGET_CHECK_URL:801/eportal/portal/login?login_method=1&user_account=${user?.id + type}&user_password=${user?.password}"
 
         // 使用协程处理网络请求
-        coroutineScope.launch {
+        lifecycleScope.launch {
             var success = false
             var retryCount = 0
 
@@ -190,12 +185,14 @@ class PortalActivity : Activity() {
             targetIntent.putExtras(intent.extras!!)
         }
 
-        val pm = packageManager
         // 必须在 Manifest 添加 <queries> 才能查到
-        val resolveInfos = pm.queryIntentActivities(targetIntent, PackageManager.MATCH_ALL)
+        // 找出其它处理CAPTIVE_PORTAL的应用
+        val resolveInfos =
+            packageManager.queryIntentActivities(targetIntent, PackageManager.MATCH_ALL)
 
         var foundSystem = false
         for (info in resolveInfos) {
+            // 避开本应用
             if (info.activityInfo.packageName != packageName) {
                 targetIntent.component =
                     ComponentName(info.activityInfo.packageName, info.activityInfo.name)
@@ -210,8 +207,9 @@ class PortalActivity : Activity() {
             }
         }
 
-        // 兜底：如果找不到系统组件，尝试用浏览器打开原始 Intent 里的 URL
+        // 如果找不到系统组件，尝试用浏览器打开原始 Intent 里的 URL
         if (!foundSystem) {
+            // 认为系统存在异常，关闭这个功能
             PortalManager.switchStatus(this, false)
             Toast.makeText(this, "处理失败，请手动登录", Toast.LENGTH_SHORT).show()
         }

@@ -5,8 +5,8 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import com.feifan.fuckingnjit.utils.system.SystemActionHelper
 import com.feifan.fuckingnjit.utils.database.AppDataCenter
+import com.feifan.fuckingnjit.utils.system.SystemActionHelper
 import com.feifan.yiban.Apis.Task
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -24,10 +24,10 @@ class KillYiBan : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         lifecycleScope.launch {
 
-            // 1. 直接获取当前登录的教务用户
+            // 获取当前登录的教务用户
             val currentUser = AppDataCenter.getCurrentUser()
 
-// 2. 校验用户是否存在以及是否绑定了易班账号
+            // 校验用户是否存在以及是否绑定了易班账号
             if (currentUser == null || currentUser.yibanId.isEmpty()) {
                 withContext(Dispatchers.Main) {
                     showToast(this@KillYiBan, "未找到易班账号信息")
@@ -36,8 +36,7 @@ class KillYiBan : AppCompatActivity() {
                 return@launch
             }
 
-
-            // 3. 执行登录逻辑
+            // 执行登录逻辑
             lateinit var task: Task
             try {
                 withContext(Dispatchers.Main) {
@@ -48,7 +47,7 @@ class KillYiBan : AppCompatActivity() {
                 }
                 withContext(Dispatchers.IO) {
                     task = Task(this@KillYiBan)
-                    // 直接使用 User 实体中合并的易班凭据字段
+                    // 从 User 实体中提取易班凭据
                     task.init(currentUser.yibanId, currentUser.yibanPassword)
                 }
             } catch (e: Exception) {

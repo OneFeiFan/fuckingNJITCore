@@ -48,13 +48,6 @@ class SecureUtil {
                     .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_RSA_PKCS1)
                     .setKeySize(2048)
 
-                //            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                //                val hasStrongBox = context.packageManager.hasSystemFeature(
-                //                    PackageManager.FEATURE_STRONGBOX_KEYSTORE
-                //                )
-                //                builder.setIsStrongBoxBacked(hasStrongBox)
-                //            }
-
                 keyPairGenerator.initialize(builder.build())
                 keyPairGenerator.generateKeyPair()
             }

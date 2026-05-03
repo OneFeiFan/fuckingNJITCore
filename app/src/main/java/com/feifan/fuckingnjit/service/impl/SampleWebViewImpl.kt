@@ -12,8 +12,8 @@ import com.feifan.fuckingnjit.model.User
 import com.feifan.fuckingnjit.utils.AppConfig
 import com.feifan.fuckingnjit.utils.J2J
 import com.feifan.fuckingnjit.utils.Manager
-import com.feifan.fuckingnjit.utils.system.SystemActionHelper
 import com.feifan.fuckingnjit.utils.TodayScheduleManager
+import com.feifan.fuckingnjit.utils.system.SystemActionHelper
 import kotlinx.coroutines.launch
 import java.util.Observable
 import java.util.Observer
@@ -25,19 +25,19 @@ class SampleWebViewImpl : AppCompatActivity(), Observer {
     @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
+        // 打开一个登陆用WebView页面
         webView = WebView(this)
         webView?.apply {
             val instance = J2J.getInstance()
             instance.addObserver(this@SampleWebViewImpl)
-            TodayScheduleManager.clearCache()
-            addJavascriptInterface(instance, "J2J")
+            TodayScheduleManager.clearCache() // 所有和课程相关数据全部清空
+            addJavascriptInterface(instance, "J2J")//注入中间件
             visibility = View.VISIBLE
             val webSettings = settings
             webSettings.javaScriptEnabled = true
             webSettings.databaseEnabled = true
             webSettings.domStorageEnabled = true
-            webSettings.cacheMode = WebSettings.LOAD_DEFAULT //
+            webSettings.cacheMode = WebSettings.LOAD_DEFAULT
             webSettings.javaScriptCanOpenWindowsAutomatically = true //支持通过JS打开新窗口
             webSettings.loadsImagesAutomatically = true //支持自动加载图片
             webSettings.defaultTextEncodingName = "utf-8"//设置编码格式
@@ -56,19 +56,19 @@ class SampleWebViewImpl : AppCompatActivity(), Observer {
 
     private fun releaseWebView() {
         webView?.apply {
-            // 1. 停止加载（先停止，再清理）
+            // 停止加载（先停止，再清理）
             stopLoading()
-            // 2. 移除父视图（避免父容器持有引用）
+            // 移除父视图（避免父容器持有引用）
             (parent as? ViewGroup)?.removeView(this)
-            // 3. 清理资源
+            // 清理资源
             settings.javaScriptEnabled = false
             clearCache(true)
             clearHistory()
             removeJavascriptInterface("J2J")
-            // 5. 销毁WebView
+            // 销毁WebView
             destroy()
         }
-        // 6. 置为null，避免后续误用
+        // 置为null，避免后续误用
         webView = null
     }
 

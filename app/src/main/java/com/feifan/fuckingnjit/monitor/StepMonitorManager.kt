@@ -25,7 +25,7 @@ object StepMonitorManager : SensorEventListener {
 
         val appContext = context.applicationContext
 
-        // 注册传感器 (彻底移除了 的初始化逻辑)
+        // 注册传感器
         sensorManager = appContext.getSystemService(Context.SENSOR_SERVICE) as SensorManager
         stepSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
 
@@ -39,18 +39,17 @@ object StepMonitorManager : SensorEventListener {
 
     override fun onSensorChanged(event: SensorEvent?) {
         if (event?.sensor?.type == Sensor.TYPE_STEP_COUNTER) {
-            val rawTotalSteps = event.values[0]
+            val rawTotalSteps = event.values[0]// 传感器里的原始数据
 
-            // 将所有逻辑委托给 AppDataCenter 安全的高阶函数，ObjectBox 的写入极速且线程安全
             AppDataCenter.updateTodayRecord { record ->
 
-                // 1. 跨天自动重置，或者设备重启后的基准对齐
+                // 跨天自动重置，或者设备重启后进行基准对齐
                 if (record.lastRawSteps < 0 || rawTotalSteps < record.lastRawSteps) {
                     Log.w(TAG, "对齐计步器基准 (新基准: $rawTotalSteps)")
                     record.lastRawSteps = rawTotalSteps
                 }
 
-                // 2. 计算增量并累加
+                // 计算增量并累加
                 val delta = (rawTotalSteps - record.lastRawSteps).toInt()
                 if (delta > 0) {
                     record.currentSteps += delta

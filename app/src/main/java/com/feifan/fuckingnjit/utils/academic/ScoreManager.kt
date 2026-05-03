@@ -3,13 +3,11 @@ package com.feifan.fuckingnjit.utils.academic
 import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.JSONArray
 import com.alibaba.fastjson.JSONObject
+import java.util.Locale
 
-/**
- * 教务成绩相关的专属业务处理类
- * 负责解析教务系统返回的 JSON 并计算复杂绩点
- */
 object ScoreManager {
 
+    // 解析教务网的成绩信息
     fun getScores(raw: JSONObject): JSONArray {
         val result = mutableListOf<Map<String, Any>>()
         val items: JSONArray = raw.getJSONArray("items")
@@ -37,6 +35,7 @@ object ScoreManager {
         return JSONArray.parseArray(JSON.toJSONString(result))
     }
 
+    // 计算GPA
     fun calculateAverageGPA(tableData: JSONArray): String {
         try {
             // 删除不计入GPA的课程和特殊算法课程
@@ -75,7 +74,7 @@ object ScoreManager {
 
             var totalCredit = 0.0
             var totalCreditPoint = 0.0
-
+            // 以下算法来自于2025年南京工程学院学生手册，很屎，不敢改了
             (0 until finalCourseList.size).forEach { i ->
                 val item = finalCourseList.getJSONObject(i)
 
@@ -118,7 +117,7 @@ object ScoreManager {
                         gradePoint -= 0.5
                     }
                 }
-
+                // 获取学分
                 val credit = item.getDouble("xf")
 
                 totalCredit += credit
@@ -126,10 +125,10 @@ object ScoreManager {
             }
 
             return (totalCreditPoint / totalCredit).let {
-                String.format("%.2f", it)
+                String.format(Locale.ROOT, "%.2f", it)
             }
         } catch (e: Exception) {
-            // Manager.handleException(e, "calculateAverageGPA")
+            e.printStackTrace()
             return "0.00"
         }
     }

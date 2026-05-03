@@ -17,14 +17,15 @@ import androidx.core.app.NotificationCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.feifan.fuckingnjit.R
+import com.feifan.fuckingnjit.monitor.AccelerometerMonitor
 import com.feifan.fuckingnjit.monitor.AppUsageManager
 import com.feifan.fuckingnjit.monitor.AudioMonitorManager
 import com.feifan.fuckingnjit.monitor.SensorDataBufferManager
-import com.feifan.fuckingnjit.monitor.SleepMotionDetector
 import com.feifan.fuckingnjit.monitor.StepMonitorManager
 import com.feifan.fuckingnjit.utils.HeartbeatBus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 class CoreService : LifecycleService() {
 
@@ -34,7 +35,7 @@ class CoreService : LifecycleService() {
     private val ACTION_TRIGGER_ENGINE = "com.feifan.fuckingnjit.ACTION_TRIGGER_ENGINE"
 
     private lateinit var audioManager: AudioMonitorManager
-    private lateinit var motionDetector: SleepMotionDetector
+    private lateinit var motionDetector: AccelerometerMonitor
     private lateinit var alarmManager: AlarmManager
 
     private var isRunning = false
@@ -51,7 +52,7 @@ class CoreService : LifecycleService() {
         // 初始化监控模块
         audioManager = AudioMonitorManager(this)
         audioManager.init()
-        motionDetector = SleepMotionDetector(this)
+        motionDetector = AccelerometerMonitor(this)
         StepMonitorManager.init(this)
 
         createNotificationChannel()
@@ -145,6 +146,7 @@ class CoreService : LifecycleService() {
     private fun updateNotification(appName: String, currentNoise: Double, currentMotion: Double) {
         val noiseText = if (audioManager.isMicrophoneOccupied) "⏸️ 避让" else "${
             String.format(
+                Locale.ROOT,
                 "%.1f",
                 currentNoise
             )
@@ -153,7 +155,7 @@ class CoreService : LifecycleService() {
         val content = """
             📱 前台: ${appName.ifEmpty { "检测中..." }}
             🔊 噪音: $noiseText
-            🛌 动作: ${String.format("%.1f", currentMotion)}
+            🛌 动作: ${String.format(Locale.ROOT, "%.1f", currentMotion)}
             🖥️ 屏幕: $lastScreenState
         """.trimIndent()
 
@@ -237,6 +239,7 @@ class CoreService : LifecycleService() {
         try {
             unregisterReceiver(screenReceiver)
         } catch (e: Exception) {
+            e.printStackTrace()
         }
 
         SensorDataBufferManager.flushToDatabase()

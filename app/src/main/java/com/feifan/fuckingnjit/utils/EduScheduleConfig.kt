@@ -7,29 +7,25 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 
-/**
- * 专属于南工程的校历与作息时间配置中心
- */
 object EduScheduleConfig {
 
     private val FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
-    // ==========================================
-    // 1. 作息时间表 (原 CourseTimeUtils)
-    // ==========================================
-
+    // 映射开始节次与时间
     private val startTimes = mapOf(
         1 to "08:00", 2 to "08:55", 3 to "10:10", 4 to "11:05",
         5 to "13:40", 6 to "14:35", 7 to "15:40", 8 to "16:35",
         9 to "18:30", 10 to "19:25", 11 to "20:20"
     )
 
+    // 映射结束节次与时间
     private val endTimes = mapOf(
         1 to "08:45", 2 to "09:40", 3 to "10:55", 4 to "11:50",
         5 to "14:25", 6 to "15:20", 7 to "16:25", 8 to "17:20",
         9 to "19:15", 10 to "20:10", 11 to "21:05"
     )
 
+    // 基于开始节次和持续节次得出课程实际时间跨度
     fun getDisplayTime(startNode: Int, step: Int): String {
         val endNode = startNode + step - 1
         val s = startTimes[startNode] ?: "00:00"
@@ -37,6 +33,7 @@ object EduScheduleConfig {
         return "$s-$e"
     }
 
+    // 获取课程结束时间
     fun getCourseEndTime(startNode: Int, step: Int): LocalTime {
         val endNode = startNode + step - 1
         val timeStr = endTimes[endNode] ?: "23:59"
@@ -44,24 +41,24 @@ object EduScheduleConfig {
         return try {
             LocalTime.parse(formatted)
         } catch (e: Exception) {
+            e.printStackTrace()
             LocalTime.MAX
         }
     }
 
+    // 获取课程开始时间
     fun getCourseStartTime(startNode: Int): LocalTime {
         val timeStr = startTimes[startNode] ?: "00:00"
         val formatted = if (timeStr.length == 4) "0$timeStr" else timeStr
         return try {
             LocalTime.parse(formatted)
         } catch (e: Exception) {
+            e.printStackTrace()
             LocalTime.MIN
         }
     }
 
-    // ==========================================
-    // 2. 校历与学期算法 (原 TimeManager 中抽取)
-    // ==========================================
-
+    // 获取学期开始时间（日期格式）
     fun getSemesterStartDate(): String {
         // 保留你原有的硬编码短路逻辑，下方注释掉的是原有的数据库读取逻辑备用
         return "2025-02-17"
@@ -75,13 +72,15 @@ object EduScheduleConfig {
         */
     }
 
-    fun calculateCurrentWeek(startDate: String, currentDate: String): Int {
+    // 基于时间差获取周次
+    fun calculateWeek(startDate: String, currentDate: String): Int {
         val start = LocalDate.parse(startDate, FORMATTER)
         val today = LocalDate.parse(currentDate, FORMATTER)
         val diffDays = ChronoUnit.DAYS.between(start, today)
         return if (diffDays < 0) 1 else (diffDays / 7).toInt() + 1
     }
 
+    // 基于当前时间和输入时间获取当前周
     fun calculateCurrentWeek(startMs: Long): Int {
         val start = Instant.ofEpochMilli(startMs).atZone(ZoneId.systemDefault()).toLocalDate()
         // 保持原代码逻辑：当前日期减去365天
@@ -90,6 +89,7 @@ object EduScheduleConfig {
         return if (diffDays < 0) 1 else (diffDays / 7).toInt() + 1
     }
 
+    // 不严谨的学年计算
     fun getCurrentSchoolYear(): String {
         val today = LocalDate.now()
         val month = today.monthValue

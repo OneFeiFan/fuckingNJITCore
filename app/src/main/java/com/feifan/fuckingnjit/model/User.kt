@@ -8,38 +8,34 @@ import com.feifan.fuckingnjit.utils.security.RSAPasswordConverter
 import io.objectbox.annotation.Convert
 import io.objectbox.annotation.Entity
 import io.objectbox.annotation.Id
+import io.objectbox.annotation.Index
 import io.objectbox.converter.PropertyConverter
 
+// 用户实体
 @Entity
 data class User(
     @Id var uuid: Long = 0,
 
-    // --- 教务系统核心身份 ---
-    var id: String = "", // 学号
+    @Index
+    var id: String = "", // 学号，且基于学号索引
     @Convert(converter = RSAPasswordConverter::class, dbType = String::class)
-    var password: String = "",
-    var name: String = "",
-
-    // --- 易班系统身份 (合并原 YiBan 实体) ---
-    var yibanId: String = "", // 通常为手机号
+    var password: String = "",//加密过的密码
+    var name: String = "",//教务系统姓名
+    var yibanId: String = "", // 易班账号通常为手机号
     @Convert(converter = RSAPasswordConverter::class, dbType = String::class)
-    var yibanPassword: String = "",
-
-    // --- 用户个人偏好 (从 SP 和 Base 吸收) ---
-    var storePassword: Boolean = true,
+    var yibanPassword: String = "",// 加密过的易班密码
+    var storePassword: Boolean = true,//是否储存教务密码
     @Convert(converter = AppModeConverter::class, dbType = String::class)
-    var currentAppMode: AppMode = AppMode.BALANCE_MODE,
-
-    // --- 教务学业数据 ---
+    var currentAppMode: AppMode = AppMode.BALANCE_MODE,// app模式
     var gpa: String = "0",
     @Convert(converter = JSONObjectConverter::class, dbType = String::class)
-    var academicProgress: JSONObject = JSONObject(),
+    var academicProgress: JSONObject = JSONObject(),//学业进度
     @Convert(converter = JSONArrayConverter::class, dbType = String::class)
-    var scores: JSONArray = JSONArray(),
+    var scores: JSONArray = JSONArray(),//全部成绩
     @Convert(converter = JSONObjectConverter::class, dbType = String::class)
-    var curriculums: JSONObject = JSONObject(),
+    var curriculums: JSONObject = JSONObject(),//全部课程（for教务）
     @Convert(converter = JSONObjectConverter::class, dbType = String::class)
-    var localCurriculums: JSONObject? = JSONObject()
+    var localCurriculums: JSONObject? = JSONObject()//全部本地课程
 )
 
 class JSONObjectConverter : PropertyConverter<JSONObject?, String?> {

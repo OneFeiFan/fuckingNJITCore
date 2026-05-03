@@ -7,10 +7,10 @@ import com.feifan.fuckingnjit.model.User
 import com.feifan.fuckingnjit.service.UserManager
 import com.feifan.fuckingnjit.utils.EduScheduleConfig
 import com.feifan.fuckingnjit.utils.Manager
-import com.feifan.fuckingnjit.utils.network.NetworkStatus
 import com.feifan.fuckingnjit.utils.academic.ScoreManager
-import com.feifan.fuckingnjit.utils.system.SystemActionHelper
 import com.feifan.fuckingnjit.utils.database.AppDataCenter
+import com.feifan.fuckingnjit.utils.network.NetworkStatus
+import com.feifan.fuckingnjit.utils.system.SystemActionHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
@@ -28,6 +28,7 @@ class UserManagerImpl private constructor() : UserManager {
         val user = AppDataCenter.getAllUsers().find { it.id == id }
         if (user != null) {
             AppDataCenter.updateSystemConfig { it.currentUserId = id }
+            // 切换当前用户必需重新登录
             SystemActionHelper.startLogin(context, true)
         }
     }
@@ -63,7 +64,7 @@ class UserManagerImpl private constructor() : UserManager {
     override suspend fun deleteUser(context: Context, id: String): Boolean {
         return try {
             val userDataList = AppDataCenter.getAllUsers()
-            val tmp = userDataList.find { it.id == id }
+            val tmp = userDataList.find { it.id == id }//使用list找也许比在ObjectBox更快
             if (tmp != null) {
                 AppDataCenter.deleteUser(tmp)
             }
@@ -78,8 +79,9 @@ class UserManagerImpl private constructor() : UserManager {
         try {
             if (user.id.isEmpty()) throw Exception("用户ID不能为空")
 
-            // 1. 获取并保存学期时间轴 (AppSystem 级数据)
+            // 获取并保存学期时间
             (async {
+                // 防止网络请求问题导致添加用户提前中断
                 try {
                     val startDate = Manager.getWebService().getSemesterStartDate(context)
                     val timestamp = LocalDate.parse(startDate)
@@ -89,17 +91,20 @@ class UserManagerImpl private constructor() : UserManager {
 
                     AppDataCenter.updateSystemConfig {
                         it.semesterStartDateMs = timestamp
-                        it.currentWeek = EduScheduleConfig.calculateCurrentWeek(timestamp)
+                        it.currentWeek =
+                            EduScheduleConfig.calculateCurrentWeek(timestamp)// 登录强制计算当前周
                     }
                 } catch (e: Exception) {
+                    e.printStackTrace()
                     SystemActionHelper.handleException(context, e, "获取学期开始日期失败")
                 }
             }).await()
 
-            // 2. 获取用户基础信息与成绩 (User 级数据)
+            // 获取用户基础信息与成绩
             val userData = (async { Manager.getWebService().getUserData(context) }).await()
             val scores = (async { Manager.getWebService().getAllSorces(context, "", "") }).await()
 
+            // 获取不到用户数据直接中断
             if (userData.isEmpty() && userData["code"] != 200) {
                 SystemActionHelper.showToast(context, "获取用户信息失败")
                 return@withContext
@@ -114,15 +119,16 @@ class UserManagerImpl private constructor() : UserManager {
                 user.gpa = ScoreManager.calculateAverageGPA(user.scores)
             }
 
-            // 处理密码存储偏好 (已合并入 User 实体)
+            // 处理密码存储偏好
             if (!user.storePassword) {
                 user.password = ""
             }
 
-            // 3. 统一保存并切换当前用户
+            // 统一保存并切换当前用户
             AppDataCenter.saveUser(user)
             AppDataCenter.updateSystemConfig { it.currentUserId = user.id }
 
+            // 强制拉取一次课程数据作为缓存
             getCurriculum(context, true)
         } catch (e: Exception) {
             SystemActionHelper.handleException(context, e, "添加用户失败")
@@ -132,8 +138,7 @@ class UserManagerImpl private constructor() : UserManager {
         }
     }
 
-    // --- 以下方法均围绕 AppDataCenter.getCurrentUser() 展开 ---
-
+    // 切换密码储存状态则必须强制清除密码
     fun setPasswordStorageEnabled(enable: Boolean) {
         val user = AppDataCenter.getCurrentUser() ?: return
         user.storePassword = enable
@@ -147,6 +152,7 @@ class UserManagerImpl private constructor() : UserManager {
         return AppDataCenter.getCurrentUser()?.storePassword ?: true
     }
 
+    // 获取缓存的用户成绩
     suspend fun getUserScores(
         context: Context,
         xnm: String,
@@ -170,6 +176,7 @@ class UserManagerImpl private constructor() : UserManager {
         return result
     }
 
+    // 获取缓存的用户课表
     suspend fun getCurriculum(context: Context, refresh: Boolean): JSONObject {
         val userData = AppDataCenter.getCurrentUser() ?: run {
             SystemActionHelper.startLogin(context, true)
@@ -186,6 +193,7 @@ class UserManagerImpl private constructor() : UserManager {
         return userData.curriculums
     }
 
+    // 获取缓存的用户学业进度
     suspend fun getAcademicProgress(context: Context, refresh: Boolean): JSONObject {
         val userData =
             AppDataCenter.getCurrentUser() ?: return NetworkStatus.Unauthorized.toJsonResult()

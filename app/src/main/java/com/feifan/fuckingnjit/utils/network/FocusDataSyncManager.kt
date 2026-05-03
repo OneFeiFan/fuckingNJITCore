@@ -12,26 +12,25 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.security.MessageDigest
 
+@Suppress("unused")
 object FocusDataSyncManager {
 
     private const val TAG = "FocusDataSyncManager"
 
-    /**
-     * 触发数据同步（建议在 App 启动、连接 WiFi 或每天定时任务时调用）
-     */
+    // 同步上传数据
     suspend fun syncUnuploadedData(context: Context) = withContext(Dispatchers.IO) {
         try {
-            // 1. 获取未上传的数据
+            // 获取未上传的数据
             val unuploadedRecords = AppDataCenter.getUnuploadedFocusRecords()
             if (unuploadedRecords.isEmpty()) {
                 Log.d(TAG, "没有需要同步的专注度数据")
                 return@withContext
             }
 
-            // 2. 获取匿名设备哈希
+            // 获取匿名设备哈希
             val deviceHash = getAnonymousDeviceHash(context)
 
-            // 3. 映射为 DTO
+            // 映射为 DTO
             val dtoList = unuploadedRecords.map { record ->
                 FocusRecordDTO(
                     courseId = record.courseId,
@@ -52,7 +51,7 @@ object FocusDataSyncManager {
             // val isSuccess = WebService.uploadFocusRecords(payload)
             val isSuccess = mockNetworkRequest(payload) // TODO: 接入真实的 POST 请求
 
-            // 5. 如果服务端接收成功，更新本地状态
+            // 如果服务端接收成功，更新本地状态
             if (isSuccess) {
                 AppDataCenter.markFocusRecordsAsUploaded(unuploadedRecords)
                 Log.i(TAG, "成功同步 ${unuploadedRecords.size} 条专注度数据到服务端")
@@ -61,13 +60,12 @@ object FocusDataSyncManager {
             }
 
         } catch (e: Exception) {
+            e.printStackTrace()
             Log.e(TAG, "数据同步过程发生异常", e)
         }
     }
 
-    /**
-     * 获取设备匿名哈希值 (保证同一个设备每次获取都一致，但不暴露真实硬件信息)
-     */
+    // 获取设备匿名哈希值 (保证同一个设备每次获取都一致，但不暴露真实硬件信息)
     @SuppressLint("HardwareIds")
     private fun getAnonymousDeviceHash(context: Context): String {
         val androidId =

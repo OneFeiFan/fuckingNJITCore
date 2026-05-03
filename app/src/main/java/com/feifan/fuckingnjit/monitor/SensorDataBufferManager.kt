@@ -30,9 +30,7 @@ object SensorDataBufferManager {
         }
     }
 
-    /**
-     * 将缓存数据异步刷入本地数据库
-     */
+    // 将缓存数据异步刷入本地数据库
     @Synchronized
     fun flushToDatabase() {
         if (buffer.isEmpty()) return
@@ -52,15 +50,13 @@ object SensorDataBufferManager {
         }
     }
 
-    /**
-     * 检查当前时间，并在接近中午 12 点（如 11 点）时触发自动修剪和上传
-     */
+    // 检查并尝试自动上传数据
     private fun checkAndTriggerAutoUpload() {
         val calendar = Calendar.getInstance()
         val currentHour = calendar.get(Calendar.HOUR_OF_DAY)
         val currentDay = calendar.get(Calendar.DAY_OF_YEAR)
 
-        // 设定在每天上午 11 点触发 (11:00 ~ 11:59 的任意心跳)
+        // 设定在每天上午 11 点后触发 (11:00 ~ 11:59 的任意心跳)
         // 并且确保今天还没有成功触发过
         if (currentHour == 11 && currentDay != lastAutoUploadDayOfYear) {
             lastAutoUploadDayOfYear = currentDay

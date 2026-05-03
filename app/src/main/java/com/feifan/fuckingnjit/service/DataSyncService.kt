@@ -5,10 +5,10 @@ import UploadSensorPoint
 import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.JSONObject
 import com.feifan.fuckingnjit.service.impl.UserManagerImpl
-import com.feifan.fuckingnjit.utils.network.HttpMethod
-import com.feifan.fuckingnjit.utils.network.HttpRequestHelper
 import com.feifan.fuckingnjit.utils.Tools
 import com.feifan.fuckingnjit.utils.database.AppDataCenter
+import com.feifan.fuckingnjit.utils.network.HttpMethod
+import com.feifan.fuckingnjit.utils.network.HttpRequestHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Headers
@@ -16,6 +16,7 @@ import java.time.LocalDate
 
 object DataSyncService {
 
+    // 上传睡眠数据
     suspend fun uploadAndClearData() = withContext(Dispatchers.IO) {
         try {
             val userId = UserManagerImpl.getInstance().getCurrentUser().id
@@ -59,7 +60,6 @@ object DataSyncService {
                     if (sleepHours > 0) {
                         val totalMinutes = (sleepHours * 60).toInt()
 
-                        // 使用一行代码替代原有的 SleepRecordBoxUtils 复杂逻辑
                         AppDataCenter.saveSleepResult(
                             dateStr = targetDate,
                             sleepStartMs = sleepStartTimeMs,

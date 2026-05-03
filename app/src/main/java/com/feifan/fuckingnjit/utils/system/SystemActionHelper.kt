@@ -20,6 +20,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 
+@Suppress("unused")
 object SystemActionHelper {
     private var dialog: LoadingAnimationDialog? = null
 
@@ -52,6 +53,7 @@ object SystemActionHelper {
         dialog = null
     }
 
+    // 调试方法
     fun handleException(appContext: Context, e: Exception, message: String) {
         e.printStackTrace()
         Log.i("handleException:", message)
@@ -60,13 +62,14 @@ object SystemActionHelper {
 
     fun startLogin(activityContext: Context, relogin: Boolean = false): String {
         if (AppConfig.inLogin) {
-            return "已登录"
+            return "登录中"//阻止可能存在的多个登录请求
         } else {
             AppConfig.inLogin = true
         }
         if (!relogin) {
-            AppConfig.logout()
+            AppConfig.logout() // 如果是强制重新登录，就先登出
         }
+        // 无论何种登录方式，都要清空cookie以防意外
         CookieManager.getInstance().removeAllCookies(null)
         val intent = Intent(
             activityContext,
@@ -76,6 +79,7 @@ object SystemActionHelper {
         return ""
     }
 
+    //跳转桌面
     fun goHome(appContext: Context) {
         val intent = Intent(Intent.ACTION_MAIN).apply {
             addCategory(Intent.CATEGORY_HOME)

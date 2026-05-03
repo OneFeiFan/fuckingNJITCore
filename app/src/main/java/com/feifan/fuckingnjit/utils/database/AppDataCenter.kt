@@ -15,38 +15,31 @@ import io.objectbox.BoxStore
 import io.objectbox.query.QueryBuilder
 import java.time.LocalDate
 
+// APP大部分基础数据管理
 object AppDataCenter {
     private var boxStore: BoxStore? = null
 
-    // 内部私有 Box 实例，对外绝对隔离
-    private val systemBox by lazy { boxStore!!.boxFor(AppSystem::class.java) }
-    private val userBox by lazy { boxStore!!.boxFor(User::class.java) }
-    private val dailyBox by lazy { boxStore!!.boxFor(DailyRecord::class.java) }
-    private val sensorBox by lazy { boxStore!!.boxFor(SleepSensorRecord::class.java) }
+    // 内部私有 Box 实例
+    private val systemBox by lazy { boxStore!!.boxFor(AppSystem::class.java) } // 和APP全局配置有关
+    private val userBox by lazy { boxStore!!.boxFor(User::class.java) } // 和用户有关
+    private val dailyBox by lazy { boxStore!!.boxFor(DailyRecord::class.java) } // 和每天健康数据有关
+    private val sensorBox by lazy { boxStore!!.boxFor(SleepSensorRecord::class.java) } // 睡眠原始数据
+    private val focusBox by lazy { boxStore!!.boxFor(ClassFocusRecord::class.java) } // 和课程专注度有关
 
-    // 🌟 [新增] 专注度明细 Box（专用于全局跨日查询）
-    private val focusBox by lazy { boxStore!!.boxFor(ClassFocusRecord::class.java) }
-
-    /**
-     * 1. 唯一初始化入口 (在 CoreInitProvider 中调用即可)
-     */
     fun init(context: Context) {
         if (boxStore == null) {
             boxStore = MyObjectBox.builder()
                 .androidContext(context.applicationContext)
-                .name("core_database") // 核心修改：所有数据归拢到同一个物理文件夹！
+                .name("core_database") // 所有数据归拢到同一个物理文件夹！
                 .build()
         }
     }
 
     fun getBoxStore(): BoxStore? = boxStore
 
-    // ==========================================
-    // 模块 1：App 全局系统配置 (替代 BaseDataBoxUtils)
-    // ==========================================
-
+    // 获取全局系统配置
     fun getSystemConfig(): AppSystem {
-        var sys = systemBox.get(1L)
+        var sys = systemBox.get(1L) // 全局数据默认分配id为1
         if (sys == null) {
             sys = AppSystem(id = 1L)
             systemBox.put(sys)
@@ -60,10 +53,7 @@ object AppDataCenter {
         systemBox.put(sys)
     }
 
-    // ==========================================
-    // 模块 2：用户与账号 (替代 UserBoxUtils & YiBanBoxUtils)
-    // ==========================================
-
+    // 获取当前激活的用户
     fun getCurrentUser(): User? {
         val userId = getSystemConfig().currentUserId
         if (userId.isEmpty()) return null
@@ -71,6 +61,7 @@ object AppDataCenter {
             .build().findFirst()
     }
 
+    // 增加用户或更新用户数据
     fun saveUser(user: User) {
         userBox.put(user)
     }
@@ -81,10 +72,7 @@ object AppDataCenter {
         userBox.remove(user)
     }
 
-    // ==========================================
-    // 模块 3：每日数据看板 (替代 SleepRecord/SP)
-    // ==========================================
-
+    // 获取每日综合数据
     fun getTodayRecord(): DailyRecord {
         val todayStr = LocalDate.now().toString()
         var record = dailyBox.query()
@@ -103,19 +91,22 @@ object AppDataCenter {
         dailyBox.put(record)
     }
 
-    // 🌟 [新增] 按日期获取指定的记录（用于数据同步服务回写以前的睡眠数据）
+    // 基于日期获取记录
     fun getRecordByDate(dateStr: String): DailyRecord {
         var record = dailyBox.query()
             .equal(DailyRecord_.dateStr, dateStr, QueryBuilder.StringOrder.CASE_SENSITIVE)
             .build()
             .findFirst()
         if (record == null) {
+            // 如果不存在数据对象，那么就返回空数据
             record = DailyRecord(dateStr = dateStr)
             dailyBox.put(record)
         }
         return record
     }
 
+    // 保存睡眠数据
+    // 分别是：日期、开始睡眠时间、醒来时间、睡眠时长。
     fun saveSleepResult(dateStr: String, sleepStartMs: Long, wakeUpMs: Long, durationMins: Int) {
         // getRecordByDate 会自动处理查询和新日期的初始化
         val record = getRecordByDate(dateStr)
@@ -128,33 +119,31 @@ object AppDataCenter {
         dailyBox.put(record)
     }
 
-    // 🌟 [新增] 获取所有包含有效睡眠数据的历史记录，供 UI 和图表使用
-    // 替代原先的 SleepRecordBoxUtils.getAllRecordsForUI()
+    // 获取所有包含有效睡眠数据的历史记录，供 UI 和图表使用
+    // 其实也不一定是给UI用（AI设计的
     fun getValidSleepRecordsForUI(): List<DailyRecord> {
         return dailyBox.query()
-            // 核心逻辑：只查 totalSleepMinutes 大于 0 的记录，过滤掉没同步睡眠的空白天数
+            // 只查 totalSleepMinutes 大于 0 的记录，过滤掉没同步睡眠的空白天数
             .greater(DailyRecord_.totalSleepMinutes, 0)
             .orderDesc(DailyRecord_.dateStr) // 按日期倒序排列，最近的在前
             .build()
             .find()
     }
 
-    // ==========================================
-    // 模块 4：专注度违规挂载 (替代 ClassFocusRecordBoxUtils)
-    // ==========================================
-
+    // 更新上课专注度数据
     fun addDistractionTime(
         courseId: String,
         courseName: String,
         startTime: Long,
         endTime: Long,
-        addedMills: Long
+        addedMills: Long // 违规使用电子产品时间
     ) {
         if (addedMills <= 0 || courseId.isEmpty()) return
 
         val todayRecord = getTodayRecord()
 
         // 在今天的记录下寻找这节课的明细
+        // 上课专注度是每日记录的一个子对象
         var targetFocus = todayRecord.focusRecords.find {
             it.courseId == courseId && it.startTime == startTime
         }
@@ -171,22 +160,21 @@ object AppDataCenter {
 
         // 累加数据并重置上传状态
         targetFocus.distractionDurationMills += addedMills
-        targetFocus.isUploaded = false
+        targetFocus.isUploaded = false //更新上传状态（false为待更新）
 
         // ObjectBox 特性：保存父对象会自动保存所有挂载的子对象
         dailyBox.put(todayRecord)
     }
 
-    // ==========================================
-    // 模块 5：高频流水日志 (替代 SleepSensorBoxUtils)
-    // ==========================================
-
+    // 更新传感器数据（睡眠相关）
     fun insertSensorBatch(records: List<SleepSensorRecord>) = sensorBox.put(records)
 
+    // 清空指定时间之前的传感器记录
     fun clearOldSensorsBefore(timestamp: Long) {
         sensorBox.query().less(SleepSensorRecord_.timestamp, timestamp).build().remove()
     }
 
+    // 获取指定时间内的传感器数据
     fun getSensorRecordsBetween(start: Long, end: Long): List<SleepSensorRecord> {
         return sensorBox.query()
             .between(SleepSensorRecord_.timestamp, start, end)
@@ -195,14 +183,7 @@ object AppDataCenter {
             .find()
     }
 
-    // ==========================================
-    // 模块 6：数据同步专用
-    // ==========================================
-
-    /**
-     * 获取所有尚未同步到服务端的专注度违规记录
-     * 替代原 ClassFocusRecordBoxUtils.getUnuploadedRecords()
-     */
+    // 获取全部待更新的专注度数据
     fun getUnuploadedFocusRecords(): List<ClassFocusRecord> {
         return focusBox.query()
             .equal(ClassFocusRecord_.isUploaded, false)
@@ -210,10 +191,7 @@ object AppDataCenter {
             .find()
     }
 
-    /**
-     * 批量标记记录为已同步
-     * 替代原 ClassFocusRecordBoxUtils.markAsUploaded()
-     */
+    // 将专注度数据批量变为已更新状态
     fun markFocusRecordsAsUploaded(records: List<ClassFocusRecord>) {
         if (records.isEmpty()) return
         records.forEach { it.isUploaded = true }

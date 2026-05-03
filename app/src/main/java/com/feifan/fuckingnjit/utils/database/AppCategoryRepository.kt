@@ -10,23 +10,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 
-/**
- * 应用分类数据仓库 (高内聚：只负责 6万条 App 分类数据的加载与分发)
- */
 object AppCategoryRepository {
     private const val TAG = "AppCategoryRepository"
 
     // 使用 ConcurrentHashMap 保证多线程读取安全性
     private val appCategoryMap = ConcurrentHashMap<String, String>()
 
-    // 【核心机制】：利用 Deferred 实现非阻塞式等待
-    // null 表示还未开始初始化
+    // 利用 Deferred 实现非阻塞式等待，null 表示还未开始初始化
     @Volatile
     private var initDeferred: CompletableDeferred<Unit>? = null
 
-    /**
-     * 触发初始化（幂等设计：多次调用只会执行一次有效加载）
-     */
     @Synchronized
     fun init(context: Context) {
         // 如果正在初始化，或者已经成功初始化过了，直接跳过
@@ -61,12 +54,12 @@ object AppCategoryRepository {
                     "数据库加载完成，共 ${appCategoryMap.size} 条，耗时: ${System.currentTimeMillis() - startTime}ms"
                 )
 
-                // 【核心】：加载成功，唤醒所有正在挂起等待的调用方
+                // 加载成功，唤醒所有正在挂起等待的调用方
                 initDeferred?.complete(Unit)
 
             } catch (e: Exception) {
                 Log.e(TAG, "加载数据库失败", e)
-                // 【核心】：加载失败，通知调用方抛出异常，并清空状态以便后续重试
+                // 加载失败，通知调用方抛出异常，并清空状态以便后续重试
                 initDeferred?.completeExceptionally(e)
                 initDeferred = null
             }
@@ -75,12 +68,12 @@ object AppCategoryRepository {
 
     /**
      * 获取应用分类（挂起函数，可拓展性强）
-     * * 如果数据已加载完：瞬间返回。
+     * 如果数据已加载完：瞬间返回。
      * 如果数据正在加载：挂起当前协程（不阻塞线程），等待加载完毕后返回。
      * 如果加载失败：内部消化异常，可在此处决定是返回默认值还是触发重新初始化。
      */
     suspend fun getCategory(context: Context, pkg: String): String? {
-        // 容错处理：如果调用方忘记 init，这里自动补救
+        // 如果调用方忘记 init，这里自动补救
         if (initDeferred == null) {
             init(context)
         }
@@ -90,7 +83,7 @@ object AppCategoryRepository {
             initDeferred?.await()
         } catch (e: Exception) {
             Log.e(TAG, "等待初始化失败，采用降级策略", e)
-            return null // 失败降级，返回 null 或 "未知"
+            return "异常" // 失败降级
         }
 
         return appCategoryMap[pkg]

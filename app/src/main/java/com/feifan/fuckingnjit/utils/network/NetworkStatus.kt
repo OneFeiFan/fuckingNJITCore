@@ -2,15 +2,15 @@ package com.feifan.fuckingnjit.utils.network
 
 import com.alibaba.fastjson.JSONObject
 
+// 网络请求异常对象
 class ApiException(
     val status: NetworkStatus,
     override val message: String = status.message,
     cause: Throwable? = null
 ) : Exception(message, cause)
 
-/**
- * 网络状态码基类
- */
+// 网络状态码基类
+@Suppress("unused")
 sealed class NetworkStatus(
     val code: Int,
     val message: String
@@ -54,9 +54,7 @@ sealed class NetworkStatus(
     }
 }
 
-/**
- * 状态码扩展工具
- */
+// 状态码扩展工具
 object NetworkStatusUtils {
     // 根据状态码获取对应枚举
     fun fromCode(code: Int): NetworkStatus {
@@ -75,16 +73,6 @@ object NetworkStatusUtils {
             600 -> NetworkStatus.NetworkUnavailable
             601 -> NetworkStatus.ParseError
             else -> NetworkStatus.UnknownError
-        }
-    }
-
-    // 处理响应
-    fun handleResponse(responseCode: Int, data: Any? = null): Result<Any> {
-        val status = fromCode(responseCode)
-        return if (status.isSuccess()) {
-            Result.success(data ?: "操作成功")
-        } else {
-            Result.failure(Exception(status.toString()))
         }
     }
 }

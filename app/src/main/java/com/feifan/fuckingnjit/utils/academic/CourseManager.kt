@@ -5,39 +5,28 @@ import com.feifan.fuckingnjit.model.Course
 import com.feifan.fuckingnjit.utils.database.AppDataCenter
 import java.util.UUID
 
-/**
- * 课程管理门面
- * 已按策略 B 重构：所有操作自动关联当前登录用户，无需手动传递 userId
- */
 class CourseManager {
 
     companion object {
-
-        // ==========================================
-        // 模块 1：本地课程管理 (增、删、查)
-        // ==========================================
-
-        /**
-         * 保存本地课程（新增或修改）
-         */
+        // 用于处理本地课表的增加/修改
         fun saveLocalCourse(course: Course): Boolean {
             val user = AppDataCenter.getCurrentUser() ?: return false
             return try {
                 val localData = user.localCurriculums ?: JSONObject()
 
-                // 1. 确保 local_courses 节点存在
+                // 确保 local_courses 节点存在
                 if (!localData.containsKey("local_courses")) {
                     localData["local_courses"] = JSONObject()
                 }
                 val courseMap = localData.getJSONObject("local_courses")
 
-                // 2. 状态处理：如果是新增则生成 UUID，并强制标记来源为本地
+                // 如果是新增则生成课程id，并强制标记来源为本地
                 if (course.id.isEmpty()) {
                     course.id = "local_" + UUID.randomUUID().toString()
                 }
                 course.source = 1
 
-                // 3. 更新内存树并持久化到 ObjectBox
+                // 更新内存树并持久化到 ObjectBox
                 courseMap[course.id] = course
                 user.localCurriculums = localData
 
@@ -49,9 +38,7 @@ class CourseManager {
             }
         }
 
-        /**
-         * 删除本地课程
-         */
+        // 删除本地课程
         fun deleteLocalCourse(courseId: String): Boolean {
             val user = AppDataCenter.getCurrentUser() ?: return false
             return try {
@@ -71,9 +58,7 @@ class CourseManager {
             }
         }
 
-        /**
-         * 获取当前用户的所有本地课程
-         */
+        // 获取当前用户的所有本地课程
         fun getLocalCourses(): List<Course> {
             val list = ArrayList<Course>()
             val user = AppDataCenter.getCurrentUser() ?: return list
@@ -81,6 +66,7 @@ class CourseManager {
             val courseMap = localData.getJSONObject("local_courses") ?: return list
 
             for (key in courseMap.keys) {
+                // 使用Course反序列化本地储存
                 val obj = JSONObject.parseObject(
                     courseMap.getJSONObject(key).toJSONString(),
                     Course::class.java
@@ -90,19 +76,14 @@ class CourseManager {
             return list
         }
 
-        // ==========================================
-        // 模块 2：精准屏蔽规则管理
-        // ==========================================
-
-        /**
-         * 添加精准屏蔽规则
-         * @param id 教务系统原始课程 ID
-         */
+        // 添加屏蔽课程的方法
+        // id：课程id
+        // start：节次
         fun addHiddenRule(id: String, day: Int, start: Int): Boolean {
             val user = AppDataCenter.getCurrentUser() ?: return false
             return try {
                 val localData = user.localCurriculums ?: JSONObject()
-
+                // 确保屏蔽规则存在
                 if (!localData.containsKey("hidden_rules_map")) {
                     localData["hidden_rules_map"] = JSONObject()
                 }
@@ -120,18 +101,14 @@ class CourseManager {
             }
         }
 
-        /**
-         * 获取当前用户的屏蔽规则 Map
-         */
+        // 获取当前用户的屏蔽规则 Map
         fun getHiddenRules(): Map<String, Any> {
             val user = AppDataCenter.getCurrentUser() ?: return emptyMap()
             val localData = user.localCurriculums ?: return emptyMap()
             return localData.getJSONObject("hidden_rules_map")?.innerMap ?: emptyMap()
         }
 
-        /**
-         * 移除屏蔽规则（恢复课程展示）
-         */
+        // 移除屏蔽规则（恢复课程展示）
         fun removeHiddenRule(id: String, day: Int, start: Int): Boolean {
             val user = AppDataCenter.getCurrentUser() ?: return false
             return try {

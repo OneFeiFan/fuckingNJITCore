@@ -1,9 +1,8 @@
 package com.feifan.fuckingnjit.decision
 
-// 权重矩阵
 data class ModeWeight(
-    val studyWeight: Float,
-    val healthWeight: Float
+    val studyWeight: Float,// 学习权重
+    val healthWeight: Float// 健康权重
 )
 
 data class InterventionConfig(
@@ -23,10 +22,7 @@ enum class AppMode(
     HEALTH_MODE("健康活力模式", ModeWeight(0.1f, 1.0f), InterventionConfig(20, 30, 1));
 
     companion object {
-        /**
-         * 统一映射逻辑：String -> AppMode
-         * 默认返回 BALANCE_MODE 以增强健壮性
-         */
+        // 将String -> AppMode
         fun fromName(name: String?): AppMode {
             return AppMode.entries.find { it.name == name } ?: BALANCE_MODE
         }

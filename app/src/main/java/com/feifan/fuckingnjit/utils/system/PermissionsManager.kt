@@ -10,16 +10,11 @@ import androidx.core.net.toUri
 import com.feifan.fuckingnjit.monitor.AppUsageManager
 import com.feifan.fuckingnjit.service.CoreService
 import com.feifan.fuckingnjit.utils.database.AppDataCenter
-import com.hjq.permissions.OnPermissionCallback
 import com.hjq.permissions.XXPermissions
 import com.hjq.permissions.permission.PermissionLists
 import com.hjq.permissions.permission.base.IPermission
 
 
-/**
- * 权限与业务状态管理器 (专为 uni-app 桥接设计)
- * 采用 object 声明，彻底杜绝 Context 内存泄漏
- */
 @Suppress("unused")
 class PermissionsManager private constructor(private var context: Context) {
     companion object {
@@ -29,7 +24,7 @@ class PermissionsManager private constructor(private var context: Context) {
 
         fun getInstance(context: Context): PermissionsManager {
             return instance?.apply {
-                this.context = context
+                this.context = context // 更新上下文对象
             } ?: synchronized(this) {
                 instance?.apply {
                     this.context = context
@@ -37,10 +32,8 @@ class PermissionsManager private constructor(private var context: Context) {
             }
         }
     }
-    // ==========================================
-    // 1. 业务级配置 (同步读取/修改)
-    // ==========================================
 
+    // 智能更新相关
     fun isSmartUpdate(): Boolean {
         return AppDataCenter.getSystemConfig().smartUpdate
     }
@@ -49,14 +42,7 @@ class PermissionsManager private constructor(private var context: Context) {
         AppDataCenter.updateSystemConfig { it.smartUpdate = isSmart }
     }
 
-
-    // ==========================================
-    // 2. 首次启动：批量权限控制 (KeepAlive 核心权限群)
-    // ==========================================
-
-    /**
-     * 检查：是否已全部授予保活基础权限
-     */
+    // 检查和业务强相关的权限
     fun checkKeepAliveNormalPermissions(): Boolean {
         val requestList = getKeepAlivePermissionList()
 
@@ -67,53 +53,40 @@ class PermissionsManager private constructor(private var context: Context) {
         return deniedList == null || deniedList.isEmpty()
     }
 
-    /**
-     * 申请：一键批量申请保活基础权限
-     * callback 回调参数: (是否全部通过, 被拒绝的权限列表集合)
-     */
+    // 申请和业务相关的基础权限
     fun requestKeepAliveNormalPermissions(callback: (Boolean, List<String>) -> Unit) {
         XXPermissions.with(context)
             .permissions(getKeepAlivePermissionList())
-            .request(object : OnPermissionCallback {
-                override fun onResult(
-                    grantedList: MutableList<IPermission>,
-                    deniedList: MutableList<IPermission>
-                ) {
-                    val allGranted = deniedList.isEmpty()
-                    if (allGranted) {
-                        val intent = Intent(context, CoreService::class.java)
-                        context.startForegroundService(intent)
-                    }
-                    // 将 IPermission 转为 String 列表返回给前端，方便前端判断哪个被拒了
-                    val deniedStrList = deniedList.map { it.toString() }
-                    callback(allGranted, deniedStrList)
+            .request { grantedList, deniedList ->
+                val allGranted = deniedList.isEmpty()
+                if (allGranted) {
+                    // 如果全部权限都有了就启动监测进程（其实不应该在这里启动，但是懒得安排在其它地方了
+                    val intent = Intent(context, CoreService::class.java)
+                    context.startForegroundService(intent)
                 }
-            })
+                // 将 IPermission 转为 String 列表返回给前端，方便前端判断哪个被拒了
+                val deniedStrList = deniedList.map { it.toString() }
+                callback(allGranted, deniedStrList)
+            }
     }
 
     private fun getKeepAlivePermissionList(): List<IPermission> {
         return listOf(
-            PermissionLists.getRecordAudioPermission(),
-            PermissionLists.getNotificationServicePermission(),
-//            PermissionLists.getWriteExternalStoragePermission(),
-//            PermissionLists.getPackageUsageStatsPermission(),
-            PermissionLists.getScheduleExactAlarmPermission(),
-            PermissionLists.getActivityRecognitionPermission()
+            PermissionLists.getRecordAudioPermission(),// 麦克风权限
+            PermissionLists.getNotificationServicePermission(),//通知权限
+            PermissionLists.getScheduleExactAlarmPermission(),// 精确闹钟权限
+            PermissionLists.getActivityRecognitionPermission()// 安卓10之后获取运动数据权限
         )
     }
 
-
-    // ==========================================
-    // 3. 设置页面：单个权限精细化控制 (原子操作)
-    // ==========================================
-    // --- 麦克风/录音权限 ---
+    // 麦克风权限
     fun checkRecordAudio(): Boolean =
         XXPermissions.isGrantedPermission(context, PermissionLists.getRecordAudioPermission())
 
     fun requestRecordAudio(callback: (Boolean) -> Unit) =
         requestSinglePermission(PermissionLists.getRecordAudioPermission(), callback)
 
-    // --- 安装未知应用权限 ---
+    // 安装未知应用权限
     fun checkRequestInstallPackage(): Boolean =
         XXPermissions.isGrantedPermission(
             context,
@@ -133,13 +106,6 @@ class PermissionsManager private constructor(private var context: Context) {
     fun requestNotificationServicePermission(callback: (Boolean) -> Unit) =
         requestSinglePermission(PermissionLists.getNotificationServicePermission(), callback)
 
-//    // 应用使用状态
-//    fun checkPackageUsageStats(): Boolean =
-//        XXPermissions.isGrantedPermission(context, PermissionLists.getPackageUsageStatsPermission())
-//
-//    fun requesPackageUsageStats(callback: (Boolean) -> Unit) =
-//        requestSinglePermission( PermissionLists.getPackageUsageStatsPermission(), callback)
-
     // 精确闹钟
     fun checkScheduleExactAlarm(): Boolean =
         XXPermissions.isGrantedPermission(
@@ -147,9 +113,11 @@ class PermissionsManager private constructor(private var context: Context) {
             PermissionLists.getScheduleExactAlarmPermission()
         )
 
-    // --- 运动与健身权限 (计步器) ---
+    fun requestScheduleExactAlarm(callback: (Boolean) -> Unit) =
+        requestSinglePermission(PermissionLists.getScheduleExactAlarmPermission(), callback)
+
+    // 计步器
     fun checkActivityRecognition(): Boolean {
-        // XXPermissions 原生常量为 Permission.ACTIVITY_RECOGNITION
         return XXPermissions.isGrantedPermission(
             context,
             PermissionLists.getActivityRecognitionPermission()
@@ -159,28 +127,17 @@ class PermissionsManager private constructor(private var context: Context) {
     fun requestActivityRecognition(callback: (Boolean) -> Unit) =
         requestSinglePermission(PermissionLists.getActivityRecognitionPermission(), callback)
 
-    fun requestScheduleExactAlarm(callback: (Boolean) -> Unit) =
-        requestSinglePermission(PermissionLists.getScheduleExactAlarmPermission(), callback)
-
-
-    // ==========================================
-    // 4. 特殊系统级权限 (无障碍 & 电池优化)
-    // 注意：这类权限无法直接回调结果，只能跳系统设置
-    // ==========================================
-
-    /**
-     * 检查：是否忽略电池优化 (后台保活关键)
-     */
+    // 是否忽略电池优化 (后台保活关键)
     fun isIgnoringBatteryOptimizations(): Boolean {
         val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
         return pm.isIgnoringBatteryOptimizations(context.packageName)
     }
 
-    /**
-     * 申请：跳转到忽略电池优化设置页
-     */
+    // 申请忽略电池优化
     fun requestIgnoreBatteryOptimizations() {
         try {
+            // 通过一些手段直接打开请求弹窗
+            // 可以绕过一点国产rom的魔改
             val intent = Intent().apply {
                 component = ComponentName(
                     "com.android.settings",
@@ -191,6 +148,7 @@ class PermissionsManager private constructor(private var context: Context) {
             }
             context.startActivity(intent)
         } catch (e: Exception) {
+            // 兜底方案，使用标准的请求
             val fallbackIntent =
                 Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -199,17 +157,12 @@ class PermissionsManager private constructor(private var context: Context) {
         }
     }
 
-    /**
-     * 检查：无障碍服务是否开启
-     * @param serviceClassName 你的无障碍服务完整类名，例如 "com.feifan.keepalive.AppUsageManager"
-     */
+    //检查无障碍服务是否开启
     fun isAccessibilitySettingsOn(): Boolean {
         return !AppUsageManager.isServiceZombie(context)
     }
 
-    /**
-     * 申请：跳转到无障碍设置列表页
-     */
+    // 跳转无障碍设置列表页
     fun requestAccessibilityPermission() {
         val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -217,21 +170,11 @@ class PermissionsManager private constructor(private var context: Context) {
         context.startActivity(intent)
     }
 
-    // ==========================================
-    // 私有辅助方法
-    // ==========================================
-
     private fun requestSinglePermission(permission: IPermission, callback: (Boolean) -> Unit) {
         XXPermissions.with(context)
             .permission(permission)
-            .request(object : OnPermissionCallback {
-                override fun onResult(
-                    grantedList: MutableList<IPermission>,
-                    deniedList: MutableList<IPermission>
-                ) {
-                    // 只要没有被拒绝的，就认为是成功
-                    callback(deniedList.isEmpty())
-                }
-            })
+            .request { grantedList, deniedList -> // 只要没有被拒绝的，就认为是成功
+                callback(deniedList.isEmpty())
+            }
     }
 }

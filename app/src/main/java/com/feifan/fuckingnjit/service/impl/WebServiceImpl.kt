@@ -6,17 +6,18 @@ import com.alibaba.fastjson.JSONArray
 import com.alibaba.fastjson.JSONObject
 import com.feifan.fuckingnjit.model.Course
 import com.feifan.fuckingnjit.service.WebService
-import com.feifan.fuckingnjit.utils.network.ApiException
+import com.feifan.fuckingnjit.utils.EduScheduleConfig
+import com.feifan.fuckingnjit.utils.TodayScheduleManager
+import com.feifan.fuckingnjit.utils.Tools
 import com.feifan.fuckingnjit.utils.academic.CourseManager
 import com.feifan.fuckingnjit.utils.academic.CourseParser
-import com.feifan.fuckingnjit.utils.EduScheduleConfig
+import com.feifan.fuckingnjit.utils.academic.ScoreManager
+import com.feifan.fuckingnjit.utils.database.AppDataCenter
+import com.feifan.fuckingnjit.utils.network.ApiException
 import com.feifan.fuckingnjit.utils.network.HttpMethod
 import com.feifan.fuckingnjit.utils.network.HttpRequestHelper
 import com.feifan.fuckingnjit.utils.network.NetworkStatus
-import com.feifan.fuckingnjit.utils.academic.ScoreManager
 import com.feifan.fuckingnjit.utils.system.SystemActionHelper
-import com.feifan.fuckingnjit.utils.Tools
-import com.feifan.fuckingnjit.utils.database.AppDataCenter
 import org.jsoup.nodes.Document
 import org.jsoup.select.Elements
 import java.lang.Integer.parseInt
@@ -216,7 +217,7 @@ class WebServiceImpl private constructor() : WebService {
         return "2025-02-17"
         val jsonObject = JSON.parseObject(raw)
         val rqazcList = jsonObject.getJSONArray("rqazcList")
-        if (rqazcList.size == 0) {
+        if (rqazcList.isEmpty()) {
             SystemActionHelper.showToast(context, "未找到学期开始日期")
             return "2025-02-17"
         }
@@ -549,7 +550,7 @@ class WebServiceImpl private constructor() : WebService {
             } else {
                 result["startDate"] = "2025-02-17"
             }
-            result["currentWeek"] = AppDataCenter.getSystemConfig().currentWeek
+            result["currentWeek"] = TodayScheduleManager.getCurrentWeek()
             return result.toJSONString()
         } catch (e: Exception) {
             SystemActionHelper.handleException(context, e, "时间获取失败：getDate")
@@ -579,10 +580,10 @@ class WebServiceImpl private constructor() : WebService {
             }
             val success = CourseManager.saveLocalCourse(course)
 
-            if (success) {
-                return NetworkStatus.Success.toJsonResult("保存成功")
+            return if (success) {
+                NetworkStatus.Success.toJsonResult("保存成功")
             } else {
-                return NetworkStatus.UnknownError.toJsonResult("保存失败，请重试")
+                NetworkStatus.UnknownError.toJsonResult("保存失败，请重试")
             }
         } catch (e: Exception) {
             SystemActionHelper.handleException(context, e, "saveCourse:未知错误")
@@ -603,21 +604,19 @@ class WebServiceImpl private constructor() : WebService {
             }
 
             // 2. 调用之前的 CourseManager 逻辑
-            var success = false
-
-            if (isSystem) {
+            val success = if (isSystem) {
                 //如果是系统课程，进行“精准隐藏”
                 // 前端必须传 day 和 start
-                success = CourseManager.addHiddenRule(courseId, day!!, start!!)
+                CourseManager.addHiddenRule(courseId, day!!, start!!)
             } else {
                 // 如果是本地课程，直接物理删除
-                success = CourseManager.deleteLocalCourse(courseId)
+                CourseManager.deleteLocalCourse(courseId)
             }
             // 3. 返回结果
-            if (success) {
-                return NetworkStatus.Success.toJsonResult("删除成功")
+            return if (success) {
+                NetworkStatus.Success.toJsonResult("删除成功")
             } else {
-                return NetworkStatus.UnknownError.toJsonResult("删除失败，请重试")
+                NetworkStatus.UnknownError.toJsonResult("删除失败，请重试")
             }
         } catch (e: Exception) {
             SystemActionHelper.handleException(context, e, "deleteCourse:未知错误")
@@ -628,10 +627,10 @@ class WebServiceImpl private constructor() : WebService {
     fun restoreCourse(context: Context, courseId: String, day: Int, start: Int): JSONObject {
         try {
             val success = CourseManager.removeHiddenRule(courseId, day, start)
-            if (success) {
-                return NetworkStatus.Success.toJsonResult("恢复成功")
+            return if (success) {
+                NetworkStatus.Success.toJsonResult("恢复成功")
             } else {
-                return NetworkStatus.UnknownError.toJsonResult("恢复失败")
+                NetworkStatus.UnknownError.toJsonResult("恢复失败")
             }
         } catch (e: Exception) {
             SystemActionHelper.handleException(context, e, "restoreCourse:未知错误")

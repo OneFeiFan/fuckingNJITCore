@@ -1,7 +1,6 @@
 package com.feifan.fuckingnjit.decision
 
 import android.content.Context
-import android.content.SharedPreferences
 import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.JSONArray
 import com.alibaba.fastjson.JSONObject
@@ -18,11 +17,6 @@ import kotlin.math.max
 
 @Suppress("unused")
 object DecisionFacade {
-
-    // ==================== SharedPreferences 持久化键 ====================
-
-    private const val PREFS_NAME = "wake_up_config"
-    private const val KEY_WAKE_UP_CONFIG = "wakeup_configuration_json"
 
     //切换app状态
     fun switchAppMode(modeStr: String): JSONObject {
@@ -74,8 +68,8 @@ object DecisionFacade {
                 100
             }
 
-            // 读取用户起床配置
-            val wakeUpConfig = getWakeUpConfig(appContext)
+            // 从 ObjectBox AppSystem 读取用户起床配置
+            val wakeUpConfig = getWakeUpConfig()
 
             //将获取的数送往计算
             val dashboardJson = DecisionEngine().generateDashboardJson(
@@ -100,34 +94,26 @@ object DecisionFacade {
      *
      * UI 层调用示例：
      * ```kotlin
-     * val config = DecisionFacade.getWakeUpConfig(context)
+     * val config = DecisionFacade.getWakeUpConfig()
      * // config.preClassBufferMinutes → 上课缓冲时间
      * // config.noClassWakeUpHour → 无课日起床时间
      * ```
      *
      * @return WakeUpConfiguration 若从未设置则返回默认配置
      */
-    fun getWakeUpConfig(context: Context): WakeUpConfiguration {
-        val json = getPrefs(context).getString(KEY_WAKE_UP_CONFIG, null)
-        if (json.isNullOrEmpty()) return WakeUpConfiguration()
-        return try {
-            JSON.parseObject(json, WakeUpConfiguration::class.java) ?: WakeUpConfiguration()
-        } catch (e: Exception) {
-            e.printStackTrace()
-            WakeUpConfiguration()
-        }
+    fun getWakeUpConfig(): WakeUpConfiguration {
+        return AppDataCenter.getSystemConfig().wakeUpConfig
     }
 
     /**
-     * 保存起床配置（全量覆盖）
+     * 保存起床配置
      *
      * @param config 完整的 WakeUpConfiguration 对象（UI 层可先 get 再改部分字段后 save）
      * @return 操作结果 JSONObject
      */
-    fun saveWakeUpConfig(context: Context, config: WakeUpConfiguration): JSONObject {
+    fun saveWakeUpConfig(config: WakeUpConfiguration): JSONObject {
         return try {
-            val json = JSON.toJSONString(config)
-            getPrefs(context).edit().putString(KEY_WAKE_UP_CONFIG, json).apply()
+            AppDataCenter.updateSystemConfig { it.wakeUpConfig = config }
             NetworkStatus.Success.toJsonResult("起床配置已保存")
         } catch (e: Exception) {
             e.printStackTrace()
@@ -141,27 +127,21 @@ object DecisionFacade {
      * 典型场景：明天要赶车/考试/面试，临时设一个 06:30 的特殊起床时间
      * 特殊闹钟仅对指定日期生效，过期自动失效
      *
-     * @param hour   小时（0~23）
-     * @param minute 分钟（0~59）
-     * @param targetDate 目标日期字符串（格式 yyyy-MM-dd），通常传明天的日期
-     *                   传 null 则默认为明天
+     * @param hour      小时（0~23）
+     * @param minute    分钟（0~59）
+     * @param targetDate 目标日期字符串（格式 yyyy-MM-dd），通常传明天的日期；传 null 则默认为明天
      * @return 操作结果 JSONObject
      */
-    fun setOneTimeOverride(
-        context: Context,
-        hour: Int,
-        minute: Int,
-        targetDate: String? = null
-    ): JSONObject {
+    fun setOneTimeOverride(hour: Int, minute: Int, targetDate: String? = null): JSONObject {
         return try {
-            val config = getWakeUpConfig(context)
+            val currentConfig = getWakeUpConfig()
             val resolvedDate = targetDate ?: LocalDate.now().plusDays(1).toString()
-            val overrideConfig = config.copy(
+            val overrideConfig = currentConfig.copy(
                 oneTimeOverrideHour = hour.coerceIn(0, 23),
                 oneTimeOverrideMinute = minute.coerceIn(0, 59),
                 oneTimeOverrideDate = resolvedDate
             )
-            saveWakeUpConfig(context, overrideConfig)
+            saveWakeUpConfig(overrideConfig)
         } catch (e: Exception) {
             e.printStackTrace()
             NetworkStatus.UnknownError.toJsonResult("设置特殊闹钟失败: ${e.message}")
@@ -173,15 +153,15 @@ object DecisionFacade {
      *
      * @return 操作结果 JSONObject
      */
-    fun clearOneTimeOverride(context: Context): JSONObject {
+    fun clearOneTimeOverride(): JSONObject {
         return try {
-            val config = getWakeUpConfig(context)
-            val clearedConfig = config.copy(
+            val currentConfig = getWakeUpConfig()
+            val clearedConfig = currentConfig.copy(
                 oneTimeOverrideHour = 0,
                 oneTimeOverrideMinute = 0,
                 oneTimeOverrideDate = ""
             )
-            saveWakeUpConfig(context, clearedConfig)
+            saveWakeUpConfig(clearedConfig)
         } catch (e: Exception) {
             e.printStackTrace()
             NetworkStatus.UnknownError.toJsonResult("清除特殊闹钟失败: ${e.message}")
@@ -266,9 +246,5 @@ object DecisionFacade {
             e.printStackTrace()
             NetworkStatus.UnknownError.toJsonResult(e.message)
         }
-    }
-
-    private fun getPrefs(context: Context): SharedPreferences {
-        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }
 }

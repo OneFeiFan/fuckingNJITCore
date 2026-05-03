@@ -1,6 +1,7 @@
 package com.feifan.fuckingnjit.decision
 
 import android.content.Context
+import android.content.SharedPreferences
 import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.JSONArray
 import com.alibaba.fastjson.JSONObject
@@ -17,6 +18,11 @@ import kotlin.math.max
 
 @Suppress("unused")
 object DecisionFacade {
+
+    // ==================== SharedPreferences 持久化键 ====================
+
+    private const val PREFS_NAME = "wake_up_config"
+    private const val KEY_WAKE_UP_CONFIG = "wakeup_configuration_json"
 
     //切换app状态
     fun switchAppMode(modeStr: String): JSONObject {
@@ -68,6 +74,9 @@ object DecisionFacade {
                 100
             }
 
+            // 读取用户起床配置
+            val wakeUpConfig = getWakeUpConfig(appContext)
+
             //将获取的数送往计算
             val dashboardJson = DecisionEngine().generateDashboardJson(
                 mode = mode,
@@ -75,7 +84,8 @@ object DecisionFacade {
                 recentSleepRecords = recentSleepRecords,
                 todaySteps = todaySteps,
                 focusRatePercent = focusRatePercent,
-                distractionMins = distractionMins
+                distractionMins = distractionMins,
+                wakeUpConfig = wakeUpConfig
             )
 
             return@withContext NetworkStatus.Success.toJsonResult(dashboardJson)
@@ -83,5 +93,182 @@ object DecisionFacade {
             e.printStackTrace()
             return@withContext NetworkStatus.UnknownError.toJsonResult()
         }
+    }
+
+    /**
+     * 获取当前起床配置
+     *
+     * UI 层调用示例：
+     * ```kotlin
+     * val config = DecisionFacade.getWakeUpConfig(context)
+     * // config.preClassBufferMinutes → 上课缓冲时间
+     * // config.noClassWakeUpHour → 无课日起床时间
+     * ```
+     *
+     * @return WakeUpConfiguration 若从未设置则返回默认配置
+     */
+    fun getWakeUpConfig(context: Context): WakeUpConfiguration {
+        val json = getPrefs(context).getString(KEY_WAKE_UP_CONFIG, null)
+        if (json.isNullOrEmpty()) return WakeUpConfiguration()
+        return try {
+            JSON.parseObject(json, WakeUpConfiguration::class.java) ?: WakeUpConfiguration()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            WakeUpConfiguration()
+        }
+    }
+
+    /**
+     * 保存起床配置（全量覆盖）
+     *
+     * @param config 完整的 WakeUpConfiguration 对象（UI 层可先 get 再改部分字段后 save）
+     * @return 操作结果 JSONObject
+     */
+    fun saveWakeUpConfig(context: Context, config: WakeUpConfiguration): JSONObject {
+        return try {
+            val json = JSON.toJSONString(config)
+            getPrefs(context).edit().putString(KEY_WAKE_UP_CONFIG, json).apply()
+            NetworkStatus.Success.toJsonResult("起床配置已保存")
+        } catch (e: Exception) {
+            e.printStackTrace()
+            NetworkStatus.UnknownError.toJsonResult("保存失败: ${e.message}")
+        }
+    }
+
+    /**
+     * 设置单次特殊闹钟（一次性覆盖默认闹钟）
+     *
+     * 典型场景：明天要赶车/考试/面试，临时设一个 06:30 的特殊起床时间
+     * 特殊闹钟仅对指定日期生效，过期自动失效
+     *
+     * @param hour   小时（0~23）
+     * @param minute 分钟（0~59）
+     * @param targetDate 目标日期字符串（格式 yyyy-MM-dd），通常传明天的日期
+     *                   传 null 则默认为明天
+     * @return 操作结果 JSONObject
+     */
+    fun setOneTimeOverride(
+        context: Context,
+        hour: Int,
+        minute: Int,
+        targetDate: String? = null
+    ): JSONObject {
+        return try {
+            val config = getWakeUpConfig(context)
+            val resolvedDate = targetDate ?: LocalDate.now().plusDays(1).toString()
+            val overrideConfig = config.copy(
+                oneTimeOverrideHour = hour.coerceIn(0, 23),
+                oneTimeOverrideMinute = minute.coerceIn(0, 59),
+                oneTimeOverrideDate = resolvedDate
+            )
+            saveWakeUpConfig(context, overrideConfig)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            NetworkStatus.UnknownError.toJsonResult("设置特殊闹钟失败: ${e.message}")
+        }
+    }
+
+    /**
+     * 清除单次特殊闹钟（恢复使用默认课表推算）
+     *
+     * @return 操作结果 JSONObject
+     */
+    fun clearOneTimeOverride(context: Context): JSONObject {
+        return try {
+            val config = getWakeUpConfig(context)
+            val clearedConfig = config.copy(
+                oneTimeOverrideHour = 0,
+                oneTimeOverrideMinute = 0,
+                oneTimeOverrideDate = ""
+            )
+            saveWakeUpConfig(context, clearedConfig)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            NetworkStatus.UnknownError.toJsonResult("清除特殊闹钟失败: ${e.message}")
+        }
+    }
+
+    /**
+     * 请求设置系统闹钟
+     *
+     * 此方法会：
+     *   1. 根据最新数据和当前配置重新跑一遍决策引擎
+     *   2. 产出最新的 AlarmInfo
+     *   3. 通过 AlarmHelper 打开系统闹钟 App
+     *
+     * UI 层可在"设闹钟"按钮点击时直接调用此方法。
+     * 如果需要先展示预览再让用户确认，可先调 getAlarmStatus() 拿信息展示，再调此方法执行。
+     *
+     * @param appContext Context（建议 Activity Context）
+     * @return JSONObject 含 success/error 状态和 alarmInfo 信息
+     */
+    suspend fun requestSetAlarm(appContext: Context): JSONObject = withContext(Dispatchers.IO) {
+        return@withContext try {
+            // 复用 Dashboard 的完整计算链路拿到最新的 alarmInfo
+            val dashboardObj = getDashboardInsight(appContext)
+            val dataObj = dashboardObj.getJSONObject("data") ?: return@withContext NetworkStatus.NotFound.toJsonResult()
+
+            val alarmInfoJson = dataObj.getJSONObject("alarmInfo")
+            if (alarmInfoJson == null) {
+                return@withContext NetworkStatus.UnknownError.toJsonResult("无法获取闹钟信息")
+            }
+
+            val alarmInfo = JSON.parseObject(alarmInfoJson.toJSONString(), AlarmInfo::class.java)
+                ?: return@withContext NetworkStatus.UnknownError.toJsonResult("闹钟信息解析失败")
+
+            // 切回主线程启动 Activity（startActivity 必须在主线程）
+            val result = if (AlarmHelper.setSystemAlarm(appContext, alarmInfo)) {
+                NetworkStatus.Success.toJsonResult(alarmInfoJson)
+            } else {
+                NetworkStatus.UnknownError.toJsonResult(alarmInfo.reason.ifEmpty { "无法设置闹钟" })
+            }
+
+            result
+        } catch (e: Exception) {
+            e.printStackTrace()
+            NetworkStatus.UnknownError.toJsonResult("设闹钟异常: ${e.message}")
+        }
+    }
+
+    /**
+     * 获取当前闹钟状态（不实际设置，只返回预览信息）
+     *
+     * UI 层可用此方法展示"建议明天 07:15 起床，是否设置闹钟？"的确认卡片，
+     * 用户确认后再调 requestSetAlarm() 执行实际操作
+     *
+     * 返回的 JSONObject 结构：
+     * ```json
+     * {
+     *   "status": "success",
+     *   "data": {
+     *     "suggestedWakeUpHour": 7,
+     *     "suggestedWakeUpMinute": 15,
+     *     "alarmType": "default",
+     *     "alarmLabel": "[劳逸结合模式] 明早 07:15 起床 · 高等数学 课前准备",
+     *     "canSetAlarm": true,
+     *     "reason": ""
+     *   }
+     * }
+     * ```
+     */
+    suspend fun getAlarmStatus(appContext: Context): JSONObject = withContext(Dispatchers.IO) {
+        return@withContext try {
+            val dashboardObj = getDashboardInsight(appContext)
+            val dataObj = dashboardObj.getJSONObject("data") ?: return@withContext NetworkStatus.NotFound.toJsonResult()
+
+            val alarmInfoJson = dataObj.getJSONObject("alarmInfo")
+            if (alarmInfoJson != null) {
+                NetworkStatus.Success.toJsonResult(alarmInfoJson)
+            } else {
+                NetworkStatus.UnknownError.toJsonResult("闹钟信息不可用")
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            NetworkStatus.UnknownError.toJsonResult(e.message)
+        }
+    }
+
+    private fun getPrefs(context: Context): SharedPreferences {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }
 }

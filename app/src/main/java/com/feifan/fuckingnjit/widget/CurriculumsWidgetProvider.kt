@@ -23,6 +23,12 @@ import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 
+/**
+ * 课程表桌面小部件 Provider
+ *
+ * 负责渲染今日剩余课程到桌面小部件，支持窄版（2条课程）和宽版（4条课程）两种布局。
+ * 通过全局心跳广播和下课时间节点注册机制实现自动刷新。
+ */
 class CurriculumsWidgetProvider : AppWidgetProvider() {
 
     companion object {
@@ -30,7 +36,6 @@ class CurriculumsWidgetProvider : AppWidgetProvider() {
         private val CHINA_DATE_FORMATTER = DateTimeFormatter.ofPattern("M.d hh:mm a", Locale.CHINA)
         private val CHINA_WEEK_FORMATTER = TextStyle.FULL to Locale.CHINA
 
-        // --- 恢复原版的静态坑位 ID，这是保持 UI 完美的关键 ---
         private val IDS_BLOCK = intArrayOf(
             R.id.course_block_1,
             R.id.course_block_2,
@@ -49,12 +54,18 @@ class CurriculumsWidgetProvider : AppWidgetProvider() {
             intArrayOf(R.id.time_id_1, R.id.time_id_2, R.id.time_id_3, R.id.time_id_4)
     }
 
+    /**
+     * 更新所有小部件实例的 UI 内容
+     *
+     * 根据布局尺寸选择展示数量，填充日期时间、课程信息，
+     * 并注册下一次关键时间节点的自动刷新。
+     */
     override fun onUpdate(
         context: Context,
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray
     ) {
-        // 1. 拿数据并计算下一次自动更新的时间点（保留新版精华）
+        // 拿数据并计算下一次自动更新的时间点
         val validList = TodayScheduleManager.getRemainingCoursesForWidget()
         calculateAndRegisterNextCriticalNode(validList)
 
@@ -68,7 +79,7 @@ class CurriculumsWidgetProvider : AppWidgetProvider() {
                 if (isWideMode) R.layout.curriculums_widget_wide else R.layout.curriculums_widget
             val remoteViews = RemoteViews(context.packageName, layoutId)
 
-            // 2. 设置头部日期时间
+            // 设置头部日期时间
             val now = java.time.LocalDateTime.now()
             remoteViews.setTextViewText(R.id.month_id, now.format(CHINA_DATE_FORMATTER))
             remoteViews.setTextViewText(
@@ -79,7 +90,7 @@ class CurriculumsWidgetProvider : AppWidgetProvider() {
                 )
             )
 
-            // 3. 恢复点击背景 FORCE_REFRESH 的逻辑
+            // 恢复点击背景 FORCE_REFRESH 的逻辑
             val refreshIntent = Intent(context, CurriculumsWidgetProvider::class.java).apply {
                 action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
                 putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, intArrayOf(widgetId))
@@ -92,9 +103,6 @@ class CurriculumsWidgetProvider : AppWidgetProvider() {
             val rootId = if (isWideMode) R.id.wide_widget else R.id.small_widget
             remoteViews.setOnClickPendingIntent(rootId, pendingIntent)
 
-            // ==========================================
-            // 4. 核心渲染逻辑：恢复原版的数据灌入方式 (抛弃 ListView)
-            // ==========================================
             if (validList.isEmpty()) {
                 // 无课状态
                 remoteViews.setViewVisibility(R.id.empty_view, View.VISIBLE)
@@ -136,13 +144,13 @@ class CurriculumsWidgetProvider : AppWidgetProvider() {
 
                 } catch (e: Exception) {
                     e.printStackTrace()
-                    // 容错：抛异常就显示无课
+                    // 抛异常就显示无课
                     remoteViews.setViewVisibility(R.id.empty_view, View.VISIBLE)
                     remoteViews.setViewVisibility(R.id.courses_container, View.GONE)
                 }
             }
 
-            // 5. 应用更新
+            // 应用更新
             appWidgetManager.updateAppWidget(widgetId, remoteViews)
         }
     }
@@ -177,13 +185,9 @@ class CurriculumsWidgetProvider : AppWidgetProvider() {
         context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int, newOptions: Bundle?
     ) {
         super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
-        // 尺寸变化（比如用户拉伸 widget）立即触发重绘，完美匹配你设计的锚点！
+        // 尺寸变化（比如用户拉伸 widget）立即触发重绘
         onUpdate(context, appWidgetManager, intArrayOf(appWidgetId))
     }
-
-    // ==========================================
-    // 内部私有方法：处理具体的 UI 赋值和时间逻辑
-    // ==========================================
 
     private fun fillCourseBlock(
         rv: RemoteViews,
@@ -210,7 +214,7 @@ class CurriculumsWidgetProvider : AppWidgetProvider() {
     }
 
     /**
-     * 新版精华：计算下一次课程的开始/结束时间点，并向 HeartbeatBus 注册。
+     * 计算下一次课程的开始/结束时间点，并向 HeartbeatBus 注册。
      */
     private fun calculateAndRegisterNextCriticalNode(courses: List<DailyCourseSlot>) {
         if (courses.isEmpty()) return

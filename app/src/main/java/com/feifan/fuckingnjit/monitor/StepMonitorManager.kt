@@ -8,6 +8,13 @@ import android.hardware.SensorManager
 import android.util.Log
 import com.feifan.fuckingnjit.utils.database.AppDataCenter
 
+/**
+ * 计步器监控管理器
+ *
+ * 基于硬件 TYPE_STEP_COUNTER 传感器实现计步功能，
+ * 采用增量累加策略将传感器原始值转化为今日累计步数并持久化到数据库。
+ * 支持跨天自动重置和设备重启后的基准对齐。
+ */
 object StepMonitorManager : SensorEventListener {
 
     private const val TAG = "StepMonitorManager"
@@ -15,10 +22,21 @@ object StepMonitorManager : SensorEventListener {
     private var sensorManager: SensorManager? = null
     private var stepSensor: Sensor? = null
 
-    // 直接通过数据中心获取今日步数，对外保持只读
+    /**
+     * 当前会话的今日累计步数（只读）
+     *
+     * 直接从数据中心读取，每次取值均为最新持久化结果。
+     */
     val currentSessionSteps: Int
         get() = AppDataCenter.getTodayRecord().currentSteps
 
+    /**
+     * 初始化计步器监听
+     *
+     * 重复调用时直接跳过。若设备不支持硬件计步传感器则打印错误日志。
+     *
+     * @param context 应用上下文
+     */
     @Synchronized
     fun init(context: Context) {
         if (sensorManager != null) return
@@ -62,6 +80,9 @@ object StepMonitorManager : SensorEventListener {
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 
+    /**
+     * 注销传感器监听并释放资源
+     */
     @Synchronized
     fun release() {
         sensorManager?.unregisterListener(this)

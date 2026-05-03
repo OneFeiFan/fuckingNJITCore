@@ -13,9 +13,19 @@ import com.feifan.yiban.Apis.Task
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+/**
+ * 应用核心初始化器
+ *
+ * 负责应用启动时的关键初始化逻辑：根据学期开始时间恢复当前教学周次，
+ * 以及初始化易班账号并启用 KillYiBan 组件。
+ */
+@Suppress("unused")
 object CoreInitializer {
 //    private val coroutineScope = CoroutineScope(Dispatchers.IO + Job())
 
+    /**
+     * 初始化核心数据：根据已保存的学期开始时间计算并恢复当前周次
+     */
     fun init() {
         try {
             Log.i("CoreInitializer", "Initializing Core")
@@ -35,6 +45,17 @@ object CoreInitializer {
         }
     }
 
+    /**
+     * 初始化易班账号并启用 KillYiBan 广播接收器
+     *
+     * 验证凭据后将易班信息合并到当前 User 实体，
+     * 并通过 PackageManager 启用 KillYiBan 组件。
+     *
+     * @param appContext 应用上下文
+     * @param mobile 易班手机号
+     * @param password 易班密码
+     * @return 操作结果 JSONObject
+     */
     suspend fun initYiBan(appContext: Context, mobile: String, password: String): JSONObject =
         withContext(Dispatchers.IO) {
             return@withContext try {

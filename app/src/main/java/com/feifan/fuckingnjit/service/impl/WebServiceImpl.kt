@@ -27,12 +27,26 @@ import java.time.format.DateTimeFormatter
 import kotlin.math.pow
 
 
+/**
+ * 教务系统 Web 服务实现类（单例）
+ *
+ * 通过 WebVPN 通道访问 NJIT 教务系统的各类接口，
+ * 完成课表查询、成绩获取、空教室查询、学业进度等功能。
+ */
+@Suppress("unused")
 class WebServiceImpl private constructor() : WebService {
     companion object {
         private val instance_: WebServiceImpl by lazy { WebServiceImpl() }
         fun getInstance(): WebServiceImpl = instance_
     }
 
+    /**
+     * 构建带基础路径和查询参数的完整 URL
+     *
+     * @param path 接口路径（相对于 WebVPN 基地址）
+     * @param params 键值对形式的查询参数
+     * @return 拼接完成的完整 URL
+     */
     private fun buildUrl(path: String, vararg params: Pair<String, String>): String {
         val baseUrl = "${HttpRequestHelper.BASE_URL}${HttpRequestHelper.WEBVPN_PATH}$path"
         if (params.isEmpty()) return baseUrl
@@ -43,6 +57,15 @@ class WebServiceImpl private constructor() : WebService {
         return "$baseUrl?$encodedParams"
     }
 
+    /**
+     * 判断 HTML 文档是否为空壳页面
+     *
+     * 空壳页面的特征是 html 下只有空 head 和空 body，
+     * 通常出现在会话过期被重定向到登录页的场景。
+     *
+     * @param doc 待检测的 Jsoup Document
+     * @return true 表示该文档为空壳
+     */
     private fun isShellDocument(doc: Document): Boolean {
         return doc.children().size == 1 &&           // 只有 <html> 一个子节点
                 doc.head().children().isEmpty() &&    // <head> 为空

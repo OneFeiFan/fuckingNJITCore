@@ -1,52 +1,95 @@
 package com.feifan.fuckingnjit.decision
 
-// 封装了当日综合评估结果，供前端 Dashboard UI 渲染使用
+/**
+ * 当日综合评估结果，供前端 Dashboard UI 渲染使用
+ *
+ * @param currentMode 当前运行模式标识字符串
+ * @param overallScore 综合评分（0~100）
+ * @param factors 三大核心决策因子
+ * @param actionableInsight 动态干预建议卡片
+ * @param timeline 睡眠目标与明日课程的时间轴视图数据
+ * @param rawStats 原始统计数据溯源
+ * @param alarmInfo 闹钟信息，UI 层据此调用系统闹钟
+ */
 data class DashboardResponse(
-    val currentMode: String,// 当前运行模式标识字符串
-    val overallScore: Int, // 综合评分
-    val factors: DecisionFactors,// 包含三大核心决策因子
-    val actionableInsight: ActionableInsight,// 动态干预建议
-    val timeline: Timeline,// 睡眠目标与今日课程的时间轴视图数据
-    val rawStats: RawStats,// 原始统计数据溯源
-    val alarmInfo: AlarmInfo? = null // 闹钟信息（新增：供UI层调用系统闹钟）
+    val currentMode: String,
+    val overallScore: Int,
+    val factors: DecisionFactors,
+    val actionableInsight: ActionableInsight,
+    val timeline: Timeline,
+    val rawStats: RawStats,
+    val alarmInfo: AlarmInfo? = null
 )
 
-// 决策因子
+/**
+ * 决策因子，包含影响综合评分的三个维度
+ *
+ * @param courseStress 课程压力因子（0~100）
+ * @param physicalState 身体状态因子（0~100）
+ * @param focusCost 专注成本因子（0~100）
+ */
 data class DecisionFactors(
-    val courseStress: Int,//课程压力因子
-    val physicalState: Int,//身体状态因子
-    val focusCost: Int//专注成本因子
+    val courseStress: Int,
+    val physicalState: Int,
+    val focusCost: Int
 )
 
-// 动态干预建议
+/**
+ * 动态干预建议卡片数据
+ *
+ * @param show 是否展示该建议
+ * @param level 建议等级："critical"、"warning" 或 "info"
+ * @param title 卡片标题
+ * @param message 卡片正文内容
+ */
 data class ActionableInsight(
-    val show: Boolean,// 是否展示该建议
-    val level: String, // 枚举值: "critical", "warning", "info"
-    val title: String,// 卡片标题
-    val message: String// 卡片正文
+    val show: Boolean,
+    val level: String,
+    val title: String,
+    val message: String
 )
 
-// 时间线
+/**
+ * 睡眠目标与课程的时间轴视图数据
+ *
+ * @param targetSleepTime 目标入睡时间，格式 HH:mm
+ * @param offset 相对理想入睡时间的偏移量描述
+ * @param suggestedWakeUpTime 建议起床时间，格式 HH:mm
+ * @param courses 明日课程列表
+ */
 data class Timeline(
-    val targetSleepTime: String,// 目标入睡时间，格式 HH:mm
-    val offset: String, // 相对基准时间的偏移描述
-    val suggestedWakeUpTime: String = "",// 新增：建议起床时间，格式 HH:mm（由引擎根据课表/用户配置推算）
-    val courses: List<TimelineCourse> = emptyList() // 明日课程列表
+    val targetSleepTime: String,
+    val offset: String,
+    val suggestedWakeUpTime: String = "",
+    val courses: List<TimelineCourse> = emptyList()
 )
 
-// 时间线中的单条课程条目
+/**
+ * 时间线中的单条课程条目
+ *
+ * @param time 上课时间段显示文本
+ * @param name 课程名称
+ */
 data class TimelineCourse(
-    val time: String,// 上课时间段
-    val name: String// 课程名称
+    val time: String,
+    val name: String
 )
 
-// 原始统计数据
+/**
+ * 原始统计数据，用于在 UI 中展示具体数值溯源
+ *
+ * @param sleepDurationStr 睡眠时长的可读字符串表示
+ * @param steps 今日累计步数
+ * @param targetSteps 每日步数目标值
+ * @param focusRate 专注率百分比
+ * @param distractionMins 累计分心时长（分钟）
+ */
 data class RawStats(
-    val sleepDurationStr: String,//睡眠时长的可读字符串表示
-    val steps: Int,// 今日累计步数
-    val targetSteps: Int,// 每日步数目标值
-    val focusRate: Int,//专注率
-    val distractionMins: Int//累计分心时长
+    val sleepDurationStr: String,
+    val steps: Int,
+    val targetSteps: Int,
+    val focusRate: Int,
+    val distractionMins: Int
 )
 
 /**
@@ -55,7 +98,7 @@ data class RawStats(
  * @param suggestedWakeUpHour   建议起床时间 - 时（24小时制）
  * @param suggestedWakeUpMinute 建议起床时间 - 分
  * @param alarmType             闹钟类型："default"=课表推算 | "override"=用户单次特殊闹钟 | "noClass"=无课默认
- * @param alarmLabel            写入系统闹钟的标签文案，如 "[学霸模式] 明早 07:15 起床 · 高数课前准备"
+ * @param alarmLabel            写入系统闹钟的标签文案，如 "学习模式 明早 07:15 起床 · 高数课前准备"
  * @param canSetAlarm           是否允许设置闹钟（false 表示时间落入禁止区间或已过期）
  * @param reason                无法设闹钟时的原因说明（canSetAlarm=false 时有值）
  */
@@ -71,8 +114,6 @@ data class AlarmInfo(
 /**
  * 用户起床配置：持久化于 User 实体或 SharedPreferences
  *
- * @param defaultWakeUpHour        默认起床时刻-时（仅在无课时使用此值的 fallback 语义）
- * @param defaultWakeUpMinute      默认起床时刻-分
  * @param preClassBufferMinutes    上课前缓冲分钟数（默认45，即闹钟 = 第一节课开始 - 缓冲）
  * @param noClassWakeUpHour        无课日的默认起床时刻-时
  * @param noClassWakeUpMinute      无课日的默认起床时刻-分

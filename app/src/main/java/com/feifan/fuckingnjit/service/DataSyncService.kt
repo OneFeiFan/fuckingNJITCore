@@ -1,9 +1,9 @@
 package com.feifan.fuckingnjit.service
 
-import SleepUploadPayload
-import UploadSensorPoint
 import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.JSONObject
+import com.feifan.fuckingnjit.dao.SleepUploadPayload
+import com.feifan.fuckingnjit.dao.UploadSensorPoint
 import com.feifan.fuckingnjit.service.impl.UserManagerImpl
 import com.feifan.fuckingnjit.utils.Tools
 import com.feifan.fuckingnjit.utils.database.AppDataCenter
@@ -14,9 +14,20 @@ import kotlinx.coroutines.withContext
 import okhttp3.Headers
 import java.time.LocalDate
 
+/**
+ * 数据同步服务
+ *
+ * 负责将本地缓冲的睡眠传感器数据上传至服务端，
+ * 并在成功响应后回写睡眠分析结果（时长、入睡/起床时间）到本地数据库。
+ */
 object DataSyncService {
 
-    // 上传睡眠数据
+    /**
+     * 执行数据上传与清理流程
+     *
+     * 从本地数据库取出目标时间窗口内的传感器记录，组装上传载荷后发送至服务端。
+     * 若服务端返回有效的睡眠分析结果则持久化到今日记录中。
+     */
     suspend fun uploadAndClearData() = withContext(Dispatchers.IO) {
         try {
             val userId = UserManagerImpl.getInstance().getCurrentUser().id

@@ -8,15 +8,29 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.util.Calendar
 
+/**
+ * 传感器数据缓冲管理器
+ *
+ * 以内存缓冲区批量收集睡眠传感器数据点，达到阈值后异步刷入本地数据库。
+ * 同时在每天上午11点的心跳周期中触发自动上传与数据清理。
+ */
 object SensorDataBufferManager {
 
     private val buffer = mutableListOf<SleepSensorRecord>()
 
-    // 一分钟一次心跳，5分钟写入一次数据库
+    /** 批量写入数据库的阈值，对应约5分钟的采集量 */
     private const val BATCH_SIZE = 5
 
+    /** 上次自动上传的年中日，用于保证每天只触发一次 */
     private var lastAutoUploadDayOfYear = -1
 
+    /**
+     * 向缓冲区添加一条传感器记录
+     *
+     * 写入后检查是否达到批量写入阈值或是否需要触发每日自动上传。
+     *
+     * @param data 睡眠综合得分数据
+     */
     @Synchronized
     fun addRecord(data: Double) {
         val record = SleepSensorRecord(
@@ -30,7 +44,12 @@ object SensorDataBufferManager {
         }
     }
 
-    // 将缓存数据异步刷入本地数据库
+    /**
+     * 将缓存数据异步刷入本地数据库
+     *
+     * 采用拷贝-清空策略：先复制当前快照再清空原集合，
+     * 数据库 IO 操作在独立协程中执行以避免阻塞调用方。
+     */
     @Synchronized
     fun flushToDatabase() {
         if (buffer.isEmpty()) return
@@ -50,7 +69,12 @@ object SensorDataBufferManager {
         }
     }
 
-    // 检查并尝试自动上传数据
+    /**
+     * 检查并尝试触发每日自动上传
+     *
+     * 在当天上午 11:00 ~ 11:59 的任意一次心跳中触发一次，
+     * 触发后调用 [DataSyncService] 完成数据上传与清理。
+     */
     private fun checkAndTriggerAutoUpload() {
         val calendar = Calendar.getInstance()
         val currentHour = calendar.get(Calendar.HOUR_OF_DAY)

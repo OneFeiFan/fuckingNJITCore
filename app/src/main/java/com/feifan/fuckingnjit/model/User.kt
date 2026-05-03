@@ -11,33 +11,41 @@ import io.objectbox.annotation.Id
 import io.objectbox.annotation.Index
 import io.objectbox.converter.PropertyConverter
 
-// 用户实体
+/**
+ * 用户实体
+ *
+ * 存储用户在教务系统和易班的账号凭据、学业数据以及应用运行模式偏好。
+ * 密码字段均经过 RSA 加密后存储。
+ */
 @Entity
 data class User(
     @Id var uuid: Long = 0,
 
     @Index
-    var id: String = "", // 学号，且基于学号索引
+    var id: String = "",
     @Convert(converter = RSAPasswordConverter::class, dbType = String::class)
-    var password: String = "",//加密过的密码
-    var name: String = "",//教务系统姓名
-    var yibanId: String = "", // 易班账号通常为手机号
+    var password: String = "",
+    var name: String = "",
+    var yibanId: String = "",
     @Convert(converter = RSAPasswordConverter::class, dbType = String::class)
-    var yibanPassword: String = "",// 加密过的易班密码
-    var storePassword: Boolean = true,//是否储存教务密码
+    var yibanPassword: String = "",
+    var storePassword: Boolean = true,
     @Convert(converter = AppModeConverter::class, dbType = String::class)
-    var currentAppMode: AppMode = AppMode.BALANCE_MODE,// app模式
+    var currentAppMode: AppMode = AppMode.BALANCE_MODE,
     var gpa: String = "0",
     @Convert(converter = JSONObjectConverter::class, dbType = String::class)
-    var academicProgress: JSONObject = JSONObject(),//学业进度
+    var academicProgress: JSONObject = JSONObject(),
     @Convert(converter = JSONArrayConverter::class, dbType = String::class)
-    var scores: JSONArray = JSONArray(),//全部成绩
+    var scores: JSONArray = JSONArray(),
     @Convert(converter = JSONObjectConverter::class, dbType = String::class)
-    var curriculums: JSONObject = JSONObject(),//全部课程（for教务）
+    var curriculums: JSONObject = JSONObject(),
     @Convert(converter = JSONObjectConverter::class, dbType = String::class)
-    var localCurriculums: JSONObject? = JSONObject()//全部本地课程
+    var localCurriculums: JSONObject? = JSONObject()
 )
 
+/**
+ * JSONObject ↔ String 的 ObjectBox 属性转换器
+ */
 class JSONObjectConverter : PropertyConverter<JSONObject?, String?> {
     override fun convertToEntityProperty(databaseValue: String?): JSONObject? {
         if (databaseValue == null) {
@@ -54,6 +62,9 @@ class JSONObjectConverter : PropertyConverter<JSONObject?, String?> {
     }
 }
 
+/**
+ * JSONArray ↔ String 的 ObjectBox 属性转换器
+ */
 class JSONArrayConverter : PropertyConverter<JSONArray?, String?> {
     override fun convertToEntityProperty(databaseValue: String?): JSONArray? {
         if (databaseValue == null) {
@@ -70,6 +81,9 @@ class JSONArrayConverter : PropertyConverter<JSONArray?, String?> {
     }
 }
 
+/**
+ * AppMode 枚举 ↔ 名称字符串 的 ObjectBox 属性转换器
+ */
 class AppModeConverter : PropertyConverter<AppMode, String> {
     override fun convertToEntityProperty(databaseValue: String?): AppMode {
         return AppMode.fromName(databaseValue)

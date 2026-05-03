@@ -9,35 +9,64 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 
-// 课间时间草
+/**
+ * 课间空堂时间槽数据类
+ *
+ * @param startTime 空堂开始时间
+ * @param endTime 空堂结束时间
+ */
 data class FreeSlot(
     val startTime: LocalTime,
     val endTime: LocalTime
 ) {
-    // 动态计算空闲分钟数，供引擎进行“碎片/大段”判定
+    /** 动态计算空闲分钟数，供决策引擎进行碎片/大段判定 */
     val durationMinutes: Long
         get() = Duration.between(startTime, endTime).toMinutes()
 }
 
-// 课程时间槽
+/**
+ * 单节课的时间槽数据类（已转换为物理时间）
+ *
+ * @param id 课程ID
+ * @param courseName 课程名称
+ * @param classroom 上课地点
+ * @param startTime 课程开始时间
+ * @param endTime 课程结束时间
+ * @param startNode 开始节次
+ * @param step 持续节数
+ */
 data class DailyCourseSlot(
     val id: String,
     val courseName: String,
     val classroom: String,
     val startTime: LocalTime,
     val endTime: LocalTime,
-    val startNode: Int,//开始节次
-    val step: Int//持续节次
+    val startNode: Int,
+    val step: Int
 )
 
+/**
+ * 今日课程表管理器
+ *
+ * 从用户缓存的课表数据中过滤出今天的课程并转换为物理时间槽，
+ * 提供空堂查询、上课状态判断、当前课程定位等能力。
+ * 内部按天缓存计算结果避免重复解析。
+ */
 object TodayScheduleManager {
 
-    // 缓存当天的物理时间槽位
+    /** 缓存当天的物理时间槽位列表 */
     private var cachedSlots: List<DailyCourseSlot>? = null
     private var lastUpdateDay: Int = -1
     private var cachedCurrentWeek: Int = -1
 
-    // 获取今天白天的有效空堂时间段，默认 45 分钟
+    /**
+     * 获取今天剩余的有效空堂时间段
+     *
+     * 有效区间为 08:00 ~ 17:20，仅返回未过期的且长度达到阈值的空堂。
+     *
+     * @param minGapMinutes 最小空堂时长阈值（分钟），默认 45
+     * @return 按时间排序的有效空堂列表
+     */
     fun getAvailableFreeSlots(minGapMinutes: Long = 45): List<FreeSlot> {
         val todayDay = LocalDate.now().dayOfYear
         if (cachedSlots == null || lastUpdateDay != todayDay) {
@@ -85,7 +114,9 @@ object TodayScheduleManager {
         return freeSlots.filter { it.endTime.isAfter(nowTime) && it.durationMinutes >= minGapMinutes }
     }
 
-    // 重新加载当天的课程并转换为物理时间
+    /**
+     * 重新加载并解析当天的课程数据到时间槽缓存
+     */
     private fun reloadTodaySlots() {
         // 这部分逻辑从小部件原封不动地搬过来
         val startDateStr = EduScheduleConfig.getSemesterStartDate()
@@ -132,13 +163,17 @@ object TodayScheduleManager {
         lastUpdateDay = LocalDate.now().dayOfYear
     }
 
-    // 强制清空缓存
+    /** 强制清空课程时间槽缓存（登录后调用） */
     fun clearCache() {
         cachedSlots = null
         lastUpdateDay = -1
     }
 
-    // 获取今天剩余的课
+    /**
+     * 获取今天尚未结束的课程列表（用于小部件展示）
+     *
+     * @return 未结束的课程时间槽列表，按开始时间排序
+     */
     fun getRemainingCoursesForWidget(): List<DailyCourseSlot> {
         val todayDay = LocalDate.now().dayOfYear
         if (cachedSlots == null || lastUpdateDay != todayDay) {
@@ -151,7 +186,11 @@ object TodayScheduleManager {
         return slots.filter { it.endTime.isAfter(nowTime) }
     }
 
-    // 判断此刻是否处于上课时间
+    /**
+     * 判断当前时刻是否处于上课时间内
+     *
+     * @return true 表示当前正在上某一节课
+     */
     fun isCurrentlyInClass(): Boolean {
         val todayDay = LocalDate.now().dayOfYear
         if (cachedSlots == null || lastUpdateDay != todayDay) {
@@ -167,7 +206,7 @@ object TodayScheduleManager {
         }
     }
 
-    // 获取当前周
+    /** 获取当前教学周次 */
     fun getCurrentWeek(): Int {
         val todayDay = LocalDate.now().dayOfYear
         if (cachedSlots == null || lastUpdateDay != todayDay) {
@@ -176,7 +215,11 @@ object TodayScheduleManager {
         return cachedCurrentWeek
     }
 
-    // 获取当前正在进行的具体课程
+    /**
+     * 获取当前正在进行中的课程
+     *
+     * @return 命中的课程时间槽，未在上课时返回 null
+     */
     fun getCurrentClassSlot(): DailyCourseSlot? {
         val todayDay = LocalDate.now().dayOfYear
         if (cachedSlots == null || lastUpdateDay != todayDay) {

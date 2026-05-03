@@ -2,14 +2,19 @@ package com.feifan.fuckingnjit.utils.network
 
 import com.alibaba.fastjson.JSONObject
 
-// 网络请求异常对象
+/** 网络请求异常封装类 */
 class ApiException(
     val status: NetworkStatus,
     override val message: String = status.message,
     cause: Throwable? = null
 ) : Exception(message, cause)
 
-// 网络状态码基类
+/**
+ * 网络状态码密封类
+ *
+ * 覆盖标准 HTTP 状态码及自定义业务错误码，
+ * 提供 toJsonResult 方法用于快速构建统一响应格式。
+ */
 @Suppress("unused")
 sealed class NetworkStatus(
     val code: Int,
@@ -54,9 +59,16 @@ sealed class NetworkStatus(
     }
 }
 
-// 状态码扩展工具
+/**
+ * HTTP / 自定义状态码与 [NetworkStatus] 枚举的互转工具。
+ */
 object NetworkStatusUtils {
-    // 根据状态码获取对应枚举
+    /**
+     * 将数值型 HTTP 或自定义状态码映射为对应的 [NetworkStatus] 枚举实例。
+     *
+     * @param code 原始状态码（200/404/500/600 等）
+     * @return 匹配的枚举值，无匹配时返回 [NetworkStatus.UnknownError]
+     */
     fun fromCode(code: Int): NetworkStatus {
         return when (code) {
             200 -> NetworkStatus.Success

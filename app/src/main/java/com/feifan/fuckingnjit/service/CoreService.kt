@@ -27,6 +27,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.util.Locale
 
+/**
+ * 核心前台服务
+ *
+ * 应用长期存活的守护进程，负责：
+ * - 以 AlarmManager 精准闹钟驱动的心跳采样管线
+ * - 加速度传感器能量采集与环境噪音检测
+ * - 前台常驻通知展示实时监控状态
+ * - 全局心跳广播以驱动桌面小部件刷新
+ */
 class CoreService : LifecycleService() {
 
     private val TAG = "CoreService"
@@ -47,7 +56,7 @@ class CoreService : LifecycleService() {
     override fun onCreate() {
         super.onCreate()
 
-        alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
 
         // 初始化监控模块
         audioManager = AudioMonitorManager(this)
@@ -81,7 +90,10 @@ class CoreService : LifecycleService() {
     }
 
     /**
-     * 【核心管线】分发心跳，驱动全 App
+     * 核心心跳管线：采集传感器数据并驱动全局状态更新
+     *
+     * 每次触发时依次执行：加速度采集 → 噪音采集 → 数据混合写入缓冲区 →
+     * 更新前台通知 → 发射全局广播 → 安排下一次精准闹钟。
      */
     private fun dispatchTick() {
         lifecycleScope.launch(Dispatchers.Default) {
@@ -126,6 +138,13 @@ class CoreService : LifecycleService() {
         }
     }
 
+    /**
+     * 安排下一次精准闹钟唤醒
+     *
+     * 使用 setExactAndAllowWhileIdle 实现单次精准唤醒，避免 setRepeating 的耗电问题。
+     *
+     * @param triggerTimeMs 目标触发时间戳（毫秒）
+     */
     private fun scheduleNextAlarm(triggerTimeMs: Long) {
         val intent = Intent(this, CoreService::class.java).apply { action = ACTION_TRIGGER_ENGINE }
         val pendingIntent = PendingIntent.getService(
@@ -143,6 +162,15 @@ class CoreService : LifecycleService() {
         )
     }
 
+    /**
+     * 更新前台通知内容
+     *
+     * 仅在内容发生实际变化时才重新提交通知，避免频繁刷新导致的闪烁。
+     *
+     * @param appName 当前前台应用名称
+     * @param currentNoise 当前环境噪音 dBFS 值
+     * @param currentMotion 当前体动能量值
+     */
     private fun updateNotification(appName: String, currentNoise: Double, currentMotion: Double) {
         val noiseText = if (audioManager.isMicrophoneOccupied) "⏸️ 避让" else "${
             String.format(
@@ -166,6 +194,13 @@ class CoreService : LifecycleService() {
         }
     }
 
+    /**
+     * 创建前台常驻通知
+     *
+     * @param title 通知标题
+     * @param content 通知正文内容
+     * @return 构建好的 Notification 对象
+     */
     private fun createNotification(title: String, content: String): Notification {
         val intent: Intent? = packageManager.getLaunchIntentForPackage(packageName)
         val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
@@ -183,16 +218,31 @@ class CoreService : LifecycleService() {
             .build()
     }
 
+    /**
+     * 兼容启动前台服务（处理 Android Q 的 foreground service type 要求）
+     *
+     * @param notification 前台通知对象
+     */
     private fun startForegroundServiceCompat(notification: Notification) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val type =
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                } else {
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                }
             startForeground(NOTIFICATION_ID, notification, type)
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
     }
 
+    /**
+     * 注册屏幕状态广播接收器
+     *
+     * 监听锁屏和解锁事件：锁屏时记录状态用于通知显示，
+     * 解锁时立即触发一次心跳采样以保证数据及时性。
+     */
     private fun registerScreenReceiver() {
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_USER_PRESENT)
@@ -212,6 +262,9 @@ class CoreService : LifecycleService() {
         registerReceiver(screenReceiver, filter)
     }
 
+    /**
+     * 创建通知渠道（Android O 以上必需）
+     */
     private fun createNotificationChannel() {
         val channel =
             NotificationChannel(CHANNEL_ID, "Monitor Service", NotificationManager.IMPORTANCE_LOW)

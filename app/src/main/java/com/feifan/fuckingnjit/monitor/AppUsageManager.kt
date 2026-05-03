@@ -41,42 +41,56 @@ class AppUsageManager : AccessibilityService() {
         private const val TAG = "AppUsageManager"
 
         @Volatile
-        private var lastInterventionTime: Long = 0L // 上次触发干预的时间戳
+        private var lastInterventionTime: Long = 0L
 
         @Volatile
-        private var continuousViolationCount: Int = 0 // 连续违规计数器
+        private var continuousViolationCount: Int = 0
 
         @Volatile
-        private var currentForegroundPkg: String = ""// 当前前台包名
+        private var currentForegroundPkg: String = ""
 
         @Volatile
-        private var isServiceConnected = false// 标记服务是否真正连接
+        private var isServiceConnected = false
 
-        private val windowIdCache = LruCache<Int, String>(20)// 前台窗口缓存池
+        private val windowIdCache = LruCache<Int, String>(20)
         private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
         @Volatile
-        private var lastPackageName: String = "" // 上一个前台应用包名
+        private var lastPackageName: String = ""
 
         @Volatile
-        private var lastSwitchTime: Long = System.currentTimeMillis() // 上一次切换前台应用时间
+        private var lastSwitchTime: Long = System.currentTimeMillis()
 
-        // 强制阻断名单（触发返回桌面）
+        /** 强制阻断名单，触发后直接返回桌面 */
         private val CATEGORY_GROUP_A = setOf("游戏", "影音娱乐", "购物消费")
 
-        // 通信豁免名单（不强制退出，但记录扣分）
+        /** 通信豁免名单，不强制退出但记录扣分 */
         private val CATEGORY_GROUP_B = setOf("社交通讯", "办公资讯")
 
-        // 违规总名单（用于课后计算总分）
+        /** 违规总名单，用于课后计算总分 */
         private val ILLEGAL_CATEGORIES = CATEGORY_GROUP_A + CATEGORY_GROUP_B
 
-        private val appLabelCache = ConcurrentHashMap<String, String>()//包名 → 应用显示名
+        private val appLabelCache = ConcurrentHashMap<String, String>()
 
-        private var interceptJob: Job? = null // 为前台应用绑定的超时任务
+        private var interceptJob: Job? = null
         private var screenReceiver: BroadcastReceiver? = null
 
-        fun getForegroundPackage(): String = currentForegroundPkg//当前前台包名
+        /**
+         * 获取当前前台应用的包名
+         *
+         * @return 当前前台应用包名字符串，可能为空
+         */
+        fun getForegroundPackage(): String = currentForegroundPkg
 
+        /**
+         * 获取应用显示名称及分类标签
+         *
+         * 结果格式为"应用名 分类"，带 LRU 缓存避免重复查询 PackageManager。
+         *
+         * @param context 应用上下文
+         * @param pkg 目标应用包名
+         * @return 格式化后的应用显示文本
+         */
         suspend fun getAppName(context: Context, pkg: String): String {
             if (pkg.isEmpty()) return "等待检测..."
             val label = appLabelCache.getOrPut(pkg) {
@@ -89,16 +103,28 @@ class AppUsageManager : AccessibilityService() {
                     if (pkg.contains(".")) pkg.substringAfterLast(".") else pkg
                 }
             }
-            val category = AppCategoryRepository.getCategory(context, pkg) ?: "未知"//从储存的映射表寻找app类型
+            val category = AppCategoryRepository.getCategory(context, pkg) ?: "未知"
             return "$label [$category]"
         }
 
-        // 检测无障碍服务是否“假死”
+        /**
+         * 检测无障碍服务是否处于"假死"状态
+         *
+         * 假死定义为：系统设置中开关已关闭且内部连接标志位为 false。
+         *
+         * @param context 应用上下文
+         * @return true 表示服务处于假死状态
+         */
         fun isServiceZombie(context: Context): Boolean {
-            return !isAccessibilitySettingsOn(context) && !isServiceConnected // 系统开关没开 && 内部连接标志位是 false -> 假死
+            return !isAccessibilitySettingsOn(context) && !isServiceConnected
         }
 
-        // 检查系统设置里的开关是否开启
+        /**
+         * 检查系统设置中的无障碍服务开关是否已开启
+         *
+         * @param context 应用上下文
+         * @return true 表示本服务的无障碍权限已开启
+         */
         fun isAccessibilitySettingsOn(context: Context): Boolean {
             var accessibilityEnabled: Int
             val service = "${context.packageName}/${AppUsageManager::class.java.name}"//无障碍服务名
@@ -191,7 +217,7 @@ class AppUsageManager : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (!isServiceConnected) isServiceConnected = true
         if (event != null) {
-            // 只保留窗口内容改变事件和窗口状态改变事件
+            // 只处理窗口内容改变和窗口状态改变事件
             if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
                 event.eventType != AccessibilityEvent.TYPE_WINDOWS_CHANGED
             ) {
@@ -201,7 +227,12 @@ class AppUsageManager : AccessibilityService() {
         }
     }
 
-    // 分析前台窗口成分
+    /**
+     * 分析当前前台窗口组成，识别出最可能的前台应用窗口
+     *
+     * 过滤掉输入法、辅助功能悬浮窗等非应用层窗口后，
+     * 综合考虑焦点状态和屏幕面积选取目标窗口，异步获取其包名。
+     */
     private fun analyzeForegroundWindow() {
         val windowList = windows ?: return
         // 过滤掉输入法、辅助功能悬浮窗等非应用层窗口
@@ -243,7 +274,13 @@ class AppUsageManager : AccessibilityService() {
         }
     }
 
-    // 统一处理应用切换逻辑
+    /**
+     * 统一处理应用切换逻辑
+     *
+     * 结算上一个应用的停留时长，并对新上台的前台应用启动实时干预检测。
+     *
+     * @param newPackageName 新切换到的应用包名
+     */
     private suspend fun handleAppSwitch(newPackageName: String) {
         // 立刻结束上一个应用的超时任务
         interceptJob?.cancel()
@@ -252,7 +289,16 @@ class AppUsageManager : AccessibilityService() {
         handleRealTimeIntervention(newPackageName)
     }
 
-    // 处理前台应用超时方法
+    /**
+     * 处理前台应用的实时干预逻辑
+     *
+     * 仅在上课时间且目标应用属于违规分类时触发。
+     * 根据当前运行模式的干预配置执行不同级别的动作：
+     * 级别1为静默通知，级别2为震动+警告提示，级别3为强阻断（A组应用返回桌面）。
+     * 容忍时长随连续违规次数指数衰减，冷却期结束后自动开启下一轮监控。
+     *
+     * @param pkgName 需要干预的目标应用包名
+     */
     private suspend fun handleRealTimeIntervention(pkgName: String) {
         // 检查是否在上课时间
         if (!TodayScheduleManager.isCurrentlyInClass()) return
@@ -350,7 +396,7 @@ class AppUsageManager : AccessibilityService() {
                 }
             }
 
-            // 更新最后干预时间并增加“仇恨值”
+            // 更新最后干预时间并增加"仇恨值"
             lastInterventionTime = System.currentTimeMillis()
             continuousViolationCount++
 
@@ -359,7 +405,11 @@ class AppUsageManager : AccessibilityService() {
         }
     }
 
-    // 震动反馈
+    /**
+     * 触发震动反馈
+     *
+     * 构造三连短震节奏模式并执行振动，用于干预提醒。
+     */
     private fun triggerVibration() {
         try {
             val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -405,7 +455,14 @@ class AppUsageManager : AccessibilityService() {
         }
     }
 
-    // 处理应用超时结果
+    /**
+     * 结算上一个应用的停留时长
+     *
+     * 停留超过5秒才计入摸鱼时间。如果上一个应用属于违规分类且当前处于上课时段，
+     * 则将违规时长累加到今日记录并保存单节课的专注度明细。
+     *
+     * @param newPackageName 新切换到的应用包名
+     */
     private suspend fun settleLastAppDuration(newPackageName: String) {
         val now = System.currentTimeMillis()
         val durationMs = now - lastSwitchTime
@@ -455,7 +512,15 @@ class AppUsageManager : AccessibilityService() {
         lastSwitchTime = now
     }
 
-    // 安全按获取包名
+    /**
+     * 安全地获取窗口对应的包名
+     *
+     * 优先从 LRU 缓存读取，缓存未命中时尝试获取根节点包名并写入缓存。
+     * 所有异常情况均返回 null 而非抛出。
+     *
+     * @param window 目标窗口信息
+     * @return 包名字符串，获取失败时返回 null
+     */
     private fun getPackageNameSafely(window: AccessibilityWindowInfo): String? {
         val windowId = window.id
 

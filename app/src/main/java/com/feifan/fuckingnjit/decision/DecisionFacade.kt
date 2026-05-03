@@ -18,7 +18,14 @@ import kotlin.math.max
 @Suppress("unused")
 object DecisionFacade {
 
-    //切换app状态
+    /**
+     * 切换当前应用运行模式
+     *
+     * 将用户选择的新模式持久化到本地数据库。
+     *
+     * @param modeStr 目标模式的枚举名称字符串
+     * @return 操作结果 JSONObject
+     */
     fun switchAppMode(modeStr: String): JSONObject {
         AppDataCenter.getCurrentUser()?.let { user ->
             user.currentAppMode = AppMode.fromName(modeStr)
@@ -28,7 +35,15 @@ object DecisionFacade {
         return NetworkStatus.Success.toJsonResult("切换成功")
     }
 
-    // 获取仪表盘数据
+    /**
+     * 获取仪表盘综合评估数据
+     *
+     * 整合课表、睡眠记录、步数、专注率等多维数据源，
+     * 经决策引擎计算后返回完整的 Dashboard 展示数据。
+     *
+     * @param appContext 应用上下文
+     * @return 包含完整仪表盘数据的 JSONObject
+     */
     suspend fun getDashboardInsight(appContext: Context): JSONObject = withContext(Dispatchers.IO) {
         try {
             val mode = AppDataCenter.getCurrentUser()?.currentAppMode ?: AppMode.BALANCE_MODE
@@ -186,7 +201,8 @@ object DecisionFacade {
         return@withContext try {
             // 复用 Dashboard 的完整计算链路拿到最新的 alarmInfo
             val dashboardObj = getDashboardInsight(appContext)
-            val dataObj = dashboardObj.getJSONObject("data") ?: return@withContext NetworkStatus.NotFound.toJsonResult()
+            val dataObj = dashboardObj.getJSONObject("data")
+                ?: return@withContext NetworkStatus.NotFound.toJsonResult()
 
             val alarmInfoJson = dataObj.getJSONObject("alarmInfo")
             if (alarmInfoJson == null) {
@@ -234,7 +250,8 @@ object DecisionFacade {
     suspend fun getAlarmStatus(appContext: Context): JSONObject = withContext(Dispatchers.IO) {
         return@withContext try {
             val dashboardObj = getDashboardInsight(appContext)
-            val dataObj = dashboardObj.getJSONObject("data") ?: return@withContext NetworkStatus.NotFound.toJsonResult()
+            val dataObj = dashboardObj.getJSONObject("data")
+                ?: return@withContext NetworkStatus.NotFound.toJsonResult()
 
             val alarmInfoJson = dataObj.getJSONObject("alarmInfo")
             if (alarmInfoJson != null) {

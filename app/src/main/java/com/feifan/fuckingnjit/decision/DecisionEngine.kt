@@ -35,7 +35,8 @@ class DecisionEngine {
             try {
                 val overrideDate = LocalDate.parse(config.oneTimeOverrideDate)
                 if (overrideDate == tomorrowDate) {
-                    val overrideMinutes = config.oneTimeOverrideHour * 60 + config.oneTimeOverrideMinute
+                    val overrideMinutes =
+                        config.oneTimeOverrideHour * 60 + config.oneTimeOverrideMinute
                     return WakeUpResolution(
                         wakeUpMinutes = overrideMinutes,
                         alarmType = "override",
@@ -60,7 +61,8 @@ class DecisionEngine {
                 startTime.hour * 60 + startTime.minute
             }
 
-            val buffer = config.preClassBufferMinutes.coerceAtLeast(DecisionConfig.PRE_CLASS_BUFFER_MINUTES)
+            val buffer =
+                config.preClassBufferMinutes.coerceAtLeast(DecisionConfig.PRE_CLASS_BUFFER_MINUTES)
             var wakeUp = firstCourseStart - buffer
 
             // 安全下限保护：不能推到前一天太晚（不早于 05:00），不晚于最晚允许值
@@ -73,7 +75,7 @@ class DecisionEngine {
             )
         }
 
-        // === L3：无课兜底 ===
+        // 无课时使用兜底默认配置
         return resolveNoClassFallback(config)
     }
 
@@ -171,7 +173,8 @@ class DecisionEngine {
 
         // 理想入睡 = 起床时间 - 8小时理想睡眠
         // 实际入睡 = 理想入睡 + 惩罚量（负值=比理想时间更早）
-        var targetSleepMins = wakeUpMins - DecisionConfig.IDEAL_SLEEP_DURATION_MINUTES + totalPenalty
+        var targetSleepMins =
+            wakeUpMins - DecisionConfig.IDEAL_SLEEP_DURATION_MINUTES + totalPenalty
 
         // 处理跨天：结果可能为负数（表示前一天晚上）
         if (targetSleepMins < 0) {
@@ -223,7 +226,13 @@ class DecisionEngine {
                     alarmType = wakeUpResolution.alarmType,
                     alarmLabel = "",
                     canSetAlarm = false,
-                    reason = "建议起床时间($hour:${String.format(Locale.ROOT, "%02d", minute)})距首节课开始不足${DecisionConfig.MIN_ALARM_INTERVAL_BEFORE_CLASS}分钟，不允许设闹钟"
+                    reason = "建议起床时间($hour:${
+                        String.format(
+                            Locale.ROOT,
+                            "%02d",
+                            minute
+                        )
+                    })距首节课开始不足${DecisionConfig.MIN_ALARM_INTERVAL_BEFORE_CLASS}分钟，不允许设闹钟"
                 )
             }
         }
@@ -264,11 +273,22 @@ class DecisionEngine {
                 val courseName = firstCourse?.name ?: "课程"
                 "[${mode.modeName}] 明早 $timeStr 起床 · $courseName 课前准备"
             }
+
             else -> "[FuckingNJIT] 明早 $timeStr 起床 · 无课日"
         }
     }
 
-    // 计算健康得分（for UI）
+    /**
+     * 计算健康维度得分
+     *
+     * 综合考虑睡眠时长（权重60%，其中平均睡眠占70%、昨夜睡眠占30%）
+     * 和运动步数（权重40%）两个因素。
+     * 当昨夜睡眠低于严重缺觉阈值时返回负分作为惩罚信号。
+     *
+     * @param recentSleepRecords 近期睡眠记录列表（取最近7条）
+     * @param steps 今日累计步数
+     * @return 健康得分浮点数，可能为负值（严重缺觉时）
+     */
     private fun calculatePhysicalScore(recentSleepRecords: List<DailyRecord>, steps: Int): Float {
         val stepsScore = min(steps.toFloat() / DecisionConfig.BASE_STEPS, 1.0f) * 0.4f
         if (recentSleepRecords.isEmpty()) return 0.6f + stepsScore
@@ -336,7 +356,8 @@ class DecisionEngine {
         val timeStr = String.format(Locale.ROOT, "%02d:%02d", h, m)
 
         // 偏移量（相对理想入睡时间的偏差）
-        val idealSleepTime = wakeUpResolution.wakeUpMinutes - DecisionConfig.IDEAL_SLEEP_DURATION_MINUTES
+        val idealSleepTime =
+            wakeUpResolution.wakeUpMinutes - DecisionConfig.IDEAL_SLEEP_DURATION_MINUTES
         val adjustedIdeal = if (idealSleepTime < 0) idealSleepTime + 1440 else idealSleepTime
         val offsetMinutes = targetSleepMins - adjustedIdeal
         val offsetStr = if (offsetMinutes > 0) "+${offsetMinutes}" else "$offsetMinutes"
@@ -366,18 +387,22 @@ class DecisionEngine {
                     true, "critical", "高优干预：大段空堂补觉",
                     "昨晚严重缺觉，系统已强制前置入睡红线至 $timeStr。下一个大段空堂 ($slotTimeStr) 建议回宿舍深度休息。"
                 )
+
                 isSedentary && !isLargeGap -> ActionableInsight(
                     true, "warning", "久坐预警：碎片时间活动",
                     "今日严重缺乏活动，可能导致失眠。建议利用 $slotTimeStr 的碎片空堂去户外或走廊活动。"
                 )
+
                 mode == AppMode.SCHOLAR_MODE && isLargeGap -> ActionableInsight(
                     true, "info", "冲刺规划：图书馆时间",
                     "当前为学霸冲刺模式。下一个空堂 ($slotTimeStr) 长达 ${nextSlot.durationMinutes} 分钟，建议前往图书馆或自习室完成沉浸式学习。"
                 )
+
                 mode == AppMode.HEALTH_MODE && isSedentary -> ActionableInsight(
                     true, "warning", "健康指令：户外运动",
                     "当前为健康活力模式且步数极低。建议在 $slotTimeStr 的空堂时间去操场完成运动目标。"
                 )
+
                 else -> null
             }
         } else null
@@ -388,14 +413,17 @@ class DecisionEngine {
                 true, "critical", "高优干预：严重睡眠负债",
                 "昨晚严重缺觉且今日已无可用白昼空堂，系统强制将今晚入睡红线前置至 $timeStr（基于明早 $wakeUpStr 起床倒推）"
             )
+
             isSedentary -> ActionableInsight(
                 true, "warning", "久坐预警",
                 "今日严重缺乏活动，建议在晚饭后去操场走走，保证入睡质量。"
             )
+
             stressFactor > 0.6f -> ActionableInsight(
                 true, "warning", "高压预警",
                 "明日课业压力较大，建议最晚入睡时间：$timeStr（明早 $wakeUpStr 起床）"
             )
+
             else -> ActionableInsight(
                 true, "info", "智能建议",
                 "综合今日消耗与明日排课，建议最晚入睡时间：$timeStr（明早 $wakeUpStr 起床）"

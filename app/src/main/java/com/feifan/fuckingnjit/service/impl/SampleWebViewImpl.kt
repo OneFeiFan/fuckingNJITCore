@@ -19,6 +19,12 @@ import java.util.Observable
 import java.util.Observer
 
 
+/**
+ * 教务系统登录 Activity
+ *
+ * 全屏展示一个用于完成 WebVPN 登录流程的 WebView，
+ * 通过 J2J 中间件与 JS 交互实现登录态的获取与回传。
+ */
 class SampleWebViewImpl : AppCompatActivity(), Observer {
     private var webView: WebView? = null
 
@@ -54,6 +60,12 @@ class SampleWebViewImpl : AppCompatActivity(), Observer {
         super.onDestroy()
     }
 
+    /**
+     * 安全销毁 WebView 及其关联资源
+     *
+     * 依次执行停止加载、移除父视图、禁用 JS、清除缓存与历史、
+     * 移除 JS 接口和 destroy，最后置空引用防止误用。
+     */
     private fun releaseWebView() {
         webView?.apply {
             // 停止加载（先停止，再清理）

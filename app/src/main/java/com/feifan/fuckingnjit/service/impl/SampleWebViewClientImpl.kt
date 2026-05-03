@@ -7,15 +7,30 @@ import com.feifan.fuckingnjit.utils.Manager
 import com.feifan.fuckingnjit.utils.database.AppDataCenter
 import com.feifan.fuckingnjit.utils.system.SystemActionHelper
 
+/**
+ * 登录流程 WebViewClient 实现
+ *
+ * 拦截教务系统登录过程中的关键 URL 跳转，
+ * 在对应页面自动注入账号密码、触发 SSO 登录和用户信息同步。
+ */
 class SampleWebViewClientImpl() : WebViewClient() {
-    // 拦截 URL 加载
+    /**
+     * 拦截所有 URL 加载请求并交由 WebView 自行处理
+     */
     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
         val url = request.url.toString()
         view.loadUrl(url)
         return true
     }
 
-    // 页面加载完成回调
+    /**
+     * 页面加载完成后的回调处理
+     *
+     * 根据目标 URL 匹配不同阶段：
+     * - 登录页：自动填充账号密码
+     * - SSO 登录页：点击统一认证按钮
+     * - 教务主页：触发用户信息更新
+     */
     override fun onPageFinished(view: WebView, url: String) {
         super.onPageFinished(view, url)
         if (url.startsWith("https://casb.njit.edu.cn/http/webvpnea5e00498bb033e68046c95dbdf6e09fbc127bea836184c80a0792b662ced92f/authserver/login")) {

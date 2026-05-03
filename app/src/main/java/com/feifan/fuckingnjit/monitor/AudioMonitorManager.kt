@@ -16,6 +16,15 @@ import kotlinx.coroutines.withContext
 import kotlin.math.log10
 import kotlin.math.sqrt
 
+/**
+ * 音频监控管理器
+ *
+ * 负责采集环境噪音快照（以负数 dBFS 值返回），
+ * 用于睡眠质量评估中的环境噪声检测。
+ * 内置麦克风占用检测，当电话或其它应用抢占麦克风时自动让出资源。
+ *
+ * @param context 应用上下文
+ */
 class AudioMonitorManager(private val context: Context) {
 
     private val TAG = "AudioMonitorManager"
@@ -31,9 +40,15 @@ class AudioMonitorManager(private val context: Context) {
 
     private var audioRecordingCallback: AudioManager.AudioRecordingCallback? = null
 
+    /**
+     * 初始化音频监控器
+     *
+     * 注册音频策略回调用于麦克风占用检测，
+     * 并在权限允许的情况下提前预热 AudioRecord 实例建立长连接。
+     */
     fun init() {
         registerAudioPolicyCallback()
-        // 尝试在服务启动时就提前预热 AudioRecord 实例，建立长连接
+
         if (ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.RECORD_AUDIO
@@ -47,7 +62,15 @@ class AudioMonitorManager(private val context: Context) {
         }
     }
 
-    // 获取环境噪音快照
+    /**
+     * 获取环境噪音快照
+     *
+     * 在指定时间窗口内录制音频并计算 RMS 值后转换为 dBFS。
+     * 麦克风被占用或缺少权限时返回 -1.0。
+     *
+     * @param durationMs 采样窗口时长（毫秒），默认 250ms
+     * @return 负数 dBFS 值；被中断或失败时返回 -1.0
+     */
     suspend fun captureSnapshot(durationMs: Long = 250L): Double = withContext(Dispatchers.IO) {
         if (isMicrophoneOccupied || ContextCompat.checkSelfPermission(
                 context,
@@ -121,6 +144,12 @@ class AudioMonitorManager(private val context: Context) {
         }
     }
 
+    /**
+     * 确保 AudioRecord 实例已初始化
+     *
+     * 使用 8kHz 单声道 16bit 采样配置以降低功耗，
+     * 数据源选用 UNPROCESSED 以获取最纯净的环境底噪。
+     */
     @RequiresPermission(Manifest.permission.RECORD_AUDIO)
     private fun ensureAudioRecordInit() {
         if (audioRecord == null) {
@@ -149,6 +178,12 @@ class AudioMonitorManager(private val context: Context) {
         }
     }
 
+    /**
+     * 注册音频录制策略回调
+     *
+     * 监听系统音频录制配置变化，检测电话或其它应用是否占用了麦克风，
+     * 占用时自动停止本实例的录音以避免冲突。
+     */
     private fun registerAudioPolicyCallback() {
         audioRecordingCallback = object : AudioManager.AudioRecordingCallback() {
             @RequiresPermission(Manifest.permission.RECORD_AUDIO)
@@ -190,6 +225,9 @@ class AudioMonitorManager(private val context: Context) {
         audioManager.registerAudioRecordingCallback(audioRecordingCallback!!, null)
     }
 
+    /**
+     * 强制释放 AudioRecord 资源
+     */
     private fun forceRelease() {
         try {
             audioRecord?.release()
@@ -199,6 +237,9 @@ class AudioMonitorManager(private val context: Context) {
         audioRecord = null
     }
 
+    /**
+     * 释放所有音频相关资源并注销回调
+     */
     fun release() {
         audioRecordingCallback?.let {
             try {

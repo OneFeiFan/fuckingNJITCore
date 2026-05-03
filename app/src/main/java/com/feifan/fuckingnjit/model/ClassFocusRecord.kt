@@ -5,7 +5,11 @@ import io.objectbox.annotation.Id
 import io.objectbox.annotation.Index
 import io.objectbox.relation.ToOne
 
-// 单节课专注度记录实体
+/**
+ * 单节课专注度记录实体
+ *
+ * 记录每节课的起止时间和分心时长，通过 [dailyRecord] 关联到所属的每日汇总记录。
+ */
 @Entity
 data class ClassFocusRecord(
     @Id var id: Long = 0,
@@ -15,8 +19,9 @@ data class ClassFocusRecord(
     var courseName: String = "",
     var startTime: Long = 0L,
     var endTime: Long = 0L,
-    var distractionDurationMills: Long = 0L,//走神时间
-    var isUploaded: Boolean = false// 是否需要上传
+    var distractionDurationMills: Long = 0L,
+    var isUploaded: Boolean = false
 ) {
-    lateinit var dailyRecord: ToOne<DailyRecord> //指向上级 DailyRecord 的关联关系
+    /** 指向上级 DailyRecord 的关联关系 */
+    lateinit var dailyRecord: ToOne<DailyRecord>
 }

@@ -2,6 +2,8 @@ package com.feifan.fuckingnjit.utils.network
 
 import android.content.Context
 import android.webkit.CookieManager
+import com.feifan.fuckingnjit.utils.network.HttpRequestHelper.Companion.COMMON_HEADERS
+import com.feifan.fuckingnjit.utils.network.HttpRequestHelper.Companion.executeBaseRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.FormBody
@@ -19,6 +21,17 @@ import java.net.HttpURLConnection
 import java.net.ProtocolException
 import java.util.concurrent.TimeUnit
 
+/**
+ * 基于 OkHttp + Jsoup 的 HTTP 请求工具，封装了教务系统 WebVPN 环境下的通用请求能力。
+ *
+ * 核心职责：
+ * - 自动携带 WebView Cookie 并定期通过 Jsoup 检测登录会话有效性
+ * - 支持表单 POST、JSON POST、GET 三种请求方式
+ * - 统一异常处理，所有网络错误均抛出 [ApiException]
+ * - 提供文件下载与 HTML 解析（Jsoup Document）两种响应读取方式
+ *
+ * 所有公开方法均为挂起函数，内部自动切换至 IO 调度器执行。
+ */
 class HttpRequestHelper {
     companion object {
         private var lastLoginCheckTime = 0L //控制登录状态检测
@@ -43,6 +56,14 @@ class HttpRequestHelper {
             "Origin" to BASE_URL
         )
 
+        /**
+         * 下载指定 URL 的文件并写入应用内部存储。
+         *
+         * @param url      文件下载地址
+         * @param fileName 保存到 filesDir 下的文件名
+         * @param context  应用上下文，用于定位内部存储目录
+         * @return 下载是否成功，失败时抛出 [ApiException]
+         */
         suspend fun downloadFile(url: String, fileName: String, context: Context): Boolean =
             withContext(Dispatchers.IO) {
                 val request = Request.Builder().url(url).headers(COMMON_HEADERS.toHeaders()).build()
@@ -79,13 +100,26 @@ class HttpRequestHelper {
                 }
             }
 
-        // 为Jsoup提供特定格式的cookie
+        /** 将 CookieManager 返回的原始 cookie 字符串解析为键值对 map，供 Jsoup 使用 */
         private fun getPersistentCookies(cookie: String): Map<String, String> {
             return cookie.split(";")
                 .associate { it.split("=").let { parts -> parts[0] to parts.getOrElse(1) { "" } } }
         }
 
-        // 核心请求方法
+        /**
+         * 基于 OkHttp 的底层请求方法，支持 GET / POST（表单或 JSON）。
+         *
+         * 不包含登录态检测逻辑，仅负责构造请求、发送并返回响应文本。
+         * 网络异常与 HTTP 错误状态码统一封装为 [ApiException] 抛出。
+         *
+         * @param url        请求地址
+         * @param method     请求方式，默认 GET
+         * @param formParams POST 表单参数，仅 POST 时生效
+         * @param jsonStr    POST JSON 体，优先级高于 formParams
+         * @param headers    自定义请求头，为 null 时使用 [COMMON_HEADERS]
+         * @param cookie     手动指定的 Cookie 值，为 null 则不携带
+         * @return 响应体文本
+         */
         suspend fun executeBaseRequest(
             url: String,
             method: HttpMethod = HttpMethod.GET,
@@ -133,6 +167,19 @@ class HttpRequestHelper {
             }
         }
 
+        /**
+         * 带登录态检测的请求入口，对外公开方法（getJsonResponse / getHtmlResponse）的最终实现。
+         *
+         * 执行逻辑：
+         * 1. 从 CookieManager 读取 WebVPN cookie，为空则直接抛出未授权异常
+         * 2. 距上次检查超过 60 秒时，通过 Jsoup 访问教务首页判断会话是否有效
+         * 3. 会话有效时调用 [executeBaseRequest] 发起实际请求
+         *
+         * @param url         请求地址
+         * @param method      请求方式
+         * @param requestBody POST 表单参数
+         * @return 响应文本
+         */
         private suspend fun makeRequest(
             url: String,
             method: HttpMethod = HttpMethod.GET,
@@ -190,14 +237,32 @@ class HttpRequestHelper {
             }
         }
 
-        // 用于获取json数据
+        /**
+         * 发起请求并返回原始 JSON 字符串。
+         *
+         * 内部自动完成登录态校验与 cookie 携带，适用于教务系统 API 接口调用。
+         *
+         * @param url         请求地址
+         * @param method      请求方式，默认 GET
+         * @param requestBody POST 表单参数
+         * @return 服务端返回的 JSON 文本
+         */
         suspend fun getJsonResponse(
             url: String,
             method: HttpMethod = HttpMethod.GET,
             requestBody: Map<String, String> = emptyMap()
         ): String = makeRequest(url, method, requestBody)
 
-        // 用于获取网页对象
+        /**
+         * 发起请求并将响应文本解析为 Jsoup [Document] 对象。
+         *
+         * 适用于需要 DOM 选择器提取教务系统页面数据的场景。
+         *
+         * @param url         请求地址
+         * @param method      请求方式，默认 GET
+         * @param requestBody POST 表单参数
+         * @return 解析后的 Jsoup Document
+         */
         suspend fun getHtmlResponse(
             url: String,
             method: HttpMethod = HttpMethod.GET,

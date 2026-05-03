@@ -16,6 +16,7 @@ import android.widget.Toast
  *   - 通过 Intent 打开系统闹钟页面，时间预填好，用户点一下确认即可
  *   - 不做 UI 交互，纯工具类，由前端 Activity/Fragment 触发
  */
+@Suppress("unused")
 object AlarmHelper {
 
     /**
@@ -37,7 +38,11 @@ object AlarmHelper {
     fun setSystemAlarm(context: Context, alarmInfo: AlarmInfo): Boolean {
         // 前置校验：canSetAlarm 必须为 true
         if (!alarmInfo.canSetAlarm) {
-            Toast.makeText(context, alarmInfo.reason.ifEmpty { "当前不允许设置闹钟" }, Toast.LENGTH_SHORT).show()
+            Toast.makeText(
+                context,
+                alarmInfo.reason.ifEmpty { "当前不允许设置闹钟" },
+                Toast.LENGTH_SHORT
+            ).show()
             return false
         }
 
@@ -76,7 +81,12 @@ object AlarmHelper {
      * @param minute    分钟（0~59）
      * @param label     闹钟标签文案（可选）
      */
-    fun setSystemAlarmDirect(context: Context, hour: Int, minute: Int, label: String = "FuckingNJIT 起床提醒"): Boolean {
+    fun setSystemAlarmDirect(
+        context: Context,
+        hour: Int,
+        minute: Int,
+        label: String = "FuckingNJIT 起床提醒"
+    ): Boolean {
         val info = AlarmInfo(
             suggestedWakeUpHour = hour.coerceIn(0, 23),
             suggestedWakeUpMinute = minute.coerceIn(0, 59),
